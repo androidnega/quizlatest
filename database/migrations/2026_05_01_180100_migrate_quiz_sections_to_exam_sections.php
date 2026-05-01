@@ -63,11 +63,16 @@ return new class extends Migration
         });
 
         Schema::table('questions', function (Blueprint $table) {
+            $table->dropIndex(['quiz_id', 'quiz_section_id']);
+        });
+
+        Schema::table('questions', function (Blueprint $table) {
             $table->dropColumn('quiz_section_id');
         });
 
         Schema::table('questions', function (Blueprint $table) {
             $table->unsignedBigInteger('section_id')->nullable(false)->change();
+            $table->index(['quiz_id', 'section_id']);
         });
 
         Schema::drop('quiz_sections');

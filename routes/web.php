@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\CoordinatorController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\ProctoringGovernanceController;
@@ -78,6 +79,11 @@ Route::prefix('admin')
         Route::post('/proctoring/toggle', [ProctoringGovernanceController::class, 'toggle'])->name('proctoring.toggle');
         Route::post('/proctoring/emergency-shutdown', [ProctoringGovernanceController::class, 'emergencyShutdown'])->name('proctoring.emergency-shutdown');
         Route::post('/proctoring/override-config', [ProctoringGovernanceController::class, 'overrideConfig'])->name('proctoring.override-config');
+
+        Route::get('/settings', [AdminSettingsController::class, 'index'])->name('settings.index');
+        Route::put('/settings', [AdminSettingsController::class, 'update'])->name('settings.update');
+        Route::post('/settings/lock', [AdminSettingsController::class, 'lock'])->name('settings.lock');
+        Route::post('/settings/unlock', [AdminSettingsController::class, 'unlock'])->name('settings.unlock');
     });
 
 Route::prefix('coordinator')
@@ -122,7 +128,7 @@ Route::prefix('coordinator')
 
 Route::prefix('examiner')
     ->name('examiner.')
-    ->middleware(['auth', 'verified', 'examiner'])
+    ->middleware(['auth', 'verified', 'coordinator'])
     ->group(function () {
         Route::get('/exams', [ExamBuilderController::class, 'index'])->name('exams.index');
         Route::get('/exams/create', [ExamBuilderController::class, 'create'])->name('exams.create');

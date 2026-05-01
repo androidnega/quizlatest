@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Middleware\EnsureExaminerAccess;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsCoordinator;
 use Illuminate\Foundation\Application;
@@ -18,7 +17,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => EnsureUserIsAdmin::class,
             'coordinator' => EnsureUserIsCoordinator::class,
-            'examiner' => EnsureExaminerAccess::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

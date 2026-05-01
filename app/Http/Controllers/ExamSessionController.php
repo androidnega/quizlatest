@@ -6,7 +6,9 @@ use App\Models\ExamSession;
 use App\Models\ExamSessionAnswer;
 use App\Models\ProctoringEvent;
 use App\Models\Question;
+use App\Models\Quiz;
 use App\Models\Result;
+use App\Models\User;
 use App\Services\AnswerEvaluationService;
 use App\Services\ExamEntryPipelineService;
 use App\Services\ProctoringGlobalControlService;
@@ -227,6 +229,9 @@ class ExamSessionController extends Controller
     public function forceSubmit(Request $request, ExamSession $examSession): JsonResponse
     {
         abort_unless(in_array($request->user()?->role, ['admin', 'coordinator'], true), 403);
+        if ($request->user()?->role === 'coordinator') {
+            $this->ensureCoordinatorCanAccessExamCourse($request->user(), (int) $examSession->exam_id);
+        }
         $this->submitSession($examSession, 'submitted_held', 'force_submit');
 
         return response()->json(['status' => 'submitted_held', 'reason' => 'force_submit']);
@@ -235,6 +240,9 @@ class ExamSessionController extends Controller
     public function reviewTimeline(Request $request, ExamSession $examSession): JsonResponse
     {
         abort_unless(in_array($request->user()?->role, ['admin', 'coordinator'], true), 403);
+        if ($request->user()?->role === 'coordinator') {
+            $this->ensureCoordinatorCanAccessExamCourse($request->user(), (int) $examSession->exam_id);
+        }
 
         $events = ProctoringEvent::query()
             ->where('user_id', $examSession->student_id)
@@ -264,6 +272,9 @@ class ExamSessionController extends Controller
     public function releaseHeldResult(Request $request, ExamSession $examSession): JsonResponse
     {
         abort_unless(in_array($request->user()?->role, ['admin', 'coordinator'], true), 403);
+        if ($request->user()?->role === 'coordinator') {
+            $this->ensureCoordinatorCanAccessExamCourse($request->user(), (int) $examSession->exam_id);
+        }
         $this->applyReviewDecision($examSession, 'released', 'Result released after review.');
 
         return response()->json(['status' => 'released']);
@@ -272,6 +283,9 @@ class ExamSessionController extends Controller
     public function confirmFail(Request $request, ExamSession $examSession): JsonResponse
     {
         abort_unless(in_array($request->user()?->role, ['admin', 'coordinator'], true), 403);
+        if ($request->user()?->role === 'coordinator') {
+            $this->ensureCoordinatorCanAccessExamCourse($request->user(), (int) $examSession->exam_id);
+        }
         $this->applyReviewDecision($examSession, 'confirmed_fail', 'Result marked failed due to violations.');
 
         return response()->json(['status' => 'confirmed_fail']);
@@ -280,6 +294,9 @@ class ExamSessionController extends Controller
     public function overrideDecision(Request $request, ExamSession $examSession): JsonResponse
     {
         abort_unless(in_array($request->user()?->role, ['admin', 'coordinator'], true), 403);
+        if ($request->user()?->role === 'coordinator') {
+            $this->ensureCoordinatorCanAccessExamCourse($request->user(), (int) $examSession->exam_id);
+        }
         $validated = $request->validate([
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
@@ -317,6 +334,23 @@ class ExamSessionController extends Controller
         $user = $request->user();
         abort_unless($user && $user->role === 'student', 403);
         abort_unless((int) $examSession->student_id === (int) $user->id, 403);
+    }
+
+    private function ensureCoordinatorCanAccessExamCourse(?User $user, int $examQuizId): void
+    {
+        abort_unless($user && $user->role === 'coordinator', 403);
+
+        $quiz = Quiz::query()->with('course')->find($examQuizId);
+        abort_if($quiz === null || $quiz->course === null, 403);
+
+        $deptId = (int) $quiz->course->department_id;
+        $allowed = $user->coordinatorAssignments()
+            ->where('is_active', true)
+            ->pluck('department_id')
+            ->map(fn ($id) => (int) $id)
+            ->contains($deptId);
+
+        abort_unless($allowed, 403);
     }
 
     private function authorizeStudentSession(Request $request, ExamSession $examSession): void

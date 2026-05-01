@@ -17,10 +17,10 @@ class ExamBuilderController extends Controller
 {
     public function index(Request $request): View
     {
-        $courseIds = $this->assignedCourseIds($request);
+        $this->authorize('viewAny', Quiz::class);
 
         $exams = Quiz::query()
-            ->whereIn('course_id', $courseIds)
+            ->whereIn('course_id', $this->manageableCourseIds($request))
             ->with('course')
             ->orderByDesc('updated_at')
             ->paginate(15);
@@ -32,12 +32,14 @@ class ExamBuilderController extends Controller
 
     public function create(Request $request): View
     {
+        $this->authorize('create', Quiz::class);
+
         $courses = Course::query()
-            ->whereIn('id', $this->assignedCourseIds($request))
+            ->whereIn('id', $this->manageableCourseIds($request))
             ->orderBy('title')
             ->get(['id', 'title', 'code']);
 
-        abort_if($courses->isEmpty(), 403, 'No assigned courses available for exam creation.');
+        abort_if($courses->isEmpty(), 403, 'No courses available for exam creation in your scope.');
 
         return view('examiner.exams.create', [
             'courses' => $courses,
@@ -46,6 +48,8 @@ class ExamBuilderController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('create', Quiz::class);
+
         $validated = $request->validate([
             'course_id' => ['required', 'integer'],
             'title' => ['required', 'string', 'max:255'],
@@ -54,7 +58,7 @@ class ExamBuilderController extends Controller
             'assessment_type' => ['nullable', 'string', 'in:quiz,mid,exam,assignment'],
         ]);
 
-        abort_unless(in_array((int) $validated['course_id'], $this->assignedCourseIds($request), true), 403);
+        abort_unless(in_array((int) $validated['course_id'], $this->manageableCourseIds($request), true), 403);
 
         $user = $request->user();
 
@@ -77,7 +81,7 @@ class ExamBuilderController extends Controller
 
     public function builder(Request $request, Quiz $exam): View
     {
-        $this->authorizeExam($request, $exam);
+        $this->authorize('view', $exam);
 
         $exam->load([
             'sections' => fn ($q) => $q->orderBy('section_order'),
@@ -92,7 +96,7 @@ class ExamBuilderController extends Controller
 
     public function storeSection(Request $request, Quiz $exam): RedirectResponse
     {
-        $this->authorizeExam($request, $exam);
+        $this->authorize('update', $exam);
 
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -111,7 +115,7 @@ class ExamBuilderController extends Controller
 
     public function storeQuestion(Request $request, Quiz $exam, ExamSection $section): RedirectResponse
     {
-        $this->authorizeExam($request, $exam);
+        $this->authorize('update', $exam);
         abort_unless((int) $section->exam_id === (int) $exam->id, 404);
 
         $validated = $request->validate([
@@ -120,7 +124,7 @@ class ExamBuilderController extends Controller
             'marks' => ['required', 'numeric', 'min:0'],
             'options' => ['nullable', 'array'],
             'options.*' => ['nullable', 'string', 'max:2000'],
-            'correct_mcq' => ['nullable'], // array from form
+            'correct_mcq' => ['nullable'],
             'correct_true_false' => ['nullable', 'in:0,1'],
             'correct_blanks' => ['nullable', 'string'],
         ]);
@@ -178,18 +182,36 @@ class ExamBuilderController extends Controller
     /**
      * @return array<int, int>
      */
-    private function assignedCourseIds(Request $request): array
+    private function coordinatorDepartmentIds(Request $request): array
     {
-        return ExaminerCourseAssignment::query()
+        return $request->user()
+            ->coordinatorAssignments()
+            ->where('is_active', true)
+            ->pluck('department_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    /**
+     * Examiner-assigned courses plus any course in the coordinator's departments.
+     *
+     * @return array<int, int>
+     */
+    private function manageableCourseIds(Request $request): array
+    {
+        $fromAssignments = ExaminerCourseAssignment::query()
             ->where('examiner_user_id', $request->user()->id)
             ->where('is_active', true)
             ->pluck('course_id')
             ->map(fn ($id) => (int) $id)
             ->all();
-    }
 
-    private function authorizeExam(Request $request, Quiz $exam): void
-    {
-        abort_unless(in_array((int) $exam->course_id, $this->assignedCourseIds($request), true), 403);
+        $fromDepartments = Course::query()
+            ->whereIn('department_id', $this->coordinatorDepartmentIds($request))
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        return array_values(array_unique(array_merge($fromAssignments, $fromDepartments)));
     }
 }

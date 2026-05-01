@@ -41,6 +41,9 @@
                     <a href="{{ route('admin.coordinators.index') }}" class="block px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('admin.coordinators.*') ? 'bg-camel text-white shadow-sm' : 'text-gray-700 hover:bg-beige' }}">
                         Coordinators
                     </a>
+                    <a href="{{ route('admin.settings.index') }}" class="block px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('admin.settings.*') ? 'bg-camel text-white shadow-sm' : 'text-gray-700 hover:bg-beige' }}">
+                        Settings
+                    </a>
                 </nav>
             </aside>
 
