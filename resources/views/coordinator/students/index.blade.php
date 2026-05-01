@@ -2,85 +2,137 @@
     <x-slot name="title">Students</x-slot>
     <x-slot name="subtitle">Manage students in your assigned departments</x-slot>
 
+    @if ($errors->any())
+        <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {{ $errors->first() }}
+        </div>
+    @endif
+
     <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
         <form method="GET" action="{{ route('coordinator.students.index') }}" class="flex flex-wrap items-center gap-2">
-            <input type="text" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Search name, index number or email" class="w-64 rounded-lg border border-camel bg-white px-3 py-2 text-sm focus:border-camel focus:ring-camel" />
+            <input type="text" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Search name, index number or email" class="w-64 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-600 focus:ring-blue-600" />
 
-            <select name="program_id" class="rounded-lg border border-camel bg-white px-3 py-2 text-sm focus:border-camel focus:ring-camel">
+            <select name="program_id" class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-600 focus:ring-blue-600">
                 <option value="">All Programs</option>
                 @foreach ($programs as $program)
                     <option value="{{ $program->id }}" @selected(($filters['program_id'] ?? '') == $program->id)>{{ $program->name }}</option>
                 @endforeach
             </select>
 
-            <select name="level_id" class="rounded-lg border border-camel bg-white px-3 py-2 text-sm focus:border-camel focus:ring-camel">
+            <select name="level_id" class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-600 focus:ring-blue-600">
                 <option value="">All Levels</option>
                 @foreach ($levels as $level)
                     <option value="{{ $level->id }}" @selected(($filters['level_id'] ?? '') == $level->id)>{{ $level->name }}</option>
                 @endforeach
             </select>
 
-            <button type="submit" class="rounded-lg border border-camel bg-camel px-3 py-2 text-sm font-medium text-white hover:bg-camel/90">Filter</button>
+            <button type="submit" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Filter</button>
         </form>
 
         <div class="flex items-center gap-2">
-            <a href="{{ route('coordinator.students.template') }}" class="rounded-lg border border-camel bg-white px-3 py-2 text-sm text-gray-700 hover:bg-beige">Download CSV Template</a>
-            <a href="{{ route('coordinator.students.upload') }}" class="rounded-lg border border-camel bg-camel px-3 py-2 text-sm font-semibold text-white hover:bg-camel/90">Upload CSV</a>
+            <a href="{{ route('coordinator.students.template') }}" class="rounded-lg bg-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-300">Download CSV Template</a>
+            <a href="{{ route('coordinator.students.upload') }}" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Upload CSV</a>
         </div>
     </div>
 
     <form method="POST" action="{{ route('coordinator.students.bulk-status') }}">
         @csrf
         <div class="mb-3 flex items-center gap-2">
-            <select name="action" class="rounded-lg border border-camel bg-white px-3 py-2 text-sm focus:border-camel focus:ring-camel" required>
+            <select name="action" class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-600 focus:ring-blue-600" required>
                 <option value="">Bulk Actions</option>
                 <option value="activate">Activate Selected</option>
                 <option value="deactivate">Deactivate Selected</option>
             </select>
-            <button type="submit" class="rounded-lg border border-camel bg-white px-3 py-2 text-sm text-gray-700 hover:bg-beige">Apply</button>
+            <button type="submit" class="rounded-lg bg-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-300">Apply</button>
         </div>
 
-        <div class="overflow-hidden rounded-xl border border-beige bg-white shadow-sm">
+        <div class="overflow-hidden rounded-xl bg-white shadow-sm">
             <table class="min-w-full divide-y divide-beige">
                 <thead class="bg-beige/60">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">
-                            <input type="checkbox" onclick="document.querySelectorAll('.student-checkbox').forEach(cb => cb.checked = this.checked)" class="rounded border-camel text-camel focus:ring-camel">
+                            <input type="checkbox" onclick="document.querySelectorAll('.student-checkbox').forEach(cb => cb.checked = this.checked)" class="rounded border-gray-300 text-blue-600 focus:ring-blue-600">
                         </th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Name</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Index Number</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Program</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Level</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Class</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Email</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-beige">
                     @forelse ($students as $student)
                         <tr class="hover:bg-beige/30">
                             <td class="px-4 py-3 text-sm">
-                                <input type="checkbox" name="student_ids[]" value="{{ $student->id }}" class="student-checkbox rounded border-camel text-camel focus:ring-camel">
+                                <input type="checkbox" name="student_ids[]" value="{{ $student->id }}" class="student-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-600">
                             </td>
                             <td class="px-4 py-3 text-sm text-gray-800">{{ $student->name }}</td>
                             <td class="px-4 py-3 text-sm text-gray-700">{{ $student->index_number }}</td>
                             <td class="px-4 py-3 text-sm text-gray-700">{{ $student->program?->name ?? 'N/A' }}</td>
                             <td class="px-4 py-3 text-sm text-gray-700">{{ $student->level?->name ?? 'N/A' }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-700">{{ $student->classroom?->name ?? 'Unassigned' }}</td>
                             <td class="px-4 py-3 text-sm text-gray-700">{{ $student->email }}</td>
                             <td class="px-4 py-3 text-sm">
-                                <span class="inline-flex rounded-full px-2 py-1 text-xs {{ $student->is_active ? 'bg-camel text-white' : 'bg-gray-200 text-gray-700' }}">
+                                <span class="inline-flex rounded-full px-2 py-1 text-xs {{ $student->is_active ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-700' }}">
                                     {{ $student->is_active ? 'Active' : 'Inactive' }}
                                 </span>
+                            </td>
+                            <td class="px-4 py-3 text-sm">
+                                <a href="{{ route('coordinator.students.assign-class.edit', $student) }}" class="rounded-lg bg-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-300">
+                                    {{ $student->class_id ? 'Edit Class' : 'Assign Class' }}
+                                </a>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="px-4 py-10 text-center text-sm text-gray-600">No students found for your departments.</td>
+                            <td colspan="9" class="px-4 py-10 text-center text-sm text-gray-600">No students found for your departments.</td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
     </form>
+
+    <div class="mt-6 rounded-xl bg-white p-5 shadow-sm">
+        <h3 class="text-base font-semibold text-gray-900">Bulk Assign Class</h3>
+        <p class="mt-1 text-sm text-gray-600">Filter by program and level, then assign one class to all matching students.</p>
+        <form method="POST" action="{{ route('coordinator.students.bulk-assign-class') }}" class="mt-4 grid gap-3 sm:grid-cols-4">
+            @csrf
+            <div>
+                <label for="bulk_program_id" class="block text-xs font-medium text-gray-700">Program</label>
+                <select id="bulk_program_id" name="program_id" required class="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-600 focus:ring-blue-600">
+                    <option value="">Select program</option>
+                    @foreach ($programs as $program)
+                        <option value="{{ $program->id }}">{{ $program->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label for="bulk_level_id" class="block text-xs font-medium text-gray-700">Level</label>
+                <select id="bulk_level_id" name="level_id" required class="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-600 focus:ring-blue-600">
+                    <option value="">Select level</option>
+                    @foreach ($levels as $level)
+                        <option value="{{ $level->id }}">{{ $level->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label for="bulk_class_id" class="block text-xs font-medium text-gray-700">Class</label>
+                <select id="bulk_class_id" name="class_id" required class="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-600 focus:ring-blue-600">
+                    <option value="">Select class</option>
+                    @foreach ($classes as $classroom)
+                        <option value="{{ $classroom->id }}">{{ $classroom->name }} ({{ $classroom->program?->code ?? $classroom->program?->name }} - {{ $classroom->level?->name }})</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button type="submit" class="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Assign Class</button>
+            </div>
+        </form>
+    </div>
 
     <div class="mt-4">
         {{ $students->links() }}

@@ -23,6 +23,11 @@ class StudentController extends Controller
         $departmentIds = $this->departmentIds();
         $programs = Program::query()->whereIn('department_id', $departmentIds)->orderBy('name')->get();
         $levels = Level::query()->orderBy('sort_order')->get();
+        $classes = Classroom::query()
+            ->whereHas('program', fn ($query) => $query->whereIn('department_id', $departmentIds))
+            ->with(['program', 'level'])
+            ->orderBy('name')
+            ->get();
 
         $students = User::query()
             ->where('role', 'student')
@@ -46,8 +51,48 @@ class StudentController extends Controller
             'students' => $students,
             'programs' => $programs,
             'levels' => $levels,
+            'classes' => $classes,
             'filters' => $request->only(['program_id', 'level_id', 'search']),
         ]);
+    }
+
+    public function editClass(User $student): View
+    {
+        $this->abortIfStudentOutOfScope($student);
+
+        return view('coordinator.students.assign-class', [
+            'student' => $student->load(['program.department', 'level', 'classroom']),
+            'classes' => $this->scopedClasses(),
+        ]);
+    }
+
+    public function updateClass(Request $request, User $student): RedirectResponse
+    {
+        $this->abortIfStudentOutOfScope($student);
+
+        $validated = $request->validate([
+            'class_id' => ['nullable', 'integer', 'exists:classes,id'],
+        ]);
+
+        $classId = $validated['class_id'] ?? null;
+        if ($classId === null && $student->is_active) {
+            return redirect()->back()->withErrors([
+                'class_id' => 'Active students must have a class assignment.',
+            ]);
+        }
+
+        if ($classId !== null) {
+            $classroom = $this->scopedClasses()->firstWhere('id', (int) $classId);
+            abort_unless($classroom, 403);
+
+            $studentDepartmentId = (int) $student->program?->department_id;
+            $classDepartmentId = (int) $classroom->program?->department_id;
+            abort_unless($studentDepartmentId > 0 && $studentDepartmentId === $classDepartmentId, 403);
+        }
+
+        $student->update(['class_id' => $classId]);
+
+        return redirect()->route('coordinator.students.index')->with('status', 'Student class assignment updated.');
     }
 
     public function uploadForm(): View
@@ -200,14 +245,19 @@ class StudentController extends Controller
         $studentRoleId = Role::query()->where('slug', 'student')->value('id');
         $serialCache = [];
         $imported = 0;
+        $unassigned = 0;
 
-        DB::transaction(function () use ($rows, $year, $studentRoleId, &$serialCache, &$imported): void {
+        DB::transaction(function () use ($rows, $year, $studentRoleId, &$serialCache, &$imported, &$unassigned): void {
             foreach ($rows as $row) {
                 $classId = Classroom::query()
                     ->where('program_id', $row['program_id'])
                     ->where('level_id', $row['level_id'])
                     ->where('is_active', true)
                     ->value('id');
+
+                if (! $classId) {
+                    $unassigned++;
+                }
 
                 $indexNumber = $row['index_number'] !== ''
                     ? $row['index_number']
@@ -221,7 +271,7 @@ class StudentController extends Controller
                     'email' => $row['email'],
                     'index_number' => $indexNumber,
                     'role' => 'student',
-                    'is_active' => true,
+                    'is_active' => $classId !== null,
                     'email_verified_at' => now(),
                     'password' => Hash::make('student123'),
                 ]);
@@ -239,7 +289,12 @@ class StudentController extends Controller
 
         $request->session()->forget('student_csv_import');
 
-        return redirect()->route('coordinator.students.index')->with('status', "Imported {$imported} student(s) successfully.");
+        $message = "Imported {$imported} student(s) successfully.";
+        if ($unassigned > 0) {
+            $message .= " {$unassigned} student(s) were left unassigned and set inactive.";
+        }
+
+        return redirect()->route('coordinator.students.index')->with('status', $message);
     }
 
     public function bulkStatus(Request $request): RedirectResponse
@@ -253,13 +308,56 @@ class StudentController extends Controller
         $departmentIds = $this->departmentIds();
         $isActive = $validated['action'] === 'activate';
 
-        User::query()
+        $query = User::query()
             ->whereIn('id', $validated['student_ids'])
             ->where('role', 'student')
-            ->whereHas('program', fn ($query) => $query->whereIn('department_id', $departmentIds))
-            ->update(['is_active' => $isActive]);
+            ->whereHas('program', fn ($query) => $query->whereIn('department_id', $departmentIds));
+
+        if ($isActive && (clone $query)->whereNull('class_id')->exists()) {
+            return redirect()->route('coordinator.students.index')->withErrors([
+                'action' => 'Students without class assignment cannot be activated.',
+            ]);
+        }
+
+        $query->update(['is_active' => $isActive]);
 
         return redirect()->route('coordinator.students.index')->with('status', 'Student statuses updated.');
+    }
+
+    public function bulkAssignClass(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'program_id' => ['required', 'integer', 'exists:programs,id'],
+            'level_id' => ['required', 'integer', 'exists:levels,id'],
+            'class_id' => ['required', 'integer', 'exists:classes,id'],
+        ]);
+
+        $departmentIds = $this->departmentIds();
+
+        $program = Program::query()
+            ->where('id', $validated['program_id'])
+            ->whereIn('department_id', $departmentIds)
+            ->first();
+        abort_unless($program, 403);
+
+        $classroom = Classroom::query()
+            ->where('id', $validated['class_id'])
+            ->where('program_id', $validated['program_id'])
+            ->where('level_id', $validated['level_id'])
+            ->first();
+        abort_unless($classroom, 403);
+
+        $updated = User::query()
+            ->where('role', 'student')
+            ->where('program_id', $validated['program_id'])
+            ->where('level_id', $validated['level_id'])
+            ->whereHas('program', fn ($query) => $query->whereIn('department_id', $departmentIds))
+            ->update([
+                'class_id' => $classroom->id,
+                'is_active' => true,
+            ]);
+
+        return redirect()->route('coordinator.students.index')->with('status', "Assigned class to {$updated} student(s).");
     }
 
     public function template(): StreamedResponse
@@ -338,5 +436,27 @@ class StudentController extends Controller
         return auth()->user()->coordinatorAssignments()
             ->where('is_active', true)
             ->pluck('department_id');
+    }
+
+    private function scopedClasses()
+    {
+        return Classroom::query()
+            ->whereHas('program', fn ($query) => $query->whereIn('department_id', $this->departmentIds()))
+            ->with(['program.department', 'level'])
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function abortIfStudentOutOfScope(User $student): void
+    {
+        abort_unless($student->role === 'student', 404);
+
+        $departmentIds = $this->departmentIds();
+        $isInScope = Program::query()
+            ->where('id', $student->program_id)
+            ->whereIn('department_id', $departmentIds)
+            ->exists();
+
+        abort_unless($isInScope, 403);
     }
 }

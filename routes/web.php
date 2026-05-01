@@ -55,6 +55,9 @@ Route::prefix('coordinator')
         Route::post('/students/upload/preview', [StudentController::class, 'previewImport'])->name('students.preview');
         Route::post('/students/upload/import', [StudentController::class, 'import'])->name('students.import');
         Route::post('/students/bulk-status', [StudentController::class, 'bulkStatus'])->name('students.bulk-status');
+        Route::post('/students/bulk-assign-class', [StudentController::class, 'bulkAssignClass'])->name('students.bulk-assign-class');
+        Route::get('/students/{student}/assign-class', [StudentController::class, 'editClass'])->name('students.assign-class.edit');
+        Route::put('/students/{student}/assign-class', [StudentController::class, 'updateClass'])->name('students.assign-class.update');
         Route::get('/students/template', [StudentController::class, 'template'])->name('students.template');
         Route::get('/programs', [ProgramController::class, 'index'])->name('programs.index');
         Route::get('/programs/create', [ProgramController::class, 'create'])->name('programs.create');
