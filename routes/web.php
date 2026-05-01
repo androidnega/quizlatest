@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\CoordinatorController;
 use App\Http\Controllers\Admin\UniversityController;
 use App\Http\Controllers\Coordinator\DashboardController as CoordinatorDashboardController;
+use App\Http\Controllers\Coordinator\StudentController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -59,7 +60,12 @@ Route::prefix('coordinator')
     ->group(function () {
         Route::get('/dashboard', [CoordinatorDashboardController::class, 'index'])->name('dashboard');
 
-        Route::view('/students', 'coordinator.placeholders.students')->name('students.index');
+        Route::get('/students', [StudentController::class, 'index'])->name('students.index');
+        Route::get('/students/upload', [StudentController::class, 'uploadForm'])->name('students.upload');
+        Route::post('/students/upload/preview', [StudentController::class, 'previewImport'])->name('students.preview');
+        Route::post('/students/upload/import', [StudentController::class, 'import'])->name('students.import');
+        Route::post('/students/bulk-status', [StudentController::class, 'bulkStatus'])->name('students.bulk-status');
+        Route::get('/students/template', [StudentController::class, 'template'])->name('students.template');
         Route::view('/programs', 'coordinator.placeholders.programs')->name('programs.index');
         Route::view('/levels', 'coordinator.placeholders.levels')->name('levels.index');
         Route::view('/classes', 'coordinator.placeholders.classes')->name('classes.index');

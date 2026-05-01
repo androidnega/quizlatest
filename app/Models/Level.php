@@ -29,4 +29,9 @@ class Level extends Model
     {
         return $this->hasMany(Classroom::class);
     }
+
+    public function students(): HasMany
+    {
+        return $this->hasMany(User::class);
+    }
 }

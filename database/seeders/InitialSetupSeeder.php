@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class InitialSetupSeeder extends Seeder
 {
@@ -166,5 +167,87 @@ class InitialSetupSeeder extends Seeder
             'created_at' => $now,
             'updated_at' => $now,
         ]);
+
+        $bscCsProgramId = DB::table('programs')->insertGetId([
+            'university_id' => $universityId,
+            'department_id' => $departmentId,
+            'name' => 'BSc Computer Science',
+            'code' => 'BCS',
+            'is_active' => true,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        DB::table('programs')->insert([
+            'university_id' => $universityId,
+            'department_id' => $departmentId,
+            'name' => 'BSc Information Technology',
+            'code' => 'BIT',
+            'is_active' => true,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        $levels = [
+            ['name' => '100', 'code' => '100', 'sort_order' => 1],
+            ['name' => '200', 'code' => '200', 'sort_order' => 2],
+            ['name' => '300', 'code' => '300', 'sort_order' => 3],
+            ['name' => '400', 'code' => '400', 'sort_order' => 4],
+        ];
+
+        $level100Id = null;
+        foreach ($levels as $levelData) {
+            $levelId = DB::table('levels')->insertGetId([
+                'university_id' => $universityId,
+                'name' => $levelData['name'],
+                'code' => $levelData['code'],
+                'sort_order' => $levelData['sort_order'],
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            if ($levelData['code'] === '100') {
+                $level100Id = $levelId;
+            }
+        }
+
+        $studentNames = [
+            'Akua Serwaa',
+            'Yaw Boateng',
+            'Efua Baidoo',
+            'Kwesi Annan',
+            'Abena Dapaah',
+        ];
+
+        foreach ($studentNames as $index => $studentName) {
+            $serial = str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT);
+            $indexNumber = 'BCS/'.date('Y').'/'.$serial;
+            $email = Str::of($studentName)->lower()->replace(' ', '.')->append('@university.edu')->toString();
+
+            $studentId = DB::table('users')->insertGetId([
+                'university_id' => $universityId,
+                'program_id' => $bscCsProgramId,
+                'level_id' => $level100Id,
+                'class_id' => null,
+                'name' => $studentName,
+                'email' => $email,
+                'index_number' => $indexNumber,
+                'role' => 'student',
+                'is_active' => true,
+                'email_verified_at' => $now,
+                'password' => Hash::make('student123'),
+                'remember_token' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            DB::table('role_user')->insert([
+                'role_id' => $studentRoleId,
+                'user_id' => $studentId,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
     }
 }

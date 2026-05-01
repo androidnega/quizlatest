@@ -17,6 +17,9 @@ class User extends Authenticatable
 
     protected $fillable = [
         'university_id',
+        'program_id',
+        'level_id',
+        'class_id',
         'name',
         'email',
         'index_number',
@@ -47,6 +50,21 @@ class User extends Authenticatable
     public function university(): BelongsTo
     {
         return $this->belongsTo(University::class);
+    }
+
+    public function program(): BelongsTo
+    {
+        return $this->belongsTo(Program::class);
+    }
+
+    public function level(): BelongsTo
+    {
+        return $this->belongsTo(Level::class);
+    }
+
+    public function classroom(): BelongsTo
+    {
+        return $this->belongsTo(Classroom::class, 'class_id');
     }
 
     public function roles(): BelongsToMany
