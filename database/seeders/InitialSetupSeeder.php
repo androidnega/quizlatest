@@ -139,8 +139,8 @@ class InitialSetupSeeder extends Seeder
 
         $coordinatorUserId = DB::table('users')->insertGetId([
             'university_id' => $universityId,
-            'name' => 'Kwame Mensah',
-            'email' => 'kwame.mensah@du.edu.gh',
+            'name' => 'Kofi Mensah',
+            'email' => 'kofi.mensah@university.edu',
             'index_number' => 'AB/CS/2024/001',
             'role' => 'coordinator',
             'is_active' => true,
