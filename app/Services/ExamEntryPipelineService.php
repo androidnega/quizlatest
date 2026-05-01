@@ -66,17 +66,26 @@ class ExamEntryPipelineService
             ->exists();
         abort_unless(! $activeSessionExists, 422, 'Another active session already exists.');
 
-        // 4. OTP — must verify via POST /exam-sessions/verify-otp before face/session
-        if (! $this->examOtp->isOtpVerified((int) $student->id, $exam->id)) {
-            try {
-                $this->examOtp->ensurePendingOtpIssued($student, $exam->id);
-            } catch (RuntimeException) {
-                abort(503, 'SMS verification is temporarily unavailable. Please contact support.');
-            }
+        // 4. OTP — verify via POST /exam-sessions/verify-otp; then start may continue
+        try {
+            $otpGate = $this->examOtp->evaluateStartGate($student, $exam->id);
+        } catch (RuntimeException) {
+            abort(503, 'SMS verification is temporarily unavailable. Please contact support.');
+        }
 
+        if ($otpGate === 'otp_required') {
             return [
                 'status' => 'otp_required',
                 'message' => 'Enter the verification code sent to your phone.',
+                'exam_id' => $exam->id,
+                'expires_in_seconds' => (int) config('exam_otp.ttl_seconds', 300),
+            ];
+        }
+
+        if ($otpGate === 'otp_pending') {
+            return [
+                'status' => 'otp_pending',
+                'message' => 'Enter the verification code sent to your phone, or wait if you just requested it.',
                 'exam_id' => $exam->id,
                 'expires_in_seconds' => (int) config('exam_otp.ttl_seconds', 300),
             ];

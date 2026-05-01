@@ -4,7 +4,7 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Pending OTP (stored in Redis only)
+    | Pending OTP (stored in Redis only; otp_hash is bcrypt, never plaintext)
     |--------------------------------------------------------------------------
     */
     'ttl_seconds' => (int) env('EXAM_OTP_TTL_SECONDS', 300),
@@ -13,17 +13,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Window after successful OTP verify — student must complete exam start (face)
+    | After successful verify — window to complete face + session start
     |--------------------------------------------------------------------------
     */
     'verified_ttl_seconds' => (int) env('EXAM_OTP_VERIFIED_TTL_SECONDS', 900),
 
     /*
     |--------------------------------------------------------------------------
-    | SMS issue rate limit (per student, rolling window)
+    | Minimum seconds between SMS sends for the same exam OTP flow
     |--------------------------------------------------------------------------
     */
-    'max_send_per_window' => (int) env('EXAM_OTP_MAX_SEND_PER_WINDOW', 3),
+    'sms_resend_cooldown_seconds' => (int) env('EXAM_OTP_SMS_COOLDOWN_SECONDS', 60),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Max OTP **generation / SMS send** operations per student (rolling window)
+    |--------------------------------------------------------------------------
+    */
+    'max_send_per_window' => (int) env('EXAM_OTP_MAX_SEND_PER_WINDOW', 5),
 
     'send_window_seconds' => (int) env('EXAM_OTP_SEND_WINDOW_SECONDS', 600),
 

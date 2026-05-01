@@ -9,7 +9,7 @@ use RuntimeException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
- * Exam start OTP — stored only in Redis (never DB, never logged).
+ * Exam start OTP — Redis only; OTP stored as bcrypt hash (never plaintext, never logged).
  */
 class ExamOtpService
 {
@@ -22,54 +22,164 @@ class ExamOtpService
         return "otp:{$studentId}:{$examId}";
     }
 
-    public function verifiedKey(int $studentId, int $examId): string
-    {
-        return "otp_verified:{$studentId}:{$examId}";
-    }
-
+    /**
+     * True when Redis record exists, is within TTL, and verified === true.
+     */
     public function isOtpVerified(int $studentId, int $examId): bool
     {
-        return (bool) Redis::get($this->verifiedKey($studentId, $examId));
+        $raw = Redis::get($this->otpKey($studentId, $examId));
+        if ($raw === null || $raw === '') {
+            return false;
+        }
+
+        $data = json_decode($raw, true);
+        if (! is_array($data) || ! ($data['verified'] ?? false)) {
+            return false;
+        }
+
+        return ($data['expires_at'] ?? 0) > now()->timestamp;
     }
 
     /**
-     * Ensure a pending OTP exists for SMS flow; send only when creating or refreshing after expiry.
-     * Does not log OTP values.
+     * Entry pipeline: exam access already validated.
      *
-     * @throws HttpException
+     * @return string 'continue' | 'otp_required' | 'otp_pending'
      */
-    public function ensurePendingOtpIssued(User $student, int $examId): void
+    public function evaluateStartGate(User $student, int $examId): string
     {
         $key = $this->otpKey((int) $student->id, $examId);
+        $data = $this->getPayload($key);
 
-        $existing = Redis::get($key);
-        if ($existing !== null && $existing !== '') {
-            $payload = json_decode($existing, true);
-            if (is_array($payload) && isset($payload['expires_at'])
-                && (int) $payload['expires_at'] > now()->timestamp) {
-                return;
-            }
+        if ($this->isVerifiedPayloadAlive($data)) {
+            return 'continue';
+        }
+
+        if (is_array($data) && ($data['verified'] ?? false) === true) {
+            Redis::del($key);
+            $data = null;
+        }
+
+        if ($this->isPendingPayloadAlive($data)) {
+            return 'otp_pending';
+        }
+
+        if (is_array($data)) {
             Redis::del($key);
         }
 
+        return $this->atomicCreateAndSendOtp($student, $examId);
+    }
+
+    /**
+     * @throws HttpException
+     */
+    public function verifySubmittedOtp(User $student, int $examId, string $otpCode): void
+    {
+        abort_unless($student->role === 'student', 403);
+
+        $key = $this->otpKey((int) $student->id, $examId);
+        $raw = Redis::get($key);
+
+        abort_if($raw === null || $raw === '', 422, 'No verification code is active for this exam. Start the exam again.');
+
+        /** @var array<string, mixed>|null $data */
+        $data = json_decode($raw, true);
+        abort_if(! is_array($data), 422, 'Verification could not be completed.');
+
+        if (($data['verified'] ?? false) === true) {
+            abort(422, 'This exam is already verified for the current code window.');
+        }
+
+        $expiresAt = (int) ($data['expires_at'] ?? 0);
+        if ($expiresAt <= now()->timestamp) {
+            Redis::del($key);
+            abort(422, 'This code has expired. Start the exam again to receive a new code.');
+        }
+
+        $attempts = (int) ($data['attempt_count'] ?? 0);
+        $maxAttempts = (int) config('exam_otp.max_verify_attempts', 3);
+        abort_if($attempts >= $maxAttempts, 422, 'Too many failed attempts. Start the exam again.');
+
+        $hash = $data['otp_hash'] ?? null;
+        abort_if(! is_string($hash) || $hash === '', 422, 'Verification could not be completed.');
+
+        $normalized = $this->normalizeOtpDigits($otpCode);
+        abort_if(strlen($normalized) !== 6, 422, 'Invalid verification code format.');
+
+        if (! password_verify($normalized, $hash)) {
+            $data['attempt_count'] = $attempts + 1;
+            $remainingTtl = max(1, $expiresAt - now()->timestamp);
+            if ($data['attempt_count'] >= $maxAttempts) {
+                Redis::del($key);
+                abort(422, 'Too many failed attempts. Start the exam again.');
+            }
+            Redis::setex($key, $remainingTtl, json_encode($data));
+
+            abort(422, 'Invalid verification code.');
+        }
+
+        $verifiedTtl = (int) config('exam_otp.verified_ttl_seconds', 900);
+        $verifiedUntil = now()->addSeconds($verifiedTtl)->timestamp;
+
+        $verifiedPayload = [
+            'otp_hash' => null,
+            'expires_at' => $verifiedUntil,
+            'attempt_count' => (int) ($data['attempt_count'] ?? 0),
+            'verified' => true,
+            'last_sent_at' => (int) ($data['last_sent_at'] ?? now()->timestamp),
+        ];
+
+        Redis::setex($key, $verifiedTtl, json_encode($verifiedPayload));
+    }
+
+    /**
+     * After session created — one-time use; removes OTP state.
+     */
+    public function forgetVerifiedFlag(int $studentId, int $examId): void
+    {
+        Redis::del($this->otpKey($studentId, $examId));
+    }
+
+    /**
+     * @return 'otp_required'|'otp_pending'|'continue'
+     */
+    private function atomicCreateAndSendOtp(User $student, int $examId): string
+    {
         $phone = $this->normalizedPhone($student->phone ?? null);
         abort_if($phone === null, 422, 'Add a phone number on your profile before starting this exam.');
 
         $this->enforceSendRateLimit((int) $student->id);
 
-        $code = $this->generateSixDigitCode();
-        $ttl = config('exam_otp.ttl_seconds', 300);
+        $plain = $this->generateSixDigitCode();
+        $hash = password_hash($plain, PASSWORD_BCRYPT);
+
+        $ttl = (int) config('exam_otp.ttl_seconds', 300);
         $expiresAt = now()->addSeconds($ttl)->timestamp;
+        $now = now()->timestamp;
 
         $payload = [
-            'otp_code' => $code,
+            'otp_hash' => $hash,
             'expires_at' => $expiresAt,
             'attempt_count' => 0,
+            'verified' => false,
+            'last_sent_at' => $now,
         ];
 
-        Redis::setex($key, $ttl, json_encode($payload));
+        $key = $this->otpKey((int) $student->id, $examId);
+        $encoded = json_encode($payload);
 
-        $message = 'Your QUIZSNAP verification code is: '.$code.'. It expires in 5 minutes.';
+        $created = $this->redisSetNxEx($key, $encoded, $ttl);
+
+        if (! $created) {
+            $again = $this->getPayload($key);
+            if ($this->isVerifiedPayloadAlive($again)) {
+                return 'continue';
+            }
+
+            return 'otp_pending';
+        }
+
+        $message = 'Your QUIZSNAP verification code is: '.$plain.'. It expires in 5 minutes.';
 
         try {
             $result = $this->sms->send([$phone], $message);
@@ -82,65 +192,73 @@ class ExamOtpService
             throw $e;
         }
 
-        RateLimiter::hit($this->sendRateLimiterKey((int) $student->id), config('exam_otp.send_window_seconds', 600));
+        RateLimiter::hit(
+            $this->sendRateLimiterKey((int) $student->id),
+            (int) config('exam_otp.send_window_seconds', 600),
+        );
+
+        return 'otp_required';
     }
 
     /**
-     * Validate OTP and set short-lived verified flag in Redis; removes pending OTP (one-time code).
-     *
-     * @throws HttpException
+     * Atomic SET with TTL only when key does not exist (race-safe creation).
      */
-    public function verifySubmittedOtp(User $student, int $examId, string $otpCode): void
+    private function redisSetNxEx(string $key, string $value, int $ttlSeconds): bool
     {
-        abort_unless($student->role === 'student', 403);
+        $result = Redis::set($key, $value, 'EX', $ttlSeconds, 'NX');
 
-        $key = $this->otpKey((int) $student->id, $examId);
-        $raw = Redis::get($key);
+        return $result === true || $result === 'OK' || $result === 1;
+    }
 
-        abort_if($raw === null || $raw === '', 422, 'No verification code is active for this exam. Request a new code.');
-
-        /** @var array<string, mixed>|null $data */
-        $data = json_decode($raw, true);
-        abort_if(! is_array($data), 422, 'Verification could not be completed.');
-
-        $expiresAt = (int) ($data['expires_at'] ?? 0);
-        abort_if($expiresAt <= now()->timestamp, 422, 'This code has expired. Start the exam again to receive a new code.');
-
-        $attempts = (int) ($data['attempt_count'] ?? 0);
-        $maxAttempts = config('exam_otp.max_verify_attempts', 3);
-        abort_if($attempts >= $maxAttempts, 422, 'Too many failed attempts. Request a new code.');
-
-        $expected = (string) ($data['otp_code'] ?? '');
-        $given = preg_replace('/\D/', '', $otpCode) ?? '';
-
-        if (! hash_equals($expected, $given)) {
-            $data['attempt_count'] = $attempts + 1;
-            $remainingTtl = max(1, $expiresAt - now()->timestamp);
-            if ($data['attempt_count'] >= $maxAttempts) {
-                Redis::del($key);
-                abort(422, 'Too many failed attempts. Request a new code.');
-            }
-            Redis::setex($key, $remainingTtl, json_encode($data));
-            abort(422, 'Invalid verification code.');
+    /**
+     * @param  array<string, mixed>|null  $data
+     */
+    private function isVerifiedPayloadAlive(?array $data): bool
+    {
+        if (! is_array($data) || ($data['verified'] ?? false) !== true) {
+            return false;
         }
 
-        Redis::del($key);
-
-        $verifiedTtl = (int) config('exam_otp.verified_ttl_seconds', 900);
-        Redis::setex($this->verifiedKey((int) $student->id, $examId), $verifiedTtl, '1');
+        return ($data['expires_at'] ?? 0) > now()->timestamp;
     }
 
     /**
-     * After session is created — verified flag is single-use for this attempt chain.
+     * @param  array<string, mixed>|null  $data
      */
-    public function forgetVerifiedFlag(int $studentId, int $examId): void
+    private function isPendingPayloadAlive(?array $data): bool
     {
-        Redis::del($this->verifiedKey($studentId, $examId));
+        if (! is_array($data) || ($data['verified'] ?? false) === true) {
+            return false;
+        }
+
+        return ($data['expires_at'] ?? 0) > now()->timestamp;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function getPayload(string $key): ?array
+    {
+        $raw = Redis::get($key);
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        $data = json_decode($raw, true);
+
+        return is_array($data) ? $data : null;
     }
 
     private function generateSixDigitCode(): string
     {
         return str_pad((string) random_int(0, 999_999), 6, '0', STR_PAD_LEFT);
+    }
+
+    private function normalizeOtpDigits(string $otp): string
+    {
+        $digits = preg_replace('/\D/', '', $otp);
+
+        return $digits ?? '';
     }
 
     private function normalizedPhone(?string $phone): ?string
@@ -165,7 +283,7 @@ class ExamOtpService
     private function enforceSendRateLimit(int $studentId): void
     {
         $key = $this->sendRateLimiterKey($studentId);
-        $max = (int) config('exam_otp.max_send_per_window', 3);
+        $max = (int) config('exam_otp.max_send_per_window', 5);
         $decay = (int) config('exam_otp.send_window_seconds', 600);
 
         if (RateLimiter::tooManyAttempts($key, $max)) {
