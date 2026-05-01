@@ -8,7 +8,9 @@ use App\Models\ProctoringEvent;
 use App\Models\Question;
 use App\Models\Quiz;
 use App\Models\Result;
+use App\Services\ProctoringOrchestratorService;
 use App\Support\FaceEmbeddingComparator;
+use App\Support\ProctoringCapabilityResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +18,10 @@ use Illuminate\Support\Str;
 
 class ExamSessionController extends Controller
 {
+    public function __construct(
+        private readonly ProctoringOrchestratorService $orchestrator,
+    ) {}
+
     public function start(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -30,7 +36,11 @@ class ExamSessionController extends Controller
         abort_unless($student->class_id !== null, 422, 'Student must be assigned to class.');
 
         $exam = Quiz::query()->findOrFail($validated['exam_id']);
-        $threshold = 60.0;
+        $settings = ProctoringOrchestratorService::normalizeProctoringSettings(
+            is_array($exam->proctoring_settings) ? $exam->proctoring_settings : [],
+            (int) $exam->id,
+        );
+        $threshold = (float) $settings['face_match_threshold'];
         $template = is_array($student->face_embedding) ? $student->face_embedding : [];
         $similarity = FaceEmbeddingComparator::similarityPercent($template, $validated['face_embedding']);
         $retryAttempt = (int) ($validated['face_retry_attempt'] ?? 0);
@@ -134,6 +144,20 @@ class ExamSessionController extends Controller
         return response()->json(['status' => $examSession->status]);
     }
 
+    public function proctoringCapability(Request $request): JsonResponse
+    {
+        abort_unless($request->user()?->role === 'student', 403);
+
+        $validated = $request->validate([
+            'hardware_concurrency' => ['nullable', 'integer', 'min:1', 'max:512'],
+            'device_memory_gb' => ['nullable', 'numeric', 'min:1'],
+            'network_effective_type' => ['nullable', 'string', 'max:32'],
+            'save_data' => ['nullable', 'boolean'],
+        ]);
+
+        return response()->json(ProctoringCapabilityResolver::resolve($validated));
+    }
+
     public function logProctoringEvent(Request $request, ExamSession $examSession): JsonResponse
     {
         $this->authorizeStudentSession($request, $examSession);
@@ -145,66 +169,25 @@ class ExamSessionController extends Controller
             'event_type' => ['required', 'string', 'max:100'],
             'severity' => ['nullable', 'integer', 'min:1', 'max:5'],
             'flagged' => ['nullable', 'boolean'],
-            'metadata' => ['nullable', 'array'],
-        ]);
-        $scoreMap = [
-            'tab_switch' => 5,
-            'face_missing' => 10,
-            'multiple_faces' => 25,
-            'phone_detected' => 20,
-            'fullscreen_exit' => 10,
-        ];
-        $eventType = $validated['event_type'];
-        $scoreIncrease = $scoreMap[$eventType] ?? 0;
-
-        $events = is_array($examSession->violation_events) ? $examSession->violation_events : [];
-        $now = now();
-        $lastSame = collect($events)->reverse()->first(fn ($event) => ($event['event_type'] ?? '') === $eventType);
-        $cooldownSeconds = 45;
-        $inCooldown = false;
-        if (is_array($lastSame) && ! empty($lastSame['timestamp'])) {
-            $inCooldown = $now->diffInSeconds($lastSame['timestamp']) < $cooldownSeconds;
-        }
-        if ($inCooldown) {
-            $scoreIncrease = 0;
-        }
-
-        $newScore = ((int) $examSession->violation_score) + $scoreIncrease;
-        $riskState = $this->resolveRiskState($newScore);
-        $events[] = [
-            'event_type' => $eventType,
-            'score' => $scoreIncrease,
-            'timestamp' => $now->toISOString(),
-            'cooldown_applied' => $inCooldown,
-        ];
-
-        ProctoringEvent::create([
-            'user_id' => $examSession->student_id,
-            'quiz_id' => $examSession->exam_id,
-            'event_type' => $eventType,
-            'severity' => $validated['severity'] ?? 1,
-            'flagged' => (bool) ($validated['flagged'] ?? false),
-            'action_taken' => null,
-            'metadata' => [
-                'session_id' => $examSession->session_id,
-                'student_id' => $examSession->student_id,
-                'exam_id' => $examSession->exam_id,
-                'risk_state' => $riskState,
-                'payload' => $validated['metadata'] ?? [],
-            ],
-            'created_at' => $now,
+            'metadata' => ['required', 'array'],
+            'metadata.session_id' => ['required', 'string'],
+            'metadata.student_id' => ['required', 'integer'],
+            'metadata.exam_id' => ['required', 'integer'],
         ]);
 
-        $examSession->update([
-            'violation_count' => (int) $examSession->violation_count + (($validated['flagged'] ?? false) ? 1 : 0),
-            'violation_score' => $newScore,
-            'violation_events' => $events,
-            'last_event_time' => $now,
-            'risk_state' => $riskState,
-            'exam_status' => $newScore >= 50 ? 'flagged_for_review' : $examSession->exam_status,
-        ]);
+        abort_unless($validated['metadata']['session_id'] === $examSession->session_id, 422, 'session_id mismatch.');
+        abort_unless((int) $validated['metadata']['student_id'] === (int) $examSession->student_id, 422, 'student_id mismatch.');
+        abort_unless((int) $validated['metadata']['exam_id'] === (int) $examSession->exam_id, 422, 'exam_id mismatch.');
 
-        if ($newScore >= 90) {
+        $decision = $this->orchestrator->ingestEvent(
+            examSession: $examSession,
+            eventType: $validated['event_type'],
+            metadata: $validated['metadata'],
+            severity: $validated['severity'] ?? null,
+            flagged: (bool) ($validated['flagged'] ?? false),
+        );
+
+        if ($decision['auto_submit'] === true) {
             $this->submitSession($examSession->fresh(), 'submitted_held', 'violation_threshold');
 
             return response()->json([
@@ -216,8 +199,64 @@ class ExamSessionController extends Controller
 
         return response()->json([
             'status' => 'logged',
-            'violation_score' => $newScore,
-            'risk_state' => $riskState,
+            'violation_score' => $decision['score'],
+            'risk_state' => $decision['risk_state'],
+            'action' => $decision['action'],
+        ]);
+    }
+
+    public function logProctoringEventBatch(Request $request, ExamSession $examSession): JsonResponse
+    {
+        $this->authorizeStudentSession($request, $examSession);
+        if ($this->autoExpireIfTimedOut($examSession)) {
+            return response()->json(['status' => 'submitted', 'reason' => 'timeout']);
+        }
+
+        $payload = $this->decodeProctoringBatchPayload($request);
+
+        $validated = validator($payload, [
+            'events' => ['required', 'array', 'min:1', 'max:25'],
+            'events.*.event_type' => ['required', 'string', 'max:100'],
+            'events.*.severity' => ['nullable', 'integer', 'min:1', 'max:5'],
+            'events.*.flagged' => ['nullable', 'boolean'],
+            'events.*.metadata' => ['required', 'array'],
+            'events.*.metadata.session_id' => ['required', 'string'],
+            'events.*.metadata.student_id' => ['required', 'integer'],
+            'events.*.metadata.exam_id' => ['required', 'integer'],
+        ])->validate();
+
+        foreach ($validated['events'] as $eventPayload) {
+            abort_unless($eventPayload['metadata']['session_id'] === $examSession->session_id, 422, 'session_id mismatch.');
+            abort_unless((int) $eventPayload['metadata']['student_id'] === (int) $examSession->student_id, 422, 'student_id mismatch.');
+            abort_unless((int) $eventPayload['metadata']['exam_id'] === (int) $examSession->exam_id, 422, 'exam_id mismatch.');
+
+            $decision = $this->orchestrator->ingestEvent(
+                examSession: $examSession->fresh(),
+                eventType: $eventPayload['event_type'],
+                metadata: $eventPayload['metadata'],
+                severity: $eventPayload['severity'] ?? null,
+                flagged: (bool) ($eventPayload['flagged'] ?? false),
+            );
+
+            if ($decision['auto_submit'] === true) {
+                $this->submitSession($examSession->fresh(), 'submitted_held', 'violation_threshold');
+
+                return response()->json([
+                    'status' => 'submitted_held',
+                    'reason' => 'violation_threshold',
+                    'message' => 'Your exam has been submitted due to violation detection. Your result is under review. Please contact your lecturer.',
+                    'last_decision' => $decision,
+                ]);
+            }
+
+            $examSession = $examSession->fresh();
+        }
+
+        return response()->json([
+            'status' => 'logged',
+            'processed' => count($validated['events']),
+            'violation_score' => $examSession->violation_score,
+            'risk_state' => $examSession->risk_state,
         ]);
     }
 
@@ -294,6 +333,29 @@ class ExamSessionController extends Controller
         return response()->json(['status' => 'overridden']);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeProctoringBatchPayload(Request $request): array
+    {
+        $encoding = strtolower((string) $request->header('X-Qs-Encoding', ''));
+
+        if ($encoding === 'gzip') {
+            abort_unless(extension_loaded('zlib'), 415, 'gzip support unavailable.');
+            $decoded = gzdecode($request->getContent());
+            abort_if($decoded === false, 422, 'Invalid gzip payload.');
+            $data = json_decode($decoded, true);
+            abort_unless(is_array($data), 422, 'Invalid batch JSON.');
+
+            return $data;
+        }
+
+        $data = $request->json()->all();
+        abort_unless(is_array($data), 422, 'Invalid batch payload.');
+
+        return $data;
+    }
+
     private function authorizeStudentSession(Request $request, ExamSession $examSession): void
     {
         $user = $request->user();
@@ -348,17 +410,6 @@ class ExamSessionController extends Controller
                 'submitted_at' => now(),
             ],
         );
-    }
-
-    private function resolveRiskState(int $score): string
-    {
-        return match (true) {
-            $score >= 90 => 'locked',
-            $score >= 70 => 'critical',
-            $score >= 50 => 'suspicious',
-            $score >= 30 => 'warning',
-            default => 'normal',
-        };
     }
 
     private function applyReviewDecision(ExamSession $examSession, string $decision, string $note): void

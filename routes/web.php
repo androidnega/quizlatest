@@ -1,12 +1,12 @@
 <?php
 
-use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\CoordinatorController;
+use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\UniversityController;
-use App\Http\Controllers\Coordinator\DashboardController as CoordinatorDashboardController;
 use App\Http\Controllers\Coordinator\ClassCourseAssignmentController;
 use App\Http\Controllers\Coordinator\ClassroomController;
 use App\Http\Controllers\Coordinator\CourseController;
+use App\Http\Controllers\Coordinator\DashboardController as CoordinatorDashboardController;
 use App\Http\Controllers\Coordinator\LevelController;
 use App\Http\Controllers\Coordinator\ProgramController;
 use App\Http\Controllers\Coordinator\StudentController;
@@ -41,9 +41,11 @@ Route::middleware('auth')->group(function () {
         ->name('exam-sessions.')
         ->group(function () {
             Route::post('/start', [ExamSessionController::class, 'start'])->name('start');
+            Route::post('/proctoring-capability', [ExamSessionController::class, 'proctoringCapability'])->name('proctoring-capability');
             Route::post('/{examSession}/answers', [ExamSessionController::class, 'saveAnswer'])->name('answers.save');
             Route::post('/{examSession}/heartbeat', [ExamSessionController::class, 'heartbeat'])->name('heartbeat');
             Route::post('/{examSession}/proctoring-events', [ExamSessionController::class, 'logProctoringEvent'])->name('proctoring-events.store');
+            Route::post('/{examSession}/proctoring-events/batch', [ExamSessionController::class, 'logProctoringEventBatch'])->name('proctoring-events.batch');
             Route::post('/{examSession}/submit', [ExamSessionController::class, 'submit'])->name('submit');
             Route::post('/{examSession}/force-submit', [ExamSessionController::class, 'forceSubmit'])->name('force-submit');
             Route::get('/{examSession}/review-timeline', [ExamSessionController::class, 'reviewTimeline'])->name('review-timeline');

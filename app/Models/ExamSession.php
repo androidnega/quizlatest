@@ -52,4 +52,9 @@ class ExamSession extends Model
     {
         return $this->hasMany(ExamSessionAnswer::class);
     }
+
+    public function getRouteKeyName(): string
+    {
+        return 'session_id';
+    }
 }

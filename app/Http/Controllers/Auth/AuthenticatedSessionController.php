@@ -47,11 +47,8 @@ class AuthenticatedSessionController extends Controller
 
     private function redirectPathByRole(Request $request): string
     {
-        return match ($request->user()?->role) {
-            'admin' => route('admin.dashboard', absolute: false),
-            'coordinator' => route('coordinator.dashboard', absolute: false),
-            'student' => route('student.dashboard', absolute: false),
-            default => route('login', absolute: false),
-        };
+        return $request->user()
+            ? route('dashboard', absolute: false)
+            : route('login', absolute: false);
     }
 }
