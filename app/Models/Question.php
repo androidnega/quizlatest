@@ -11,9 +11,10 @@ class Question extends Model
         'quiz_id',
         'quiz_section_id',
         'question_text',
-        'question_type',
+        'type',
         'options',
         'correct_answer',
+        'answer_schema',
         'marks',
         'question_order',
         'metadata',
@@ -21,6 +22,8 @@ class Question extends Model
 
     protected $casts = [
         'options' => 'array',
+        'correct_answer' => 'array',
+        'answer_schema' => 'array',
         'metadata' => 'array',
     ];
 
@@ -32,5 +35,25 @@ class Question extends Model
     public function section(): BelongsTo
     {
         return $this->belongsTo(QuizSection::class, 'quiz_section_id');
+    }
+
+    public function isMCQ(): bool
+    {
+        return $this->type === 'mcq';
+    }
+
+    public function isTrueFalse(): bool
+    {
+        return $this->type === 'true_false';
+    }
+
+    public function isFillBlank(): bool
+    {
+        return $this->type === 'fill_blank';
+    }
+
+    public function isEssay(): bool
+    {
+        return $this->type === 'essay';
     }
 }
