@@ -12,6 +12,7 @@ use App\Http\Controllers\Coordinator\LevelController;
 use App\Http\Controllers\Coordinator\ProgramController;
 use App\Http\Controllers\Coordinator\StudentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Examiner\ExamBuilderController;
 use App\Http\Controllers\ExamSessionController;
 use App\Http\Controllers\ProctoringUploadController;
 use App\Http\Controllers\ProfileController;
@@ -117,6 +118,18 @@ Route::prefix('coordinator')
         Route::patch('/courses/{course}/toggle-status', [CourseController::class, 'toggleStatus'])->name('courses.toggle-status');
         Route::get('/courses/assign/classes', [ClassCourseAssignmentController::class, 'edit'])->name('courses.assign.edit');
         Route::post('/courses/assign/classes', [ClassCourseAssignmentController::class, 'update'])->name('courses.assign.update');
+    });
+
+Route::prefix('examiner')
+    ->name('examiner.')
+    ->middleware(['auth', 'verified', 'examiner'])
+    ->group(function () {
+        Route::get('/exams', [ExamBuilderController::class, 'index'])->name('exams.index');
+        Route::get('/exams/create', [ExamBuilderController::class, 'create'])->name('exams.create');
+        Route::post('/exams', [ExamBuilderController::class, 'store'])->name('exams.store');
+        Route::get('/exams/{exam}/builder', [ExamBuilderController::class, 'builder'])->name('exams.builder');
+        Route::post('/exams/{exam}/sections', [ExamBuilderController::class, 'storeSection'])->name('exams.sections.store');
+        Route::post('/exams/{exam}/sections/{section}/questions', [ExamBuilderController::class, 'storeQuestion'])->name('exams.questions.store');
     });
 
 require __DIR__.'/auth.php';
