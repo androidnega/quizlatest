@@ -34,25 +34,34 @@ export function createProctoringEcho() {
     });
 }
 
-export function subscribeExamSessionChannels(echo, sessionId, handlers = {}) {
+/**
+ * Subscribes to exam-session WebSocket events and forwards payloads into ExamStateEngine only.
+ *
+ * @param {import('./examStateEngine.js').ExamStateEngine} examStateEngine
+ */
+export function subscribeExamSessionChannels(echo, sessionId, examStateEngine) {
     if (!echo || !sessionId) {
+        return () => {};
+    }
+    if (!examStateEngine?.handleRealtimeEvent) {
         return () => {};
     }
 
     const channel = echo.private(`exam-session.${sessionId}`);
 
-    if (handlers.onWarning) {
-        channel.listen('.proctoring.warning', handlers.onWarning);
-    }
-    if (handlers.onRiskUpdate) {
-        channel.listen('.proctoring.risk-update', handlers.onRiskUpdate);
-    }
-    if (handlers.onAutoSubmit) {
-        channel.listen('.exam.autosubmit', handlers.onAutoSubmit);
-    }
-    if (handlers.onHeldResult) {
-        channel.listen('.exam.held-result', handlers.onHeldResult);
-    }
+    channel.listen('.proctoring.warning', (payload) =>
+        examStateEngine.handleRealtimeEvent('proctoring.warning', payload),
+    );
+    channel.listen('.proctoring.risk-update', (payload) =>
+        examStateEngine.handleRealtimeEvent('proctoring.risk-update', payload),
+    );
+    channel.listen('.exam.autosubmit', (payload) => examStateEngine.handleRealtimeEvent('exam.autosubmit', payload));
+    channel.listen('.exam.held-result', (payload) =>
+        examStateEngine.handleRealtimeEvent('exam.held-result', payload),
+    );
+    channel.listen('.exam.governance-update', (payload) =>
+        examStateEngine.handleRealtimeEvent('exam.governance-update', payload),
+    );
 
     return () => {
         echo.leave(`exam-session.${sessionId}`);

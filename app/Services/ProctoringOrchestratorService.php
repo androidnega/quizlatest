@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\Log;
 
 class ProctoringOrchestratorService
 {
+    public function __construct(
+        private readonly ProctoringGlobalControlService $globalControl,
+    ) {}
+
     /** @var array<int, bool> */
     private static array $configNormalizationLoggedForExam = [];
 
@@ -141,6 +145,15 @@ class ProctoringOrchestratorService
     }
 
     /**
+     * @param  array<string, mixed>  $normalizedExamOnly  Output of normalizeProctoringSettings()
+     * @return array<string, mixed>
+     */
+    public static function mergeInternalBandsWithNormalized(array $normalizedExamOnly): array
+    {
+        return array_merge(self::INTERNAL_SCORE_BANDS, $normalizedExamOnly);
+    }
+
+    /**
      * Full settings used inside ingest (canonical quiz fields + fixed bands).
      *
      * @return array<string, mixed>
@@ -150,12 +163,24 @@ class ProctoringOrchestratorService
         $examSession->loadMissing('exam');
         $raw = is_array($examSession->exam?->proctoring_settings) ? $examSession->exam->proctoring_settings : [];
 
-        return array_merge(self::INTERNAL_SCORE_BANDS, self::normalizeProctoringSettings($raw, $examSession->exam_id));
+        $normalized = self::normalizeProctoringSettings($raw, $examSession->exam_id);
+        $merged = self::mergeInternalBandsWithNormalized($normalized);
+
+        return $this->globalControl->mergeExamSettingsForOrchestrator($merged);
     }
 
     public function ingestEvent(ExamSession $examSession, string $eventType, array $metadata = [], ?int $severity = null, bool $flagged = false): array
     {
         $examSession->loadMissing('exam');
+
+        if ($this->globalControl->shouldBypassProctoringIngest()) {
+            return [
+                'score' => (int) $examSession->violation_score,
+                'risk_state' => (string) $examSession->risk_state,
+                'action' => 'log',
+                'auto_submit' => false,
+            ];
+        }
 
         $settings = $this->effectiveSettings($examSession);
         $events = is_array($examSession->violation_events) ? $examSession->violation_events : [];

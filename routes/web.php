@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\CoordinatorController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\ProctoringGovernanceController;
 use App\Http\Controllers\Admin\UniversityController;
 use App\Http\Controllers\Coordinator\ClassCourseAssignmentController;
 use App\Http\Controllers\Coordinator\ClassroomController;
@@ -42,6 +43,7 @@ Route::middleware('auth')->group(function () {
         ->group(function () {
             Route::post('/start', [ExamSessionController::class, 'start'])->name('start');
             Route::post('/proctoring-capability', [ExamSessionController::class, 'proctoringCapability'])->name('proctoring-capability');
+            Route::get('/{examSession}/state', [ExamSessionController::class, 'state'])->name('state');
             Route::post('/{examSession}/answers', [ExamSessionController::class, 'saveAnswer'])->name('answers.save');
             Route::post('/{examSession}/heartbeat', [ExamSessionController::class, 'heartbeat'])->name('heartbeat');
             Route::post('/{examSession}/proctoring-events', [ExamSessionController::class, 'logProctoringEvent'])->name('proctoring-events.store');
@@ -71,6 +73,10 @@ Route::prefix('admin')
         Route::post('/coordinators', [CoordinatorController::class, 'store'])->name('coordinators.store');
         Route::get('/coordinators/{coordinator}/edit', [CoordinatorController::class, 'edit'])->name('coordinators.edit');
         Route::put('/coordinators/{coordinator}', [CoordinatorController::class, 'update'])->name('coordinators.update');
+
+        Route::post('/proctoring/toggle', [ProctoringGovernanceController::class, 'toggle'])->name('proctoring.toggle');
+        Route::post('/proctoring/emergency-shutdown', [ProctoringGovernanceController::class, 'emergencyShutdown'])->name('proctoring.emergency-shutdown');
+        Route::post('/proctoring/override-config', [ProctoringGovernanceController::class, 'overrideConfig'])->name('proctoring.override-config');
     });
 
 Route::prefix('coordinator')

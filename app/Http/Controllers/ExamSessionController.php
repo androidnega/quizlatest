@@ -6,20 +6,21 @@ use App\Models\ExamSession;
 use App\Models\ExamSessionAnswer;
 use App\Models\ProctoringEvent;
 use App\Models\Question;
-use App\Models\Quiz;
 use App\Models\Result;
+use App\Services\ExamEntryPipelineService;
+use App\Services\ProctoringGlobalControlService;
 use App\Services\ProctoringOrchestratorService;
-use App\Support\FaceEmbeddingComparator;
+use App\Support\ExamSessionStateResolver;
 use App\Support\ProctoringCapabilityResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class ExamSessionController extends Controller
 {
     public function __construct(
         private readonly ProctoringOrchestratorService $orchestrator,
+        private readonly ExamEntryPipelineService $entryPipeline,
+        private readonly ProctoringGlobalControlService $globalControl,
     ) {}
 
     public function start(Request $request): JsonResponse
@@ -29,74 +30,27 @@ class ExamSessionController extends Controller
             'face_embedding' => ['required', 'array', 'min:3'],
             'face_embedding.*' => ['numeric'],
             'face_retry_attempt' => ['nullable', 'integer', 'min:0', 'max:1'],
+            'hardware_concurrency' => ['nullable', 'integer', 'min:1', 'max:512'],
+            'device_memory_gb' => ['nullable', 'numeric', 'min:1'],
+            'network_effective_type' => ['nullable', 'string', 'max:32'],
+            'save_data' => ['nullable', 'boolean'],
         ]);
 
-        $student = $request->user();
-        abort_unless($student && $student->role === 'student', 403);
-        abort_unless($student->class_id !== null, 422, 'Student must be assigned to class.');
+        return response()->json($this->entryPipeline->execute($request, $validated));
+    }
 
-        $exam = Quiz::query()->findOrFail($validated['exam_id']);
-        $settings = ProctoringOrchestratorService::normalizeProctoringSettings(
-            is_array($exam->proctoring_settings) ? $exam->proctoring_settings : [],
-            (int) $exam->id,
+    public function state(Request $request, ExamSession $examSession): JsonResponse
+    {
+        $this->authorizeStudentOwnsSession($request, $examSession);
+
+        $fresh = $examSession->fresh();
+        if ($fresh && $fresh->status !== 'submitted') {
+            $this->autoExpireIfTimedOut($fresh);
+        }
+
+        return response()->json(
+            ExamSessionStateResolver::payload($examSession->fresh(), $this->globalControl->getControl()),
         );
-        $threshold = (float) $settings['face_match_threshold'];
-        $template = is_array($student->face_embedding) ? $student->face_embedding : [];
-        $similarity = FaceEmbeddingComparator::similarityPercent($template, $validated['face_embedding']);
-        $retryAttempt = (int) ($validated['face_retry_attempt'] ?? 0);
-        abort_unless(! empty($template), 422, 'Face template not enrolled.');
-        abort_unless(
-            $similarity >= $threshold || $retryAttempt === 0,
-            422,
-            'Face verification failed. Retry once.',
-        );
-        abort_unless($similarity >= $threshold, 422, 'Face verification failed. Exam start blocked.');
-
-        $classHasExamCourse = DB::table('class_course')
-            ->where('class_id', $student->class_id)
-            ->where('course_id', $exam->course_id)
-            ->exists();
-        abort_unless($classHasExamCourse, 422, 'Exam is not assigned to your class.');
-
-        $session = DB::transaction(function () use ($student, $exam) {
-            $existingSubmitted = ExamSession::query()
-                ->where('student_id', $student->id)
-                ->where('exam_id', $exam->id)
-                ->where('status', 'submitted')
-                ->lockForUpdate()
-                ->exists();
-            abort_unless(! $existingSubmitted, 422, 'Re-entry is not allowed after submission.');
-
-            $activeSessionExists = ExamSession::query()
-                ->where('student_id', $student->id)
-                ->whereIn('status', ['active', 'paused'])
-                ->lockForUpdate()
-                ->exists();
-            abort_unless(! $activeSessionExists, 422, 'Another active session already exists.');
-
-            return ExamSession::create([
-                'student_id' => $student->id,
-                'class_id' => $student->class_id,
-                'exam_id' => $exam->id,
-                'session_id' => (string) Str::uuid(),
-                'status' => 'active',
-                'start_time' => now(),
-                'end_time' => null,
-                'violation_count' => 0,
-                'violation_score' => 0,
-                'violation_events' => [],
-                'last_event_time' => null,
-                'risk_state' => 'normal',
-                'exam_status' => 'active',
-            ]);
-        });
-
-        return response()->json([
-            'session_id' => $session->session_id,
-            'status' => $session->status,
-            'start_time' => $session->start_time?->toISOString(),
-            'face_similarity' => $similarity,
-        ]);
     }
 
     public function saveAnswer(Request $request, ExamSession $examSession): JsonResponse
@@ -356,16 +310,23 @@ class ExamSessionController extends Controller
         return $data;
     }
 
-    private function authorizeStudentSession(Request $request, ExamSession $examSession): void
+    private function authorizeStudentOwnsSession(Request $request, ExamSession $examSession): void
     {
         $user = $request->user();
         abort_unless($user && $user->role === 'student', 403);
         abort_unless((int) $examSession->student_id === (int) $user->id, 403);
+    }
+
+    private function authorizeStudentSession(Request $request, ExamSession $examSession): void
+    {
+        $this->authorizeStudentOwnsSession($request, $examSession);
         abort_unless(in_array($examSession->status, ['active', 'paused'], true), 422, 'Session is not active.');
     }
 
     private function autoExpireIfTimedOut(ExamSession $examSession): bool
     {
+        $examSession->loadMissing('exam');
+
         $durationMinutes = (int) ($examSession->exam?->duration_minutes ?? 0);
         if ($durationMinutes <= 0) {
             return false;
