@@ -28,7 +28,7 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        return redirect()->intended($this->redirectPathByRole($request));
     }
 
     /**
@@ -43,5 +43,15 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerateToken();
 
         return redirect('/');
+    }
+
+    private function redirectPathByRole(Request $request): string
+    {
+        return match ($request->user()?->role) {
+            'admin' => route('admin.dashboard', absolute: false),
+            'coordinator' => route('coordinator.dashboard', absolute: false),
+            'student' => route('student.dashboard', absolute: false),
+            default => route('login', absolute: false),
+        };
     }
 }
