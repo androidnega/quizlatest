@@ -18,6 +18,7 @@ use App\Http\Controllers\Examiner\ExamBuilderController;
 use App\Http\Controllers\ExamSessionController;
 use App\Http\Controllers\ProctoringUploadController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Student\StudentExamController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -29,6 +30,9 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     ->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/student/exam/{examSession}', [StudentExamController::class, 'take'])
+        ->name('student.exam.take');
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

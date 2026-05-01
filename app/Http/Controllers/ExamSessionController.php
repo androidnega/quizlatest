@@ -16,6 +16,7 @@ use App\Services\ExamOtpService;
 use App\Services\ProctoringGlobalControlService;
 use App\Services\ProctoringOrchestratorService;
 use App\Services\ResultFinalizationService;
+use App\Support\ExamRuntimeStateExtension;
 use App\Support\ExamSessionStateResolver;
 use App\Support\ProctoringCapabilityResolver;
 use Illuminate\Http\JsonResponse;
@@ -83,9 +84,13 @@ class ExamSessionController extends Controller
             $this->autoExpireIfTimedOut($fresh);
         }
 
-        return response()->json(
-            ExamSessionStateResolver::payload($examSession->fresh(), $this->globalControl->getControl()),
-        );
+        $fresh = $examSession->fresh();
+        abort_if($fresh === null, 404);
+
+        $base = ExamSessionStateResolver::payload($fresh, $this->globalControl->getControl());
+        $runtime = ExamRuntimeStateExtension::forSession($fresh);
+
+        return response()->json(array_merge($base, $runtime));
     }
 
     public function saveAnswer(Request $request, ExamSession $examSession): JsonResponse
