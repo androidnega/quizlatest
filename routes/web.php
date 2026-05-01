@@ -11,6 +11,7 @@ use App\Http\Controllers\Coordinator\LevelController;
 use App\Http\Controllers\Coordinator\ProgramController;
 use App\Http\Controllers\Coordinator\StudentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ExamSessionController;
 use App\Http\Controllers\ProctoringUploadController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
@@ -34,6 +35,17 @@ Route::middleware('auth')->group(function () {
             Route::post('/path', [ProctoringUploadController::class, 'createUploadPath'])->name('path');
             Route::post('/file', [ProctoringUploadController::class, 'uploadFile'])->name('file');
             Route::post('/metadata', [ProctoringUploadController::class, 'storeMetadata'])->name('metadata');
+        });
+
+    Route::prefix('exam-sessions')
+        ->name('exam-sessions.')
+        ->group(function () {
+            Route::post('/start', [ExamSessionController::class, 'start'])->name('start');
+            Route::post('/{examSession}/answers', [ExamSessionController::class, 'saveAnswer'])->name('answers.save');
+            Route::post('/{examSession}/heartbeat', [ExamSessionController::class, 'heartbeat'])->name('heartbeat');
+            Route::post('/{examSession}/proctoring-events', [ExamSessionController::class, 'logProctoringEvent'])->name('proctoring-events.store');
+            Route::post('/{examSession}/submit', [ExamSessionController::class, 'submit'])->name('submit');
+            Route::post('/{examSession}/force-submit', [ExamSessionController::class, 'forceSubmit'])->name('force-submit');
         });
 });
 

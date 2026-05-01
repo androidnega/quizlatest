@@ -116,4 +116,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(ProctoringEvent::class);
     }
+
+    public function examSessions(): HasMany
+    {
+        return $this->hasMany(ExamSession::class, 'student_id');
+    }
 }
