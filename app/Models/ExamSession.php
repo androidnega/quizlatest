@@ -17,12 +17,20 @@ class ExamSession extends Model
         'start_time',
         'end_time',
         'violation_count',
+        'violation_score',
+        'violation_events',
+        'last_event_time',
+        'risk_state',
+        'exam_status',
     ];
 
     protected $casts = [
         'start_time' => 'datetime',
         'end_time' => 'datetime',
         'violation_count' => 'integer',
+        'violation_score' => 'integer',
+        'violation_events' => 'array',
+        'last_event_time' => 'datetime',
     ];
 
     public function student(): BelongsTo

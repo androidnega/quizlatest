@@ -46,6 +46,10 @@ Route::middleware('auth')->group(function () {
             Route::post('/{examSession}/proctoring-events', [ExamSessionController::class, 'logProctoringEvent'])->name('proctoring-events.store');
             Route::post('/{examSession}/submit', [ExamSessionController::class, 'submit'])->name('submit');
             Route::post('/{examSession}/force-submit', [ExamSessionController::class, 'forceSubmit'])->name('force-submit');
+            Route::get('/{examSession}/review-timeline', [ExamSessionController::class, 'reviewTimeline'])->name('review-timeline');
+            Route::post('/{examSession}/review/release', [ExamSessionController::class, 'releaseHeldResult'])->name('review.release');
+            Route::post('/{examSession}/review/confirm-fail', [ExamSessionController::class, 'confirmFail'])->name('review.confirm-fail');
+            Route::post('/{examSession}/review/override', [ExamSessionController::class, 'overrideDecision'])->name('review.override');
         });
 });
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ExamSession;
 use App\Models\ProctoringEvent;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,21 +17,30 @@ class ProctoringUploadController extends Controller
         $validated = $request->validate([
             'session_id' => ['required', 'string', 'max:100'],
             'event_type' => ['required', 'string', 'max:100'],
-            'quiz_id' => ['nullable', 'integer', 'exists:quizzes,id'],
+            'quiz_id' => ['required', 'integer', 'exists:quizzes,id'],
         ]);
 
         $sessionId = preg_replace('/[^A-Za-z0-9_-]/', '', $validated['session_id']) ?: 'default';
         $userId = (int) $request->user()->id;
+        $session = ExamSession::query()
+            ->where('session_id', $sessionId)
+            ->where('student_id', $userId)
+            ->where('exam_id', $validated['quiz_id'])
+            ->whereIn('status', ['active', 'paused'])
+            ->first();
+        abort_unless($session, 422, 'Invalid exam session context.');
+
         $filename = now()->format('YmdHis').'_' . Str::random(10).'.jpg';
         $filePath = "proctoring/user_{$userId}/session_{$sessionId}/{$filename}";
         $token = Str::uuid()->toString();
 
         Cache::put($this->cacheKey($token), [
             'user_id' => $userId,
-            'quiz_id' => $validated['quiz_id'] ?? null,
+            'quiz_id' => $validated['quiz_id'],
             'session_id' => $sessionId,
             'event_type' => $validated['event_type'],
             'file_path' => $filePath,
+            'exam_session_id' => $session->id,
             'uploaded' => false,
             'created_at' => now()->toISOString(),
         ], now()->addMinutes(15));
@@ -91,6 +101,8 @@ class ProctoringUploadController extends Controller
                 'timestamp' => $validated['timestamp'] ?? now()->toISOString(),
                 'event_type' => $payload['event_type'],
                 'session_id' => $payload['session_id'],
+                'student_id' => $request->user()->id,
+                'exam_id' => $payload['quiz_id'],
                 'extra' => $validated['metadata'] ?? [],
             ],
             'created_at' => now(),

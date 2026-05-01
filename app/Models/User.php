@@ -25,6 +25,8 @@ class User extends Authenticatable
         'index_number',
         'role',
         'is_active',
+        'face_embedding',
+        'face_image_path',
         'password',
     ];
 
@@ -43,6 +45,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'is_active' => 'boolean',
+            'face_embedding' => 'array',
             'password' => 'hashed',
         ];
     }
