@@ -34,4 +34,13 @@ return [
 
     'send_window_seconds' => (int) env('EXAM_OTP_SEND_WINDOW_SECONDS', 600),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Emergency: use Laravel cache store when Redis is unavailable (never DB)
+    |--------------------------------------------------------------------------
+    */
+    'fallback_enabled' => (bool) env('EXAM_OTP_FALLBACK_ENABLED', false),
+
+    'fallback_cache_store' => env('EXAM_OTP_FALLBACK_CACHE_STORE', 'file'),
+
 ];

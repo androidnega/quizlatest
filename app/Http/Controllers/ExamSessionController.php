@@ -47,7 +47,10 @@ class ExamSessionController extends Controller
             'save_data' => ['nullable', 'boolean'],
         ]);
 
-        return response()->json($this->entryPipeline->execute($request, $validated));
+        $payload = $this->entryPipeline->execute($request, $validated);
+        $httpStatus = (($payload['status'] ?? '') === 'service_unavailable') ? 503 : 200;
+
+        return response()->json($payload, $httpStatus);
     }
 
     public function verifyOtp(Request $request): JsonResponse

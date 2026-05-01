@@ -20,6 +20,7 @@ class ExamEntryPipelineService
         private readonly ProctoringGlobalControlService $globalControl,
         private readonly SystemSettingsService $systemSettings,
         private readonly ExamOtpService $examOtp,
+        private readonly RedisHealthService $redisHealth,
     ) {}
 
     /**
@@ -66,7 +67,15 @@ class ExamEntryPipelineService
             ->exists();
         abort_unless(! $activeSessionExists, 422, 'Another active session already exists.');
 
-        // 4. OTP — verify via POST /exam-sessions/verify-otp; then start may continue
+        // 4. OTP — backend must be reachable (Redis, or file cache if emergency fallback is enabled)
+        if (! $this->redisHealth->isAvailable() && ! config('exam_otp.fallback_enabled')) {
+            return [
+                'status' => 'service_unavailable',
+                'message' => 'Verification service temporarily unavailable. Try again.',
+            ];
+        }
+
+        // 4b. OTP — verify via POST /exam-sessions/verify-otp; then start may continue
         try {
             $otpGate = $this->examOtp->evaluateStartGate($student, $exam->id);
         } catch (RuntimeException) {

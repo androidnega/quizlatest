@@ -3,18 +3,22 @@
 namespace App\Services;
 
 use App\Models\User;
+use Illuminate\Contracts\Cache\Repository as CacheRepository;
+use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Redis;
 use RuntimeException;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
- * Exam start OTP — Redis only; OTP stored as bcrypt hash (never plaintext, never logged).
+ * Exam start OTP — Redis primary; optional file cache fallback; bcrypt hash only (never plaintext, never logged).
  */
 class ExamOtpService
 {
     public function __construct(
         private readonly ArkeselSmsService $sms,
+        private readonly RedisHealthService $redisHealth,
     ) {}
 
     public function otpKey(int $studentId, int $examId): string
@@ -23,11 +27,11 @@ class ExamOtpService
     }
 
     /**
-     * True when Redis record exists, is within TTL, and verified === true.
+     * True when record exists, is within TTL, and verified === true.
      */
     public function isOtpVerified(int $studentId, int $examId): bool
     {
-        $raw = Redis::get($this->otpKey($studentId, $examId));
+        $raw = $this->storeGet($this->otpKey($studentId, $examId));
         if ($raw === null || $raw === '') {
             return false;
         }
@@ -47,6 +51,8 @@ class ExamOtpService
      */
     public function evaluateStartGate(User $student, int $examId): string
     {
+        $this->assertOtpBackendReady();
+
         $key = $this->otpKey((int) $student->id, $examId);
         $data = $this->getPayload($key);
 
@@ -55,7 +61,7 @@ class ExamOtpService
         }
 
         if (is_array($data) && ($data['verified'] ?? false) === true) {
-            Redis::del($key);
+            $this->storeDelBestEffort($key);
             $data = null;
         }
 
@@ -64,21 +70,23 @@ class ExamOtpService
         }
 
         if (is_array($data)) {
-            Redis::del($key);
+            $this->storeDelBestEffort($key);
         }
 
         return $this->atomicCreateAndSendOtp($student, $examId);
     }
 
     /**
-     * @throws HttpException
+     * @throws HttpResponseException
      */
     public function verifySubmittedOtp(User $student, int $examId, string $otpCode): void
     {
         abort_unless($student->role === 'student', 403);
 
+        $this->assertOtpBackendReady();
+
         $key = $this->otpKey((int) $student->id, $examId);
-        $raw = Redis::get($key);
+        $raw = $this->storeGet($key);
 
         abort_if($raw === null || $raw === '', 422, 'No verification code is active for this exam. Start the exam again.');
 
@@ -92,7 +100,7 @@ class ExamOtpService
 
         $expiresAt = (int) ($data['expires_at'] ?? 0);
         if ($expiresAt <= now()->timestamp) {
-            Redis::del($key);
+            $this->storeDelBestEffort($key);
             abort(422, 'This code has expired. Start the exam again to receive a new code.');
         }
 
@@ -110,10 +118,10 @@ class ExamOtpService
             $data['attempt_count'] = $attempts + 1;
             $remainingTtl = max(1, $expiresAt - now()->timestamp);
             if ($data['attempt_count'] >= $maxAttempts) {
-                Redis::del($key);
+                $this->storeDelBestEffort($key);
                 abort(422, 'Too many failed attempts. Start the exam again.');
             }
-            Redis::setex($key, $remainingTtl, json_encode($data));
+            $this->storeSetex($key, $remainingTtl, json_encode($data));
 
             abort(422, 'Invalid verification code.');
         }
@@ -129,7 +137,7 @@ class ExamOtpService
             'last_sent_at' => (int) ($data['last_sent_at'] ?? now()->timestamp),
         ];
 
-        Redis::setex($key, $verifiedTtl, json_encode($verifiedPayload));
+        $this->storeSetex($key, $verifiedTtl, json_encode($verifiedPayload));
     }
 
     /**
@@ -137,7 +145,7 @@ class ExamOtpService
      */
     public function forgetVerifiedFlag(int $studentId, int $examId): void
     {
-        Redis::del($this->otpKey($studentId, $examId));
+        $this->storeDelBestEffort($this->otpKey($studentId, $examId));
     }
 
     /**
@@ -168,7 +176,7 @@ class ExamOtpService
         $key = $this->otpKey((int) $student->id, $examId);
         $encoded = json_encode($payload);
 
-        $created = $this->redisSetNxEx($key, $encoded, $ttl);
+        $created = $this->storeSetNxEx($key, $encoded, $ttl);
 
         if (! $created) {
             $again = $this->getPayload($key);
@@ -184,11 +192,11 @@ class ExamOtpService
         try {
             $result = $this->sms->send([$phone], $message);
             if (! ($result['success'] ?? false)) {
-                Redis::del($key);
+                $this->storeDelBestEffort($key);
                 throw new RuntimeException('SMS gateway rejected the message.');
             }
         } catch (\Throwable $e) {
-            Redis::del($key);
+            $this->storeDelBestEffort($key);
             throw $e;
         }
 
@@ -198,16 +206,6 @@ class ExamOtpService
         );
 
         return 'otp_required';
-    }
-
-    /**
-     * Atomic SET with TTL only when key does not exist (race-safe creation).
-     */
-    private function redisSetNxEx(string $key, string $value, int $ttlSeconds): bool
-    {
-        $result = Redis::set($key, $value, 'EX', $ttlSeconds, 'NX');
-
-        return $result === true || $result === 'OK' || $result === 1;
     }
 
     /**
@@ -239,7 +237,7 @@ class ExamOtpService
      */
     private function getPayload(string $key): ?array
     {
-        $raw = Redis::get($key);
+        $raw = $this->storeGet($key);
         if ($raw === null || $raw === '') {
             return null;
         }
@@ -247,6 +245,142 @@ class ExamOtpService
         $data = json_decode($raw, true);
 
         return is_array($data) ? $data : null;
+    }
+
+    private function assertOtpBackendReady(): void
+    {
+        if ($this->redisHealth->isAvailable()) {
+            return;
+        }
+        if ($this->fallbackEnabled()) {
+            return;
+        }
+        $this->throwServiceUnavailable();
+    }
+
+    private function fallbackEnabled(): bool
+    {
+        return (bool) config('exam_otp.fallback_enabled', false);
+    }
+
+    private function fallbackCache(): CacheRepository
+    {
+        return Cache::store((string) config('exam_otp.fallback_cache_store', 'file'));
+    }
+
+    /**
+     * @throws HttpResponseException
+     */
+    private function throwServiceUnavailable(): never
+    {
+        throw new HttpResponseException(response()->json([
+            'status' => 'service_unavailable',
+            'message' => 'Verification service temporarily unavailable. Try again.',
+        ], 503));
+    }
+
+    private function storeGet(string $key): ?string
+    {
+        if ($this->redisHealth->isAvailable()) {
+            try {
+                $v = Redis::get($key);
+                if ($v !== null && $v !== false && $v !== '') {
+                    return (string) $v;
+                }
+            } catch (\Throwable) {
+                Log::warning('OTP Redis unavailable');
+                if ($this->fallbackEnabled()) {
+                    return $this->cacheGetOrNull($key);
+                }
+                $this->throwServiceUnavailable();
+            }
+
+            if ($this->fallbackEnabled()) {
+                return $this->cacheGetOrNull($key);
+            }
+
+            return null;
+        }
+
+        if ($this->fallbackEnabled()) {
+            return $this->cacheGetOrNull($key);
+        }
+
+        $this->throwServiceUnavailable();
+    }
+
+    private function cacheGetOrNull(string $key): ?string
+    {
+        $c = $this->fallbackCache()->get($key);
+
+        return ($c === null || $c === '') ? null : (string) $c;
+    }
+
+    private function storeSetex(string $key, int $ttlSeconds, string $value): void
+    {
+        if ($this->redisHealth->isAvailable()) {
+            try {
+                Redis::setex($key, $ttlSeconds, $value);
+
+                return;
+            } catch (\Throwable) {
+                Log::warning('OTP Redis unavailable');
+                if ($this->fallbackEnabled()) {
+                    $this->fallbackCache()->put($key, $value, $ttlSeconds);
+
+                    return;
+                }
+                $this->throwServiceUnavailable();
+            }
+        }
+        if ($this->fallbackEnabled()) {
+            $this->fallbackCache()->put($key, $value, $ttlSeconds);
+
+            return;
+        }
+        $this->throwServiceUnavailable();
+    }
+
+    /**
+     * @throws HttpResponseException
+     */
+    private function storeSetNxEx(string $key, string $value, int $ttlSeconds): bool
+    {
+        if ($this->redisHealth->isAvailable()) {
+            try {
+                $result = Redis::set($key, $value, 'EX', $ttlSeconds, 'NX');
+
+                return $result === true || $result === 'OK' || $result === 1;
+            } catch (\Throwable) {
+                Log::warning('OTP Redis unavailable');
+                if ($this->fallbackEnabled()) {
+                    return $this->fallbackCache()->add($key, $value, $ttlSeconds);
+                }
+                $this->throwServiceUnavailable();
+            }
+        }
+        if ($this->fallbackEnabled()) {
+            return $this->fallbackCache()->add($key, $value, $ttlSeconds);
+        }
+        $this->throwServiceUnavailable();
+    }
+
+    private function storeDelBestEffort(string $key): void
+    {
+        if ($this->redisHealth->isAvailable()) {
+            try {
+                Redis::del($key);
+            } catch (\Throwable) {
+                Log::warning('OTP Redis unavailable');
+            }
+        }
+        if ($this->fallbackEnabled()) {
+            try {
+                $this->fallbackCache()->forget($key);
+            } catch (\Throwable) {
+                //
+            }
+        }
     }
 
     private function generateSixDigitCode(): string
