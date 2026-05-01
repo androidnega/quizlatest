@@ -10,13 +10,16 @@ use App\Models\Quiz;
 use App\Models\Result;
 use App\Models\User;
 use App\Services\AnswerEvaluationService;
+use App\Services\AnswerPayloadValidator;
 use App\Services\ExamEntryPipelineService;
 use App\Services\ProctoringGlobalControlService;
 use App\Services\ProctoringOrchestratorService;
+use App\Services\ResultFinalizationService;
 use App\Support\ExamSessionStateResolver;
 use App\Support\ProctoringCapabilityResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class ExamSessionController extends Controller
 {
@@ -25,6 +28,7 @@ class ExamSessionController extends Controller
         private readonly ExamEntryPipelineService $entryPipeline,
         private readonly ProctoringGlobalControlService $globalControl,
         private readonly AnswerEvaluationService $answerEvaluation,
+        private readonly ResultFinalizationService $resultFinalization,
     ) {}
 
     public function start(Request $request): JsonResponse
@@ -66,15 +70,23 @@ class ExamSessionController extends Controller
 
         $validated = $request->validate([
             'question_id' => ['required', 'integer', 'exists:questions,id'],
-            'answer_text' => ['nullable', 'string'],
-            'answer_payload' => ['nullable', 'array'],
+            'answer_payload' => ['required', 'array'],
         ]);
 
-        $questionBelongsToExam = Question::query()
+        $question = Question::query()
             ->where('id', $validated['question_id'])
             ->where('quiz_id', $examSession->exam_id)
-            ->exists();
-        abort_unless($questionBelongsToExam, 422, 'Question does not belong to this exam.');
+            ->first();
+        abort_unless($question !== null, 422, 'Question does not belong to this exam.');
+
+        try {
+            $normalized = AnswerPayloadValidator::validate($question, $validated['answer_payload']);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Invalid answer payload.',
+                'errors' => $e->errors(),
+            ], 422);
+        }
 
         ExamSessionAnswer::query()->updateOrCreate(
             [
@@ -82,8 +94,8 @@ class ExamSessionController extends Controller
                 'question_id' => $validated['question_id'],
             ],
             [
-                'answer_text' => $validated['answer_text'] ?? null,
-                'answer_payload' => $validated['answer_payload'] ?? null,
+                'answer_text' => null,
+                'answer_payload' => $normalized,
                 'saved_at' => now(),
             ],
         );
@@ -255,6 +267,15 @@ class ExamSessionController extends Controller
             return ! empty($event->metadata['payload']['file_path']);
         })->values();
 
+        $result = Result::query()
+            ->where('user_id', $examSession->student_id)
+            ->where('quiz_id', $examSession->exam_id)
+            ->first(['score', 'status', 'exam_status']);
+
+        if ($result !== null) {
+            $this->authorize('view', $result);
+        }
+
         return response()->json([
             'session_id' => $examSession->session_id,
             'exam_status' => $examSession->exam_status,
@@ -262,10 +283,11 @@ class ExamSessionController extends Controller
             'violation_score' => $examSession->violation_score,
             'events' => $events,
             'captured_images' => $capturedImages,
-            'result' => Result::query()
-                ->where('user_id', $examSession->student_id)
-                ->where('quiz_id', $examSession->exam_id)
-                ->first(['score', 'status', 'exam_status']),
+            'result' => $result ? [
+                'score' => $result->score,
+                'status' => $result->status,
+                'exam_status' => $result->exam_status,
+            ] : null,
         ]);
     }
 
@@ -393,23 +415,17 @@ class ExamSessionController extends Controller
 
         $timeTaken = max(0, $examSession->start_time?->diffInSeconds($examSession->end_time ?? now()) ?? 0);
 
-        $submitted = $examSession->fresh();
-        $eval = $this->answerEvaluation->evaluateAndPersist($submitted);
+        $gradedSession = $examSession->fresh(['answers']);
+        $eval = $this->answerEvaluation->evaluateAndPersist($gradedSession);
         $score = $eval['total_score'];
 
-        Result::query()->updateOrCreate(
-            [
-                'user_id' => $examSession->student_id,
-                'quiz_id' => $examSession->exam_id,
-            ],
-            [
-                'score' => $score,
-                'time_taken' => $timeTaken,
-                'status' => 'submitted',
-                'exam_status' => $examStatus,
-                'review_note' => $reason,
-                'submitted_at' => now(),
-            ],
+        $finalSession = $examSession->fresh(['answers']);
+        $this->resultFinalization->syncAfterSubmission(
+            $finalSession,
+            $score,
+            $timeTaken,
+            $examStatus,
+            $reason,
         );
     }
 

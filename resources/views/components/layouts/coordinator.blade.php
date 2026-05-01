@@ -53,6 +53,9 @@
                     <a href="{{ route('examiner.exams.index') }}" class="block px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('examiner.exams.*') ? 'bg-camel text-white shadow-sm' : 'text-gray-700 hover:bg-beige' }}">
                         Exam builder
                     </a>
+                    <a href="{{ route('coordinator.grading.pending') }}" class="block px-3 py-2.5 rounded-lg text-sm font-medium transition {{ request()->routeIs('coordinator.grading.*') ? 'bg-camel text-white shadow-sm' : 'text-gray-700 hover:bg-beige' }}">
+                        Essay grading
+                    </a>
                 </nav>
             </aside>
 

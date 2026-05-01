@@ -17,6 +17,7 @@ class ExamEntryPipelineService
 {
     public function __construct(
         private readonly ProctoringGlobalControlService $globalControl,
+        private readonly SystemSettingsService $systemSettings,
     ) {}
 
     /**
@@ -42,8 +43,22 @@ class ExamEntryPipelineService
         // 2. Load exam.proctoring_settings (normalized canonical keys only)
         $exam = Quiz::query()->findOrFail($validated['exam_id']);
 
+        $defaultsRaw = $this->systemSettings->get('default_proctoring_settings');
+        $defaults = [];
+        if ($defaultsRaw !== null && $defaultsRaw !== '') {
+            try {
+                $decoded = json_decode($defaultsRaw, true, 512, JSON_THROW_ON_ERROR);
+                $defaults = is_array($decoded) ? $decoded : [];
+            } catch (\Throwable) {
+                $defaults = [];
+            }
+        }
+
+        $examOnly = is_array($exam->proctoring_settings) ? $exam->proctoring_settings : [];
+        $mergedForNormalize = array_replace_recursive($defaults, $examOnly);
+
         $normalizedSettings = ProctoringOrchestratorService::normalizeProctoringSettings(
-            is_array($exam->proctoring_settings) ? $exam->proctoring_settings : [],
+            $mergedForNormalize,
             (int) $exam->id,
         );
 

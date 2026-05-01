@@ -13,6 +13,8 @@ class UniversityController extends Controller
 {
     public function index(): View
     {
+        $this->authorize('viewAny', University::class);
+
         return view('admin.universities.index', [
             'universities' => University::query()->latest()->paginate(10),
         ]);
@@ -20,11 +22,15 @@ class UniversityController extends Controller
 
     public function create(): View
     {
+        $this->authorize('create', University::class);
+
         return view('admin.universities.create');
     }
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('create', University::class);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:30', 'unique:universities,code'],
@@ -44,6 +50,8 @@ class UniversityController extends Controller
 
     public function edit(University $university): View
     {
+        $this->authorize('update', $university);
+
         return view('admin.universities.edit', [
             'university' => $university,
         ]);
@@ -51,6 +59,8 @@ class UniversityController extends Controller
 
     public function update(Request $request, University $university): RedirectResponse
     {
+        $this->authorize('update', $university);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:30', Rule::unique('universities', 'code')->ignore($university->id)],

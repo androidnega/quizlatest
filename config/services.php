@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    /*
+    | Endpoint only — credentials come from system_settings (see ArkeselSmsService).
+    */
+    'arkesel' => [
+        'sms_send_url' => env('ARKESEL_SMS_SEND_URL', 'https://sms.arkesel.com/api/v2/sms/send'),
+    ],
+
 ];

@@ -10,7 +10,7 @@ use Illuminate\Support\Collection;
 class AnswerEvaluationService
 {
     /**
-     * @return array{total_score: float, results: list<array{question_id: int, points_awarded: float, evaluation_status: string, evaluation_detail: array<string, mixed>}>}
+     * @return array{total_score: float, results: list<array<string, mixed>>}
      */
     public function evaluateAndPersist(ExamSession $examSession): array
     {
@@ -36,7 +36,6 @@ class AnswerEvaluationService
                     'question_id' => (int) $answer->question_id,
                     'points_awarded' => 0.0,
                     'evaluation_status' => 'error',
-                    'evaluation_detail' => ['message' => 'Question not found for exam.'],
                 ];
 
                 continue;
@@ -54,7 +53,6 @@ class AnswerEvaluationService
                 'question_id' => (int) $question->id,
                 'points_awarded' => $points,
                 'evaluation_status' => $status,
-                'evaluation_detail' => $detail,
             ];
         }
 
@@ -75,7 +73,7 @@ class AnswerEvaluationService
             return [
                 'points_awarded' => 0.0,
                 'evaluation_status' => 'pending_manual',
-                'evaluation_detail' => ['reason' => 'essay_requires_manual_grading', 'max_marks' => $max],
+                'evaluation_detail' => ['reason' => 'essay_requires_manual_grading'],
             ];
         }
 
@@ -112,12 +110,25 @@ class AnswerEvaluationService
             ];
         }
 
-        $actual = $this->readTrueFalseAnswer($answer);
-        if ($actual === null) {
+        $payload = $this->strictPayload($answer, 'true_false');
+        if ($payload === null || ! array_key_exists('value', $payload)) {
             return [
                 'points_awarded' => 0.0,
                 'evaluation_status' => 'auto_scored',
-                'evaluation_detail' => ['correct' => false, 'reason' => 'no_answer', 'expected' => $expected],
+                'evaluation_detail' => ['reason' => 'invalid_payload'],
+            ];
+        }
+
+        $actual = $payload['value'];
+        if (! is_bool($actual)) {
+            $converted = filter_var($actual, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            $actual = is_bool($converted) ? $converted : null;
+        }
+        if (! is_bool($actual)) {
+            return [
+                'points_awarded' => 0.0,
+                'evaluation_status' => 'auto_scored',
+                'evaluation_detail' => ['reason' => 'invalid_payload'],
             ];
         }
 
@@ -126,11 +137,7 @@ class AnswerEvaluationService
         return [
             'points_awarded' => $ok ? $max : 0.0,
             'evaluation_status' => 'auto_scored',
-            'evaluation_detail' => [
-                'correct' => $ok,
-                'expected' => $expected,
-                'given' => $actual,
-            ],
+            'evaluation_detail' => ['correct' => $ok],
         ];
     }
 
@@ -148,7 +155,16 @@ class AnswerEvaluationService
             ];
         }
 
-        $actual = $this->readMcqSelection($answer);
+        $payload = $this->strictPayload($answer, 'mcq');
+        if ($payload === null) {
+            return [
+                'points_awarded' => 0.0,
+                'evaluation_status' => 'auto_scored',
+                'evaluation_detail' => ['reason' => 'invalid_payload'],
+            ];
+        }
+
+        $actual = $this->indicesFromMcqPayload($payload);
         $expectedSorted = $expected;
         sort($expectedSorted);
         $actualSorted = $actual;
@@ -159,11 +175,7 @@ class AnswerEvaluationService
         return [
             'points_awarded' => $ok ? $max : 0.0,
             'evaluation_status' => 'auto_scored',
-            'evaluation_detail' => [
-                'correct' => $ok,
-                'expected_indices' => $expectedSorted,
-                'given_indices' => $actualSorted,
-            ],
+            'evaluation_detail' => ['correct' => $ok],
         ];
     }
 
@@ -181,19 +193,26 @@ class AnswerEvaluationService
             ];
         }
 
-        $given = $this->readFillBlankAnswers($answer);
+        $payload = $this->strictPayload($answer, 'fill_blank');
+        if ($payload === null || ! isset($payload['blanks']) || ! is_array($payload['blanks'])) {
+            return [
+                'points_awarded' => 0.0,
+                'evaluation_status' => 'auto_scored',
+                'evaluation_detail' => ['reason' => 'invalid_payload'],
+            ];
+        }
+
+        /** @var list<string> $given */
+        $given = array_map(fn ($s) => (string) $s, array_values($payload['blanks']));
         $n = count($expected);
         $matched = 0;
-        $pairResults = [];
 
         for ($i = 0; $i < $n; $i++) {
             $exp = $this->normalizeBlank((string) ($expected[$i] ?? ''));
             $got = $this->normalizeBlank((string) ($given[$i] ?? ''));
-            $pairOk = $exp !== '' && $got !== '' && strcasecmp($exp, $got) === 0;
-            if ($pairOk) {
+            if ($exp !== '' && $got !== '' && strcasecmp($exp, $got) === 0) {
                 $matched++;
             }
-            $pairResults[] = ['expected' => $exp, 'given' => $got, 'match' => $pairOk];
         }
 
         $ratio = $n > 0 ? $matched / $n : 0.0;
@@ -202,12 +221,45 @@ class AnswerEvaluationService
         return [
             'points_awarded' => $points,
             'evaluation_status' => 'auto_scored',
-            'evaluation_detail' => [
-                'blanks_matched' => $matched,
-                'blanks_total' => $n,
-                'pairs' => $pairResults,
-            ],
+            'evaluation_detail' => ['blanks_matched' => $matched, 'blanks_total' => $n],
         ];
+    }
+
+    /**
+     * @return array{type: string, value: bool}|array{type: string, selected: mixed}|array{type: string, blanks: list<string>}|null
+     */
+    private function strictPayload(ExamSessionAnswer $answer, string $type): ?array
+    {
+        $p = $answer->answer_payload;
+        if (! is_array($p) || ($p['type'] ?? null) !== $type) {
+            return null;
+        }
+
+        return $p;
+    }
+
+    /**
+     * @param  array{type: string, selected: mixed}  $payload
+     * @return list<int>
+     */
+    private function indicesFromMcqPayload(array $payload): array
+    {
+        $raw = $payload['selected'] ?? null;
+        if (is_int($raw) || (is_string($raw) && preg_match('/^-?\d+$/', (string) $raw))) {
+            return [(int) $raw];
+        }
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($raw as $item) {
+            if (is_int($item) || (is_string($item) && ctype_digit((string) $item))) {
+                $out[] = (int) $item;
+            }
+        }
+
+        return array_values(array_unique($out));
     }
 
     /**
@@ -220,76 +272,6 @@ class AnswerEvaluationService
             'evaluation_status' => $status,
             'evaluation_detail' => $detail,
         ])->save();
-    }
-
-    private function readTrueFalseAnswer(ExamSessionAnswer $answer): ?bool
-    {
-        $payload = $answer->answer_payload ?? [];
-        if (is_array($payload) && array_key_exists('value', $payload)) {
-            return filter_var($payload['value'], FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
-        }
-
-        $text = strtolower(trim((string) ($answer->answer_text ?? '')));
-        if ($text === '') {
-            return null;
-        }
-
-        if (in_array($text, ['true', '1', 'yes'], true)) {
-            return true;
-        }
-        if (in_array($text, ['false', '0', 'no'], true)) {
-            return false;
-        }
-
-        return null;
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function readMcqSelection(ExamSessionAnswer $answer): array
-    {
-        $payload = $answer->answer_payload ?? [];
-        if (! is_array($payload)) {
-            return [];
-        }
-
-        if (isset($payload['selected'])) {
-            $raw = $payload['selected'];
-            if (is_int($raw) || (is_string($raw) && ctype_digit($raw))) {
-                return [(int) $raw];
-            }
-            if (is_array($raw)) {
-                $out = [];
-                foreach ($raw as $v) {
-                    if (is_int($v) || (is_string($v) && ctype_digit($v))) {
-                        $out[] = (int) $v;
-                    }
-                }
-
-                return array_values(array_unique($out));
-            }
-        }
-
-        return [];
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function readFillBlankAnswers(ExamSessionAnswer $answer): array
-    {
-        $payload = $answer->answer_payload ?? [];
-        if (is_array($payload) && isset($payload['blanks']) && is_array($payload['blanks'])) {
-            return array_map(fn ($s) => (string) $s, array_values($payload['blanks']));
-        }
-
-        $text = (string) ($answer->answer_text ?? '');
-        if ($text === '') {
-            return [];
-        }
-
-        return array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $text) ?: [])));
     }
 
     private function normalizeBlank(string $s): string

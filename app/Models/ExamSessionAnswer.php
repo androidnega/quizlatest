@@ -15,7 +15,12 @@ class ExamSessionAnswer extends Model
         'points_awarded',
         'evaluation_status',
         'evaluation_detail',
+        'grader_feedback',
         'saved_at',
+    ];
+
+    protected $hidden = [
+        'evaluation_detail',
     ];
 
     protected $casts = [

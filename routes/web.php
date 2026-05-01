@@ -10,6 +10,7 @@ use App\Http\Controllers\Coordinator\ClassroomController;
 use App\Http\Controllers\Coordinator\CourseController;
 use App\Http\Controllers\Coordinator\DashboardController as CoordinatorDashboardController;
 use App\Http\Controllers\Coordinator\LevelController;
+use App\Http\Controllers\Coordinator\ManualGradingController;
 use App\Http\Controllers\Coordinator\ProgramController;
 use App\Http\Controllers\Coordinator\StudentController;
 use App\Http\Controllers\DashboardController;
@@ -124,6 +125,10 @@ Route::prefix('coordinator')
         Route::patch('/courses/{course}/toggle-status', [CourseController::class, 'toggleStatus'])->name('courses.toggle-status');
         Route::get('/courses/assign/classes', [ClassCourseAssignmentController::class, 'edit'])->name('courses.assign.edit');
         Route::post('/courses/assign/classes', [ClassCourseAssignmentController::class, 'update'])->name('courses.assign.update');
+
+        Route::get('/grading/pending-essays', [ManualGradingController::class, 'index'])->name('grading.pending');
+        Route::get('/grading/answers/{answer}', [ManualGradingController::class, 'show'])->name('grading.show');
+        Route::post('/grading/answers/{answer}', [ManualGradingController::class, 'grade'])->name('grading.grade');
     });
 
 Route::prefix('examiner')

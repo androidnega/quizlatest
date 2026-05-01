@@ -14,6 +14,8 @@ class CourseController extends Controller
 {
     public function index(): View
     {
+        $this->authorize('viewAny', Course::class);
+
         return view('coordinator.courses.index', [
             'courses' => Course::query()
                 ->whereIn('department_id', $this->departmentIds())
@@ -25,6 +27,8 @@ class CourseController extends Controller
 
     public function create(Request $request): View
     {
+        $this->authorize('viewAny', Course::class);
+
         $departmentIds = $this->departmentIds();
         $selectedDepartmentId = (int) $request->integer('department_id', $departmentIds[0] ?? 0);
         abort_unless(in_array($selectedDepartmentId, $departmentIds, true), 403);
@@ -37,6 +41,8 @@ class CourseController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('viewAny', Course::class);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'code' => ['required', 'string', 'max:100'],
@@ -70,7 +76,7 @@ class CourseController extends Controller
 
     public function edit(Course $course): View
     {
-        abort_unless(in_array((int) $course->department_id, $this->departmentIds(), true), 403);
+        $this->authorize('update', $course);
 
         return view('coordinator.courses.edit', [
             'course' => $course->load('department'),
@@ -79,7 +85,7 @@ class CourseController extends Controller
 
     public function update(Request $request, Course $course): RedirectResponse
     {
-        abort_unless(in_array((int) $course->department_id, $this->departmentIds(), true), 403);
+        $this->authorize('update', $course);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -108,7 +114,7 @@ class CourseController extends Controller
 
     public function toggleStatus(Course $course): RedirectResponse
     {
-        abort_unless(in_array((int) $course->department_id, $this->departmentIds(), true), 403);
+        $this->authorize('update', $course);
 
         $course->update(['is_active' => ! $course->is_active]);
 
