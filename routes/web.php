@@ -4,7 +4,9 @@ use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\CoordinatorController;
 use App\Http\Controllers\Admin\UniversityController;
 use App\Http\Controllers\Coordinator\DashboardController as CoordinatorDashboardController;
+use App\Http\Controllers\Coordinator\ClassCourseAssignmentController;
 use App\Http\Controllers\Coordinator\ClassroomController;
+use App\Http\Controllers\Coordinator\CourseController;
 use App\Http\Controllers\Coordinator\LevelController;
 use App\Http\Controllers\Coordinator\ProgramController;
 use App\Http\Controllers\Coordinator\StudentController;
@@ -74,7 +76,14 @@ Route::prefix('coordinator')
         Route::get('/classes/{classroom}/edit', [ClassroomController::class, 'edit'])->name('classes.edit');
         Route::put('/classes/{classroom}', [ClassroomController::class, 'update'])->name('classes.update');
         Route::patch('/classes/{classroom}/toggle-status', [ClassroomController::class, 'toggleStatus'])->name('classes.toggle-status');
-        Route::view('/courses', 'coordinator.placeholders.courses')->name('courses.index');
+        Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
+        Route::get('/courses/create', [CourseController::class, 'create'])->name('courses.create');
+        Route::post('/courses', [CourseController::class, 'store'])->name('courses.store');
+        Route::get('/courses/{course}/edit', [CourseController::class, 'edit'])->name('courses.edit');
+        Route::put('/courses/{course}', [CourseController::class, 'update'])->name('courses.update');
+        Route::patch('/courses/{course}/toggle-status', [CourseController::class, 'toggleStatus'])->name('courses.toggle-status');
+        Route::get('/courses/assign/classes', [ClassCourseAssignmentController::class, 'edit'])->name('courses.assign.edit');
+        Route::post('/courses/assign/classes', [ClassCourseAssignmentController::class, 'update'])->name('courses.assign.update');
     });
 
 require __DIR__.'/auth.php';
