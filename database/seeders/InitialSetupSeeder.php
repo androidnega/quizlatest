@@ -103,6 +103,7 @@ class InitialSetupSeeder extends Seeder
             'email' => 'admin',
             'index_number' => null,
             'role' => 'admin',
+            'is_active' => true,
             'email_verified_at' => $now,
             'password' => Hash::make('admin123'),
             'remember_token' => null,
@@ -126,7 +127,7 @@ class InitialSetupSeeder extends Seeder
             'updated_at' => $now,
         ]);
 
-        DB::table('departments')->insert([
+        $departmentId = DB::table('departments')->insertGetId([
             'university_id' => $universityId,
             'faculty_id' => $facultyId,
             'name' => 'Department of Computer Science',
@@ -136,6 +137,34 @@ class InitialSetupSeeder extends Seeder
             'updated_at' => $now,
         ]);
 
-        // Student role is seeded for upcoming student provisioning workflows.
+        $coordinatorUserId = DB::table('users')->insertGetId([
+            'university_id' => $universityId,
+            'name' => 'Kwame Mensah',
+            'email' => 'kwame.mensah@du.edu.gh',
+            'index_number' => 'AB/CS/2024/001',
+            'role' => 'coordinator',
+            'is_active' => true,
+            'email_verified_at' => $now,
+            'password' => Hash::make('admin123'),
+            'remember_token' => null,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        DB::table('role_user')->insert([
+            'role_id' => $coordinatorRoleId,
+            'user_id' => $coordinatorUserId,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        DB::table('coordinator_assignments')->insert([
+            'user_id' => $coordinatorUserId,
+            'faculty_id' => $facultyId,
+            'department_id' => $departmentId,
+            'is_active' => true,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
     }
 }

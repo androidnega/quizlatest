@@ -26,6 +26,9 @@
                     <a href="{{ route('admin.universities.index') }}" class="block px-3 py-2 rounded-md text-sm font-medium {{ request()->routeIs('admin.universities.*') ? 'bg-[#CFAC81] text-white' : 'text-gray-700 hover:bg-white' }}">
                         Universities
                     </a>
+                    <a href="{{ route('admin.coordinators.index') }}" class="block px-3 py-2 rounded-md text-sm font-medium {{ request()->routeIs('admin.coordinators.*') ? 'bg-[#CFAC81] text-white' : 'text-gray-700 hover:bg-white' }}">
+                        Coordinators
+                    </a>
                 </nav>
             </aside>
 
