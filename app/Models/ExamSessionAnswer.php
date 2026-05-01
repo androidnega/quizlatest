@@ -12,11 +12,15 @@ class ExamSessionAnswer extends Model
         'question_id',
         'answer_text',
         'answer_payload',
+        'points_awarded',
+        'evaluation_status',
+        'evaluation_detail',
         'saved_at',
     ];
 
     protected $casts = [
         'answer_payload' => 'array',
+        'evaluation_detail' => 'array',
         'saved_at' => 'datetime',
     ];
 

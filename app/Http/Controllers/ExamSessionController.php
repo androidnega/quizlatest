@@ -7,6 +7,7 @@ use App\Models\ExamSessionAnswer;
 use App\Models\ProctoringEvent;
 use App\Models\Question;
 use App\Models\Result;
+use App\Services\AnswerEvaluationService;
 use App\Services\ExamEntryPipelineService;
 use App\Services\ProctoringGlobalControlService;
 use App\Services\ProctoringOrchestratorService;
@@ -21,6 +22,7 @@ class ExamSessionController extends Controller
         private readonly ProctoringOrchestratorService $orchestrator,
         private readonly ExamEntryPipelineService $entryPipeline,
         private readonly ProctoringGlobalControlService $globalControl,
+        private readonly AnswerEvaluationService $answerEvaluation,
     ) {}
 
     public function start(Request $request): JsonResponse
@@ -357,13 +359,17 @@ class ExamSessionController extends Controller
 
         $timeTaken = max(0, $examSession->start_time?->diffInSeconds($examSession->end_time ?? now()) ?? 0);
 
+        $submitted = $examSession->fresh();
+        $eval = $this->answerEvaluation->evaluateAndPersist($submitted);
+        $score = $eval['total_score'];
+
         Result::query()->updateOrCreate(
             [
                 'user_id' => $examSession->student_id,
                 'quiz_id' => $examSession->exam_id,
             ],
             [
-                'score' => 0,
+                'score' => $score,
                 'time_taken' => $timeTaken,
                 'status' => 'submitted',
                 'exam_status' => $examStatus,
