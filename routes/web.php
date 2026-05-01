@@ -11,6 +11,7 @@ use App\Http\Controllers\Coordinator\LevelController;
 use App\Http\Controllers\Coordinator\ProgramController;
 use App\Http\Controllers\Coordinator\StudentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ProctoringUploadController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -26,6 +27,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    Route::prefix('proctoring/uploads')
+        ->name('proctoring.uploads.')
+        ->group(function () {
+            Route::post('/path', [ProctoringUploadController::class, 'createUploadPath'])->name('path');
+            Route::post('/file', [ProctoringUploadController::class, 'uploadFile'])->name('file');
+            Route::post('/metadata', [ProctoringUploadController::class, 'storeMetadata'])->name('metadata');
+        });
 });
 
 Route::prefix('admin')
