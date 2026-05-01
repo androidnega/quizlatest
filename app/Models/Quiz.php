@@ -46,7 +46,7 @@ class Quiz extends Model
 
     public function sections(): HasMany
     {
-        return $this->hasMany(QuizSection::class);
+        return $this->hasMany(ExamSection::class, 'exam_id');
     }
 
     public function questions(): HasMany

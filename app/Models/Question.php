@@ -9,7 +9,7 @@ class Question extends Model
 {
     protected $fillable = [
         'quiz_id',
-        'quiz_section_id',
+        'section_id',
         'question_text',
         'type',
         'options',
@@ -34,7 +34,7 @@ class Question extends Model
 
     public function section(): BelongsTo
     {
-        return $this->belongsTo(QuizSection::class, 'quiz_section_id');
+        return $this->belongsTo(ExamSection::class, 'section_id');
     }
 
     public function isMCQ(): bool
