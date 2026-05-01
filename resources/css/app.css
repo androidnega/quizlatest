@@ -1,3 +1,35 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+    :root {
+        --qs-bg: #FFFFFF;
+        --qs-surface: #EBE6DE;
+        --qs-accent: #CFAC81;
+        --qs-text-accent: #70866F;
+    }
+
+    body {
+        background-color: var(--qs-bg);
+        color: #1f2937;
+    }
+}
+
+@layer components {
+    .qs-surface {
+        background-color: var(--qs-surface);
+    }
+
+    .qs-heading {
+        color: var(--qs-text-accent);
+    }
+
+    .qs-link {
+        color: var(--qs-text-accent);
+    }
+
+    .qs-link:hover {
+        color: #5f735e;
+    }
+}
