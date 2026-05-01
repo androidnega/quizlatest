@@ -4,31 +4,21 @@ use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\CoordinatorController;
 use App\Http\Controllers\Admin\UniversityController;
 use App\Http\Controllers\Coordinator\DashboardController as CoordinatorDashboardController;
+use App\Http\Controllers\Coordinator\ClassroomController;
+use App\Http\Controllers\Coordinator\LevelController;
+use App\Http\Controllers\Coordinator\ProgramController;
 use App\Http\Controllers\Coordinator\StudentController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    if (! auth()->check()) {
-        return redirect()->route('login');
-    }
+    return view('home');
+})->name('home');
 
-    return match (auth()->user()->role) {
-        'admin' => redirect()->route('admin.dashboard'),
-        'coordinator' => redirect()->route('coordinator.dashboard'),
-        'student' => redirect()->route('student.dashboard'),
-        default => redirect()->route('login'),
-    };
-});
-
-Route::get('/dashboard', function () {
-    return match (auth()->user()?->role) {
-        'admin' => redirect()->route('admin.dashboard'),
-        'coordinator' => redirect()->route('coordinator.dashboard'),
-        'student' => redirect()->route('student.dashboard'),
-        default => redirect()->route('login'),
-    };
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -66,18 +56,22 @@ Route::prefix('coordinator')
         Route::post('/students/upload/import', [StudentController::class, 'import'])->name('students.import');
         Route::post('/students/bulk-status', [StudentController::class, 'bulkStatus'])->name('students.bulk-status');
         Route::get('/students/template', [StudentController::class, 'template'])->name('students.template');
-        Route::view('/programs', 'coordinator.placeholders.programs')->name('programs.index');
-        Route::view('/levels', 'coordinator.placeholders.levels')->name('levels.index');
-        Route::view('/classes', 'coordinator.placeholders.classes')->name('classes.index');
+        Route::get('/programs', [ProgramController::class, 'index'])->name('programs.index');
+        Route::get('/programs/create', [ProgramController::class, 'create'])->name('programs.create');
+        Route::post('/programs', [ProgramController::class, 'store'])->name('programs.store');
+        Route::get('/programs/{program}/edit', [ProgramController::class, 'edit'])->name('programs.edit');
+        Route::put('/programs/{program}', [ProgramController::class, 'update'])->name('programs.update');
+        Route::patch('/programs/{program}/toggle-status', [ProgramController::class, 'toggleStatus'])->name('programs.toggle-status');
+
+        Route::get('/levels', [LevelController::class, 'index'])->name('levels.index');
+        Route::patch('/levels/{level}/toggle-status', [LevelController::class, 'toggleStatus'])->name('levels.toggle-status');
+        Route::get('/classes', [ClassroomController::class, 'index'])->name('classes.index');
+        Route::get('/classes/create', [ClassroomController::class, 'create'])->name('classes.create');
+        Route::post('/classes', [ClassroomController::class, 'store'])->name('classes.store');
+        Route::get('/classes/{classroom}/edit', [ClassroomController::class, 'edit'])->name('classes.edit');
+        Route::put('/classes/{classroom}', [ClassroomController::class, 'update'])->name('classes.update');
+        Route::patch('/classes/{classroom}/toggle-status', [ClassroomController::class, 'toggleStatus'])->name('classes.toggle-status');
         Route::view('/courses', 'coordinator.placeholders.courses')->name('courses.index');
     });
-
-Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('/student/dashboard', function () {
-        abort_unless(auth()->user()?->role === 'student', 403);
-
-        return view('student.dashboard');
-    })->name('student.dashboard');
-});
 
 require __DIR__.'/auth.php';
