@@ -8,10 +8,11 @@ use App\Models\ProctoringEvent;
 use App\Models\Question;
 use App\Models\Quiz;
 use App\Models\Result;
-use App\Models\User;
 use App\Services\AnswerEvaluationService;
 use App\Services\AnswerPayloadValidator;
+use App\Services\ExamAnswerSynthesisService;
 use App\Services\ExamEntryPipelineService;
+use App\Services\ExamOtpService;
 use App\Services\ProctoringGlobalControlService;
 use App\Services\ProctoringOrchestratorService;
 use App\Services\ResultFinalizationService;
@@ -28,14 +29,16 @@ class ExamSessionController extends Controller
         private readonly ExamEntryPipelineService $entryPipeline,
         private readonly ProctoringGlobalControlService $globalControl,
         private readonly AnswerEvaluationService $answerEvaluation,
+        private readonly ExamAnswerSynthesisService $answerSynthesis,
         private readonly ResultFinalizationService $resultFinalization,
+        private readonly ExamOtpService $examOtp,
     ) {}
 
     public function start(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'exam_id' => ['required', 'integer', 'exists:quizzes,id'],
-            'face_embedding' => ['required', 'array', 'min:3'],
+            'face_embedding' => ['nullable', 'array', 'min:3'],
             'face_embedding.*' => ['numeric'],
             'face_retry_attempt' => ['nullable', 'integer', 'min:0', 'max:1'],
             'hardware_concurrency' => ['nullable', 'integer', 'min:1', 'max:512'],
@@ -45,6 +48,27 @@ class ExamSessionController extends Controller
         ]);
 
         return response()->json($this->entryPipeline->execute($request, $validated));
+    }
+
+    public function verifyOtp(Request $request): JsonResponse
+    {
+        abort_unless($request->user()?->role === 'student', 403);
+
+        $validated = $request->validate([
+            'exam_id' => ['required', 'integer', 'exists:quizzes,id'],
+            'otp_code' => ['required', 'string', 'regex:/^[0-9]{6}$/'],
+        ]);
+
+        $this->examOtp->verifySubmittedOtp(
+            $request->user(),
+            (int) $validated['exam_id'],
+            $validated['otp_code'],
+        );
+
+        return response()->json([
+            'status' => 'otp_verified',
+            'exam_id' => (int) $validated['exam_id'],
+        ]);
     }
 
     public function state(Request $request, ExamSession $examSession): JsonResponse
@@ -240,10 +264,10 @@ class ExamSessionController extends Controller
 
     public function forceSubmit(Request $request, ExamSession $examSession): JsonResponse
     {
-        abort_unless(in_array($request->user()?->role, ['admin', 'coordinator'], true), 403);
-        if ($request->user()?->role === 'coordinator') {
-            $this->ensureCoordinatorCanAccessExamCourse($request->user(), (int) $examSession->exam_id);
-        }
+        $quiz = Quiz::query()->find((int) $examSession->exam_id);
+        abort_if($quiz === null, 403);
+        $this->authorize('update', $quiz);
+
         $this->submitSession($examSession, 'submitted_held', 'force_submit');
 
         return response()->json(['status' => 'submitted_held', 'reason' => 'force_submit']);
@@ -251,10 +275,9 @@ class ExamSessionController extends Controller
 
     public function reviewTimeline(Request $request, ExamSession $examSession): JsonResponse
     {
-        abort_unless(in_array($request->user()?->role, ['admin', 'coordinator'], true), 403);
-        if ($request->user()?->role === 'coordinator') {
-            $this->ensureCoordinatorCanAccessExamCourse($request->user(), (int) $examSession->exam_id);
-        }
+        $quiz = Quiz::query()->find((int) $examSession->exam_id);
+        abort_if($quiz === null, 403);
+        $this->authorize('update', $quiz);
 
         $events = ProctoringEvent::query()
             ->where('user_id', $examSession->student_id)
@@ -293,10 +316,10 @@ class ExamSessionController extends Controller
 
     public function releaseHeldResult(Request $request, ExamSession $examSession): JsonResponse
     {
-        abort_unless(in_array($request->user()?->role, ['admin', 'coordinator'], true), 403);
-        if ($request->user()?->role === 'coordinator') {
-            $this->ensureCoordinatorCanAccessExamCourse($request->user(), (int) $examSession->exam_id);
-        }
+        $quiz = Quiz::query()->find((int) $examSession->exam_id);
+        abort_if($quiz === null, 403);
+        $this->authorize('update', $quiz);
+
         $this->applyReviewDecision($examSession, 'released', 'Result released after review.');
 
         return response()->json(['status' => 'released']);
@@ -304,10 +327,10 @@ class ExamSessionController extends Controller
 
     public function confirmFail(Request $request, ExamSession $examSession): JsonResponse
     {
-        abort_unless(in_array($request->user()?->role, ['admin', 'coordinator'], true), 403);
-        if ($request->user()?->role === 'coordinator') {
-            $this->ensureCoordinatorCanAccessExamCourse($request->user(), (int) $examSession->exam_id);
-        }
+        $quiz = Quiz::query()->find((int) $examSession->exam_id);
+        abort_if($quiz === null, 403);
+        $this->authorize('update', $quiz);
+
         $this->applyReviewDecision($examSession, 'confirmed_fail', 'Result marked failed due to violations.');
 
         return response()->json(['status' => 'confirmed_fail']);
@@ -315,10 +338,10 @@ class ExamSessionController extends Controller
 
     public function overrideDecision(Request $request, ExamSession $examSession): JsonResponse
     {
-        abort_unless(in_array($request->user()?->role, ['admin', 'coordinator'], true), 403);
-        if ($request->user()?->role === 'coordinator') {
-            $this->ensureCoordinatorCanAccessExamCourse($request->user(), (int) $examSession->exam_id);
-        }
+        $quiz = Quiz::query()->find((int) $examSession->exam_id);
+        abort_if($quiz === null, 403);
+        $this->authorize('update', $quiz);
+
         $validated = $request->validate([
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
@@ -356,23 +379,6 @@ class ExamSessionController extends Controller
         $user = $request->user();
         abort_unless($user && $user->role === 'student', 403);
         abort_unless((int) $examSession->student_id === (int) $user->id, 403);
-    }
-
-    private function ensureCoordinatorCanAccessExamCourse(?User $user, int $examQuizId): void
-    {
-        abort_unless($user && $user->role === 'coordinator', 403);
-
-        $quiz = Quiz::query()->with('course')->find($examQuizId);
-        abort_if($quiz === null || $quiz->course === null, 403);
-
-        $deptId = (int) $quiz->course->department_id;
-        $allowed = $user->coordinatorAssignments()
-            ->where('is_active', true)
-            ->pluck('department_id')
-            ->map(fn ($id) => (int) $id)
-            ->contains($deptId);
-
-        abort_unless($allowed, 403);
     }
 
     private function authorizeStudentSession(Request $request, ExamSession $examSession): void
@@ -413,18 +419,18 @@ class ExamSessionController extends Controller
             'risk_state' => $examStatus === 'submitted_held' ? 'locked' : $examSession->risk_state,
         ]);
 
-        $timeTaken = max(0, $examSession->start_time?->diffInSeconds($examSession->end_time ?? now()) ?? 0);
+        $submitted = $examSession->fresh();
+        $this->answerSynthesis->ensureEveryQuestionHasAnswer($submitted);
 
-        $gradedSession = $examSession->fresh(['answers']);
-        $eval = $this->answerEvaluation->evaluateAndPersist($gradedSession);
-        $score = $eval['total_score'];
+        $timeTaken = max(0, $submitted->start_time?->diffInSeconds($submitted->end_time ?? now()) ?? 0);
 
-        $finalSession = $examSession->fresh(['answers']);
+        $gradedSession = $submitted->fresh(['exam.questions', 'answers']);
+        $this->answerEvaluation->evaluateAndPersist($gradedSession);
+
+        $finalSession = $submitted->fresh(['answers']);
         $this->resultFinalization->syncAfterSubmission(
             $finalSession,
-            $score,
             $timeTaken,
-            $examStatus,
             $reason,
         );
     }
@@ -444,5 +450,7 @@ class ExamSessionController extends Controller
                 'review_decision' => $decision,
                 'review_note' => $note,
             ]);
+
+        $this->resultFinalization->refreshResultFromSessionState($examSession->fresh(['answers']));
     }
 }

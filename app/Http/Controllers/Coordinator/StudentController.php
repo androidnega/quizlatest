@@ -20,6 +20,8 @@ class StudentController extends Controller
 {
     public function index(Request $request): View
     {
+        $this->authorize('viewStudentDirectory');
+
         $departmentIds = $this->departmentIds();
         $programs = Program::query()->whereIn('department_id', $departmentIds)->orderBy('name')->get();
         $levels = Level::query()->orderBy('sort_order')->get();
@@ -58,7 +60,7 @@ class StudentController extends Controller
 
     public function editClass(User $student): View
     {
-        $this->abortIfStudentOutOfScope($student);
+        $this->authorize('manageStudentInScope', $student);
 
         return view('coordinator.students.assign-class', [
             'student' => $student->load(['program.department', 'level', 'classroom']),
@@ -68,7 +70,7 @@ class StudentController extends Controller
 
     public function updateClass(Request $request, User $student): RedirectResponse
     {
-        $this->abortIfStudentOutOfScope($student);
+        $this->authorize('manageStudentInScope', $student);
 
         $validated = $request->validate([
             'class_id' => ['nullable', 'integer', 'exists:classes,id'],
@@ -82,12 +84,11 @@ class StudentController extends Controller
         }
 
         if ($classId !== null) {
-            $classroom = $this->scopedClasses()->firstWhere('id', (int) $classId);
-            abort_unless($classroom, 403);
+            $classroom = Classroom::query()->find((int) $classId);
+            abort_if($classroom === null, 404);
+            $this->authorize('view', $classroom);
 
-            $studentDepartmentId = (int) $student->program?->department_id;
-            $classDepartmentId = (int) $classroom->program?->department_id;
-            abort_unless($studentDepartmentId > 0 && $studentDepartmentId === $classDepartmentId, 403);
+            abort_unless((int) $student->program_id === (int) $classroom->program_id, 422);
         }
 
         $student->update(['class_id' => $classId]);
@@ -97,11 +98,15 @@ class StudentController extends Controller
 
     public function uploadForm(): View
     {
+        $this->authorize('viewStudentDirectory');
+
         return view('coordinator.students.upload');
     }
 
     public function previewImport(Request $request): View
     {
+        $this->authorize('viewStudentDirectory');
+
         $validated = $request->validate([
             'csv_file' => ['required', 'file', 'mimes:csv,txt', 'max:4096'],
             'map_name' => ['required', 'string'],
@@ -232,6 +237,8 @@ class StudentController extends Controller
 
     public function import(Request $request): RedirectResponse
     {
+        $this->authorize('viewStudentDirectory');
+
         $payload = $request->session()->get('student_csv_import');
 
         if (! is_array($payload) || empty($payload['rows'])) {
@@ -299,6 +306,8 @@ class StudentController extends Controller
 
     public function bulkStatus(Request $request): RedirectResponse
     {
+        $this->authorize('viewStudentDirectory');
+
         $validated = $request->validate([
             'student_ids' => ['required', 'array', 'min:1'],
             'student_ids.*' => ['integer', 'exists:users,id'],
@@ -326,6 +335,8 @@ class StudentController extends Controller
 
     public function bulkAssignClass(Request $request): RedirectResponse
     {
+        $this->authorize('viewStudentDirectory');
+
         $validated = $request->validate([
             'program_id' => ['required', 'integer', 'exists:programs,id'],
             'level_id' => ['required', 'integer', 'exists:levels,id'],
@@ -334,18 +345,17 @@ class StudentController extends Controller
 
         $departmentIds = $this->departmentIds();
 
-        $program = Program::query()
-            ->where('id', $validated['program_id'])
-            ->whereIn('department_id', $departmentIds)
-            ->first();
-        abort_unless($program, 403);
+        $program = Program::query()->find((int) $validated['program_id']);
+        abort_if($program === null, 404);
+        $this->authorize('view', $program);
 
         $classroom = Classroom::query()
             ->where('id', $validated['class_id'])
             ->where('program_id', $validated['program_id'])
             ->where('level_id', $validated['level_id'])
             ->first();
-        abort_unless($classroom, 403);
+        abort_if($classroom === null, 404);
+        $this->authorize('view', $classroom);
 
         $updated = User::query()
             ->where('role', 'student')
@@ -362,6 +372,8 @@ class StudentController extends Controller
 
     public function template(): StreamedResponse
     {
+        $this->authorize('viewStudentDirectory');
+
         return response()->streamDownload(function (): void {
             $handle = fopen('php://output', 'wb');
             fputcsv($handle, ['name', 'email', 'index_number', 'program', 'level']);
@@ -383,6 +395,7 @@ class StudentController extends Controller
         $headers = fgetcsv($handle);
         if (! $headers) {
             fclose($handle);
+
             return $rows;
         }
 
@@ -419,6 +432,7 @@ class StudentController extends Controller
                 ->pluck('index_number')
                 ->map(function ($indexNumber) {
                     $parts = explode('/', (string) $indexNumber);
+
                     return (int) ($parts[2] ?? 0);
                 })
                 ->max();
@@ -445,18 +459,5 @@ class StudentController extends Controller
             ->with(['program.department', 'level'])
             ->orderBy('name')
             ->get();
-    }
-
-    private function abortIfStudentOutOfScope(User $student): void
-    {
-        abort_unless($student->role === 'student', 404);
-
-        $departmentIds = $this->departmentIds();
-        $isInScope = Program::query()
-            ->where('id', $student->program_id)
-            ->whereIn('department_id', $departmentIds)
-            ->exists();
-
-        abort_unless($isInScope, 403);
     }
 }

@@ -10,20 +10,17 @@ use App\Models\User;
 class ResultFinalizationService
 {
     /**
-     * Sync {@see Result} row after submission autograding using session outcome rules.
-     *
-     * Priority: pending manual essays → violation held → graded.
+     * Persist {@see Result} after submission: score from summed answer points; status rules applied.
      */
     public function syncAfterSubmission(
         ExamSession $examSession,
-        float $score,
         int $timeTakenSeconds,
-        string $submitExamStatus,
         string $reviewNote,
     ): void {
-        $examSession->loadMissing('answers');
+        $examSession->load(['answers']);
 
-        $status = $this->resolveStatus($examSession, $submitExamStatus);
+        $total = $this->sumPoints($examSession);
+        $status = $this->resolveStatus($examSession);
 
         Result::query()->updateOrCreate(
             [
@@ -31,10 +28,10 @@ class ResultFinalizationService
                 'quiz_id' => $examSession->exam_id,
             ],
             [
-                'score' => $score,
+                'score' => round($total, 2),
                 'time_taken' => $timeTakenSeconds,
                 'status' => $status,
-                'exam_status' => $submitExamStatus,
+                'exam_status' => $examSession->exam_status,
                 'review_note' => $reviewNote,
                 'submitted_at' => now(),
             ],
@@ -42,40 +39,59 @@ class ResultFinalizationService
     }
 
     /**
-     * Recalculate score and status after manual essay grading (or batch completion).
+     * Recalculate score and workflow status from session + answers (held release, manual grading, etc.).
      */
-    public function finalizeAfterManualGrading(ExamSession $examSession, ?User $gradedBy = null): void
+    public function refreshResultFromSessionState(ExamSession $examSession, ?User $gradedBy = null): void
     {
-        $examSession->refresh();
         $examSession->load(['answers']);
 
-        $total = (float) ExamSessionAnswer::query()
-            ->where('exam_session_id', $examSession->id)
-            ->sum('points_awarded');
+        $total = $this->sumPoints($examSession);
+        $status = $this->resolveStatus($examSession);
 
-        $result = Result::query()
+        $existing = Result::query()
             ->where('user_id', $examSession->student_id)
             ->where('quiz_id', $examSession->exam_id)
             ->first();
 
-        if ($result === null) {
-            return;
-        }
-
-        $status = $this->resolveStatus($examSession, (string) $examSession->exam_status);
-
-        $result->update([
+        $payload = [
             'score' => round($total, 2),
             'status' => $status,
-            'graded_at' => $status === 'graded' ? now() : $result->graded_at,
-            'graded_by' => $status === 'graded' && $gradedBy ? $gradedBy->id : $result->graded_by,
-        ]);
+            'exam_status' => $examSession->exam_status,
+        ];
+
+        if ($status === 'graded' && $gradedBy !== null) {
+            $payload['graded_by'] = $gradedBy->id;
+            $payload['graded_at'] = now();
+        } elseif ($status === 'graded' && $existing?->graded_at !== null) {
+            $payload['graded_at'] = $existing->graded_at;
+            $payload['graded_by'] = $existing->graded_by;
+        }
+
+        Result::query()->updateOrCreate(
+            [
+                'user_id' => $examSession->student_id,
+                'quiz_id' => $examSession->exam_id,
+            ],
+            $payload,
+        );
     }
 
     /**
-     * @param  string  $submitExamStatus  {@see ExamSession::exam_status} at submission time
+     * After essay grades change; wraps {@see refreshResultFromSessionState()} with grader attribution when applicable.
      */
-    public function resolveStatus(ExamSession $examSession, string $submitExamStatus): string
+    public function finalizeAfterManualGrading(ExamSession $examSession, ?User $gradedBy = null): void
+    {
+        $examSession->refresh();
+        $this->refreshResultFromSessionState($examSession->fresh(['answers']), $gradedBy);
+    }
+
+    /**
+     * Strict precedence:
+     * 1. Any answer pending_manual → pending_manual
+     * 2. Session exam_status held-like → held
+     * 3. graded
+     */
+    public function resolveStatus(ExamSession $examSession): string
     {
         $examSession->loadMissing('answers');
 
@@ -87,15 +103,20 @@ class ResultFinalizationService
             return 'pending_manual';
         }
 
-        $violationHeld = in_array($submitExamStatus, [
+        if (in_array((string) $examSession->exam_status, [
             'submitted_held',
             'locked_by_admin',
-        ], true);
-
-        if ($violationHeld) {
+        ], true)) {
             return 'held';
         }
 
         return 'graded';
+    }
+
+    private function sumPoints(ExamSession $examSession): float
+    {
+        return (float) ExamSessionAnswer::query()
+            ->where('exam_session_id', $examSession->id)
+            ->sum('points_awarded');
     }
 }

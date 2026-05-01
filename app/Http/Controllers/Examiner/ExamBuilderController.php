@@ -58,7 +58,9 @@ class ExamBuilderController extends Controller
             'assessment_type' => ['nullable', 'string', 'in:quiz,mid,exam,assignment'],
         ]);
 
-        abort_unless(in_array((int) $validated['course_id'], $this->manageableCourseIds($request), true), 403);
+        $course = Course::query()->find((int) $validated['course_id']);
+        abort_if($course === null, 404);
+        $this->authorize('update', $course);
 
         $user = $request->user();
 

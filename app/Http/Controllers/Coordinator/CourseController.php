@@ -31,7 +31,10 @@ class CourseController extends Controller
 
         $departmentIds = $this->departmentIds();
         $selectedDepartmentId = (int) $request->integer('department_id', $departmentIds[0] ?? 0);
-        abort_unless(in_array($selectedDepartmentId, $departmentIds, true), 403);
+        $this->authorize('update', Course::make([
+            'department_id' => $selectedDepartmentId,
+            'university_id' => auth()->user()->university_id,
+        ]));
 
         return view('coordinator.courses.create', [
             'department' => Department::query()->find($selectedDepartmentId),
@@ -51,7 +54,10 @@ class CourseController extends Controller
         ]);
 
         $departmentId = (int) $validated['department_id'];
-        abort_unless(in_array($departmentId, $this->departmentIds(), true), 403);
+        $this->authorize('update', Course::make([
+            'department_id' => $departmentId,
+            'university_id' => auth()->user()->university_id,
+        ]));
 
         $request->validate([
             'code' => [

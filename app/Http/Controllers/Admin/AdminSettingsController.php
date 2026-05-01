@@ -16,6 +16,8 @@ class AdminSettingsController extends Controller
 
     public function index(): View
     {
+        $this->authorize('manageSystemSettings');
+
         return view('admin.settings.index', [
             'arkesel_api_key_masked' => $this->systemSettings->getMasked('arkesel_api_key'),
             'arkesel_sender_id' => $this->systemSettings->get('arkesel_sender_id') ?? '',
@@ -32,6 +34,8 @@ class AdminSettingsController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
+        $this->authorize('manageSystemSettings');
+
         $validated = $request->validate([
             'arkesel_api_key' => ['nullable', 'string', 'max:2000'],
             'arkesel_sender_id' => ['nullable', 'string', 'max:255'],
@@ -41,7 +45,6 @@ class AdminSettingsController extends Controller
         ]);
 
         $user = $request->user();
-        abort_unless($user && $user->role === 'admin', 403);
 
         if (! empty($validated['arkesel_api_key']) && $validated['arkesel_api_key'] !== '********') {
             $this->systemSettings->set('arkesel_api_key', $validated['arkesel_api_key'], $user);
@@ -64,6 +67,8 @@ class AdminSettingsController extends Controller
 
     public function lock(Request $request): RedirectResponse
     {
+        $this->authorize('manageSystemSettings');
+
         $validated = $request->validate([
             'key' => ['required', 'string', 'max:100'],
         ]);
@@ -74,6 +79,8 @@ class AdminSettingsController extends Controller
 
     public function unlock(Request $request): RedirectResponse
     {
+        $this->authorize('manageSystemSettings');
+
         $validated = $request->validate([
             'key' => ['required', 'string', 'max:100'],
         ]);

@@ -15,6 +15,8 @@ class ClassroomController extends Controller
 {
     public function index(): View
     {
+        $this->authorize('viewAny', Classroom::class);
+
         return view('coordinator.classes.index', [
             'classes' => Classroom::query()
                 ->whereIn('program_id', $this->scopedProgramIds())
@@ -26,6 +28,8 @@ class ClassroomController extends Controller
 
     public function create(): View
     {
+        $this->authorize('create', Classroom::class);
+
         return view('coordinator.classes.create', [
             'programs' => $this->scopedPrograms(),
             'levels' => $this->scopedLevels(),
@@ -34,6 +38,8 @@ class ClassroomController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('create', Classroom::class);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'program_id' => ['required', 'integer'],
@@ -43,8 +49,11 @@ class ClassroomController extends Controller
 
         $programId = (int) $validated['program_id'];
         $levelId = (int) $validated['level_id'];
-        abort_unless(in_array($programId, $this->scopedProgramIds(), true), 403);
-        abort_unless(in_array($levelId, $this->scopedLevelIds(), true), 403);
+        $program = Program::query()->find($programId);
+        $level = Level::query()->find($levelId);
+        abort_if($program === null || $level === null, 404);
+        $this->authorize('view', $program);
+        $this->authorize('view', $level);
 
         $request->validate([
             'name' => [
@@ -70,7 +79,7 @@ class ClassroomController extends Controller
 
     public function edit(Classroom $classroom): View
     {
-        abort_unless(in_array((int) $classroom->program_id, $this->scopedProgramIds(), true), 403);
+        $this->authorize('update', $classroom);
 
         return view('coordinator.classes.edit', [
             'classroom' => $classroom->load(['program.department', 'level']),
@@ -81,7 +90,7 @@ class ClassroomController extends Controller
 
     public function update(Request $request, Classroom $classroom): RedirectResponse
     {
-        abort_unless(in_array((int) $classroom->program_id, $this->scopedProgramIds(), true), 403);
+        $this->authorize('update', $classroom);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -92,8 +101,11 @@ class ClassroomController extends Controller
 
         $programId = (int) $validated['program_id'];
         $levelId = (int) $validated['level_id'];
-        abort_unless(in_array($programId, $this->scopedProgramIds(), true), 403);
-        abort_unless(in_array($levelId, $this->scopedLevelIds(), true), 403);
+        $program = Program::query()->find($programId);
+        $level = Level::query()->find($levelId);
+        abort_if($program === null || $level === null, 404);
+        $this->authorize('view', $program);
+        $this->authorize('view', $level);
 
         $request->validate([
             'name' => [
@@ -117,7 +129,7 @@ class ClassroomController extends Controller
 
     public function toggleStatus(Classroom $classroom): RedirectResponse
     {
-        abort_unless(in_array((int) $classroom->program_id, $this->scopedProgramIds(), true), 403);
+        $this->authorize('update', $classroom);
 
         $classroom->update(['is_active' => ! $classroom->is_active]);
 

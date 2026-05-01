@@ -44,7 +44,12 @@ Route::middleware('auth')->group(function () {
     Route::prefix('exam-sessions')
         ->name('exam-sessions.')
         ->group(function () {
-            Route::post('/start', [ExamSessionController::class, 'start'])->name('start');
+            Route::post('/verify-otp', [ExamSessionController::class, 'verifyOtp'])
+                ->middleware('throttle:20,1')
+                ->name('verify-otp');
+            Route::post('/start', [ExamSessionController::class, 'start'])
+                ->middleware('throttle:60,1')
+                ->name('start');
             Route::post('/proctoring-capability', [ExamSessionController::class, 'proctoringCapability'])->name('proctoring-capability');
             Route::get('/{examSession}/state', [ExamSessionController::class, 'state'])->name('state');
             Route::post('/{examSession}/answers', [ExamSessionController::class, 'saveAnswer'])->name('answers.save');

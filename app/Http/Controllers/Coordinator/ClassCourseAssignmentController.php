@@ -14,12 +14,18 @@ class ClassCourseAssignmentController extends Controller
 {
     public function edit(Request $request): View
     {
+        $this->authorize('viewAny', Classroom::class);
+
         $classes = $this->scopedClasses();
         $courses = $this->scopedCourses();
         $selectedClassId = (int) $request->integer('class_id', $classes->first()?->id ?? 0);
         $selectedClass = $classes->firstWhere('id', $selectedClassId);
 
-        abort_unless($selectedClass || $selectedClassId === 0, 403);
+        if ($selectedClass) {
+            $this->authorize('view', $selectedClass);
+        } elseif ($classes->isNotEmpty()) {
+            abort(403);
+        }
 
         $assignedCourseIds = $selectedClass
             ? DB::table('class_course')
@@ -49,8 +55,9 @@ class ClassCourseAssignmentController extends Controller
             'course_ids.*' => ['integer', 'exists:courses,id'],
         ]);
 
-        $classroom = $this->scopedClasses()->firstWhere('id', (int) $validated['class_id']);
-        abort_unless($classroom, 403);
+        $classroom = Classroom::query()->find((int) $validated['class_id']);
+        abort_if($classroom === null, 404);
+        $this->authorize('assignCourses', $classroom);
 
         $selectedCourseIds = collect($validated['course_ids'] ?? [])->map(fn ($id) => (int) $id)->all();
         $scopedCourses = $this->scopedCourses()->whereIn('id', $selectedCourseIds);

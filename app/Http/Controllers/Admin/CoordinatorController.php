@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Department;
+use App\Models\Faculty;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Contracts\View\View;
@@ -17,6 +18,8 @@ class CoordinatorController extends Controller
 {
     public function index(): View
     {
+        $this->authorize('manageCoordinatorDirectory');
+
         $coordinators = User::query()
             ->where('role', 'coordinator')
             ->with(['coordinatorAssignments.department.faculty'])
@@ -30,6 +33,8 @@ class CoordinatorController extends Controller
 
     public function create(): View
     {
+        $this->authorize('manageCoordinatorDirectory');
+
         return view('admin.coordinators.create', [
             'faculties' => $this->facultiesWithDepartments(),
         ]);
@@ -37,6 +42,8 @@ class CoordinatorController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->authorize('manageCoordinatorDirectory');
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'max:255', 'unique:users,email'],
@@ -67,7 +74,7 @@ class CoordinatorController extends Controller
 
     public function edit(User $coordinator): View
     {
-        abort_unless($coordinator->role === 'coordinator', 404);
+        $this->authorize('manageCoordinatorAccount', $coordinator);
 
         return view('admin.coordinators.edit', [
             'coordinator' => $coordinator->load('coordinatorAssignments'),
@@ -78,7 +85,7 @@ class CoordinatorController extends Controller
 
     public function update(Request $request, User $coordinator): RedirectResponse
     {
-        abort_unless($coordinator->role === 'coordinator', 404);
+        $this->authorize('manageCoordinatorAccount', $coordinator);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -112,7 +119,7 @@ class CoordinatorController extends Controller
 
     private function facultiesWithDepartments()
     {
-        return \App\Models\Faculty::query()
+        return Faculty::query()
             ->with(['departments' => fn ($query) => $query->orderBy('name')])
             ->orderBy('name')
             ->get();
