@@ -23,6 +23,31 @@ class SystemSettingsService
         }
     }
 
+    public function getBool(string $key, bool $default = false): bool
+    {
+        $v = $this->get($key);
+        if ($v === null || $v === '') {
+            return $default;
+        }
+
+        return in_array(strtolower(trim($v)), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    public function getInt(string $key, int $default): int
+    {
+        $v = $this->get($key);
+        if ($v === null || $v === '') {
+            return $default;
+        }
+        if (! is_numeric($v)) {
+            return $default;
+        }
+
+        $i = (int) $v;
+
+        return $i < 0 ? $default : $i;
+    }
+
     /**
      * Masked placeholder for UI — never returns raw secrets.
      */

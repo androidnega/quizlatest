@@ -7,7 +7,6 @@ use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Redis;
 use RuntimeException;
 
@@ -19,6 +18,8 @@ class ExamOtpService
     public function __construct(
         private readonly ArkeselSmsService $sms,
         private readonly RedisHealthService $redisHealth,
+        private readonly SystemExamPolicyService $examPolicy,
+        private readonly ExamRedisService $examRedis,
     ) {}
 
     public function otpKey(int $studentId, int $examId): string
@@ -51,6 +52,10 @@ class ExamOtpService
      */
     public function evaluateStartGate(User $student, int $examId): string
     {
+        if (! $this->examPolicy->isOtpEnabled()) {
+            return 'continue';
+        }
+
         $this->assertOtpBackendReady();
 
         $key = $this->otpKey((int) $student->id, $examId);
@@ -83,6 +88,8 @@ class ExamOtpService
     {
         abort_unless($student->role === 'student', 403);
 
+        abort_unless($this->examPolicy->isOtpEnabled(), 422, 'Phone verification is disabled for this institution.');
+
         $this->assertOtpBackendReady();
 
         $key = $this->otpKey((int) $student->id, $examId);
@@ -105,7 +112,7 @@ class ExamOtpService
         }
 
         $attempts = (int) ($data['attempt_count'] ?? 0);
-        $maxAttempts = (int) config('exam_otp.max_verify_attempts', 3);
+        $maxAttempts = $this->examPolicy->getOtpAttemptLimit();
         abort_if($attempts >= $maxAttempts, 422, 'Too many failed attempts. Start the exam again.');
 
         $hash = $data['otp_hash'] ?? null;
@@ -153,15 +160,17 @@ class ExamOtpService
      */
     private function atomicCreateAndSendOtp(User $student, int $examId): string
     {
+        abort_unless($this->examPolicy->isSmsEnabled(), 422, 'SMS delivery is disabled for this institution.');
+
         $phone = $this->normalizedPhone($student->phone ?? null);
         abort_if($phone === null, 422, 'Add a phone number on your profile before starting this exam.');
 
-        $this->enforceSendRateLimit((int) $student->id);
+        $this->examRedis->enforceOtpSendRateLimit((int) $student->id);
 
         $plain = $this->generateSixDigitCode();
         $hash = password_hash($plain, PASSWORD_BCRYPT);
 
-        $ttl = (int) config('exam_otp.ttl_seconds', 300);
+        $ttl = $this->examPolicy->getOtpExpirySeconds();
         $expiresAt = now()->addSeconds($ttl)->timestamp;
         $now = now()->timestamp;
 
@@ -199,11 +208,6 @@ class ExamOtpService
             $this->storeDelBestEffort($key);
             throw $e;
         }
-
-        RateLimiter::hit(
-            $this->sendRateLimiterKey((int) $student->id),
-            (int) config('exam_otp.send_window_seconds', 600),
-        );
 
         return 'otp_required';
     }
@@ -407,22 +411,5 @@ class ExamOtpService
         }
 
         return $digits;
-    }
-
-    private function sendRateLimiterKey(int $studentId): string
-    {
-        return 'exam-otp-send:'.$studentId;
-    }
-
-    private function enforceSendRateLimit(int $studentId): void
-    {
-        $key = $this->sendRateLimiterKey($studentId);
-        $max = (int) config('exam_otp.max_send_per_window', 5);
-        $decay = (int) config('exam_otp.send_window_seconds', 600);
-
-        if (RateLimiter::tooManyAttempts($key, $max)) {
-            $seconds = RateLimiter::availableIn($key);
-            abort(429, 'Too many verification codes requested. Try again in '.$seconds.' seconds.');
-        }
     }
 }

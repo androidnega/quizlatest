@@ -13,9 +13,11 @@ use App\Services\AnswerPayloadValidator;
 use App\Services\ExamAnswerSynthesisService;
 use App\Services\ExamEntryPipelineService;
 use App\Services\ExamOtpService;
+use App\Services\ExamRedisService;
 use App\Services\ProctoringGlobalControlService;
 use App\Services\ProctoringOrchestratorService;
 use App\Services\ResultFinalizationService;
+use App\Services\SystemExamPolicyService;
 use App\Support\ExamRuntimeStateExtension;
 use App\Support\ExamSessionStateResolver;
 use App\Support\ProctoringCapabilityResolver;
@@ -33,6 +35,8 @@ class ExamSessionController extends Controller
         private readonly ExamAnswerSynthesisService $answerSynthesis,
         private readonly ResultFinalizationService $resultFinalization,
         private readonly ExamOtpService $examOtp,
+        private readonly ExamRedisService $examRedis,
+        private readonly SystemExamPolicyService $examPolicy,
     ) {}
 
     public function start(Request $request): JsonResponse
@@ -57,6 +61,8 @@ class ExamSessionController extends Controller
     public function verifyOtp(Request $request): JsonResponse
     {
         abort_unless($request->user()?->role === 'student', 403);
+
+        abort_unless($this->examPolicy->isOtpEnabled(), 422, 'Phone verification is disabled for this institution.');
 
         $validated = $request->validate([
             'exam_id' => ['required', 'integer', 'exists:quizzes,id'],
@@ -204,6 +210,15 @@ class ExamSessionController extends Controller
         abort_unless((int) $validated['metadata']['student_id'] === (int) $examSession->student_id, 422, 'student_id mismatch.');
         abort_unless((int) $validated['metadata']['exam_id'] === (int) $examSession->exam_id, 422, 'exam_id mismatch.');
 
+        if (! $this->examPolicy->isProctoringEnabled()) {
+            return response()->json([
+                'status' => 'ignored',
+                'reason' => 'proctoring_disabled',
+            ]);
+        }
+
+        $this->examRedis->enforceProctoringEventBudget($examSession->session_id, 1);
+
         $decision = $this->orchestrator->ingestEvent(
             examSession: $examSession,
             eventType: $validated['event_type'],
@@ -249,6 +264,16 @@ class ExamSessionController extends Controller
             'events.*.metadata.student_id' => ['required', 'integer'],
             'events.*.metadata.exam_id' => ['required', 'integer'],
         ])->validate();
+
+        if (! $this->examPolicy->isProctoringEnabled()) {
+            return response()->json([
+                'status' => 'ignored',
+                'reason' => 'proctoring_disabled',
+                'processed' => 0,
+            ]);
+        }
+
+        $this->examRedis->enforceProctoringEventBudget($examSession->session_id, count($validated['events']));
 
         foreach ($validated['events'] as $eventPayload) {
             abort_unless($eventPayload['metadata']['session_id'] === $examSession->session_id, 422, 'session_id mismatch.');
@@ -460,12 +485,16 @@ class ExamSessionController extends Controller
             return;
         }
 
+        $examId = (int) $examSession->exam_id;
+
         $examSession->update([
             'status' => 'submitted',
             'end_time' => now(),
             'exam_status' => $examStatus,
             'risk_state' => $examStatus === 'submitted_held' ? 'locked' : $examSession->risk_state,
         ]);
+
+        $this->examRedis->decrementActiveSessions($examId);
 
         $submitted = $examSession->fresh();
         $this->answerSynthesis->ensureEveryQuestionHasAnswer($submitted);
