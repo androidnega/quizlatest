@@ -13,6 +13,7 @@ class ExamSession extends Model
         'class_id',
         'exam_id',
         'session_id',
+        'verification_image_path',
         'status',
         'start_time',
         'end_time',

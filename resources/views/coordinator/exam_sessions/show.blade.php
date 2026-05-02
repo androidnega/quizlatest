@@ -15,6 +15,18 @@
             @endif
         </div>
 
+        @if ($verificationImageUrl)
+            <div class="qs-card rounded-xl p-5 shadow-sm">
+                <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-soft">Verification image</h3>
+                <p class="mt-1 text-xs text-qs-soft">Captured at exam start after face verification.</p>
+                <div class="mt-3">
+                    <a href="{{ $verificationImageUrl }}" target="_blank" rel="noopener noreferrer">
+                        <img src="{{ $verificationImageUrl }}" alt="" loading="lazy" decoding="async" class="max-h-48 max-w-full rounded-lg border border-qs-soft object-contain" />
+                    </a>
+                </div>
+            </div>
+        @endif
+
         <div class="qs-card rounded-xl p-5 shadow-sm">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-soft">Exam</h3>
             <p class="mt-2 text-sm font-medium text-qs-text">{{ $session->exam?->title }}</p>
@@ -53,7 +65,7 @@
             </dl>
         </div>
 
-        @if ($isHeld)
+        @if ($isHeld && $canReviewHeld)
             <div class="qs-card rounded-xl border border-qs-accent/40 p-5 shadow-sm">
                 <h3 class="text-sm font-semibold text-qs-text">Held result review</h3>
                 <p class="mt-2 text-sm text-qs-soft">Choose an action. Changes apply immediately.</p>
@@ -67,10 +79,16 @@
                     <textarea id="override-note" rows="2" class="qs-input w-full max-w-lg py-2 text-sm" placeholder="Short note for audit trail"></textarea>
                 </div>
             </div>
+        @elseif ($isHeld)
+            <div class="qs-card rounded-xl border border-qs-soft p-5 shadow-sm">
+                <h3 class="text-sm font-semibold text-qs-text">Held result</h3>
+                <p class="mt-2 text-sm text-qs-soft">Only an examiner assigned to this course can release, confirm, or override this result.</p>
+            </div>
         @endif
 
         <div class="qs-card rounded-xl p-5 shadow-sm">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-soft">Proctoring timeline</h3>
+            <p class="mt-1 text-xs text-qs-soft">Latest 200 events, oldest first.</p>
             <div class="qs-table-wrap mt-4 overflow-x-auto rounded-lg border border-qs-soft">
                 <table class="qs-table min-w-full">
                     <thead>
@@ -117,7 +135,7 @@
         @endif
     </div>
 
-    @if ($isHeld)
+    @if ($isHeld && $canReviewHeld)
         @push('scripts')
             <script>
                 (function () {

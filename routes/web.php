@@ -59,6 +59,9 @@ Route::middleware('auth')->group(function () {
             Route::get('/{examSession}/state', [ExamSessionController::class, 'state'])->name('state');
             Route::post('/{examSession}/answers', [ExamSessionController::class, 'saveAnswer'])->name('answers.save');
             Route::post('/{examSession}/heartbeat', [ExamSessionController::class, 'heartbeat'])->name('heartbeat');
+            Route::post('/{examSession}/verification-image', [ExamSessionController::class, 'storeVerificationImage'])
+                ->middleware('throttle:30,1')
+                ->name('verification-image');
             Route::post('/{examSession}/proctoring-events', [ExamSessionController::class, 'logProctoringEvent'])->name('proctoring-events.store');
             Route::post('/{examSession}/proctoring-events/batch', [ExamSessionController::class, 'logProctoringEventBatch'])->name('proctoring-events.batch');
             Route::post('/{examSession}/submit', [ExamSessionController::class, 'submit'])->name('submit');

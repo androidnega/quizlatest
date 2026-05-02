@@ -23,6 +23,8 @@ use App\Support\ExamSessionStateResolver;
 use App\Support\ProctoringCapabilityResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ExamSessionController extends Controller
@@ -93,10 +95,36 @@ class ExamSessionController extends Controller
         $fresh = $examSession->fresh();
         abort_if($fresh === null, 404);
 
-        $base = ExamSessionStateResolver::payload($fresh, $this->globalControl->getControl());
-        $runtime = ExamRuntimeStateExtension::forSession($fresh);
+        return response()->json($this->mergeStudentExamStatePayload($fresh));
+    }
 
-        return response()->json(array_merge($base, $runtime));
+    public function storeVerificationImage(Request $request, ExamSession $examSession): JsonResponse
+    {
+        $this->authorizeStudentSession($request, $examSession);
+
+        if ($examSession->verification_image_path !== null && $examSession->verification_image_path !== '') {
+            return response()->json(['status' => 'already_stored']);
+        }
+
+        $validated = $request->validate([
+            'snapshot' => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:2048'],
+        ]);
+
+        $safeSessionKey = preg_replace('/[^A-Za-z0-9_-]/', '', $examSession->session_id) ?: 'session';
+        $dir = sprintf(
+            'proctoring/user_%d/session_%s',
+            (int) $examSession->student_id,
+            $safeSessionKey,
+        );
+
+        $filename = 'verification_'.now()->format('YmdHis').'_'.Str::random(8).'.jpg';
+        $path = $dir.'/'.$filename;
+
+        Storage::disk('public')->put($path, file_get_contents($validated['snapshot']->getRealPath()));
+
+        $examSession->forceFill(['verification_image_path' => $path])->save();
+
+        return response()->json(['status' => 'stored']);
     }
 
     public function saveAnswer(Request $request, ExamSession $examSession): JsonResponse
@@ -318,13 +346,9 @@ class ExamSessionController extends Controller
         abort_if($fresh === null, 404);
 
         if ($fresh->status === 'submitted') {
-            $base = ExamSessionStateResolver::payload($fresh, $this->globalControl->getControl());
-            $runtime = ExamRuntimeStateExtension::forSession($fresh);
-
             return response()->json(array_merge(
                 ['status' => 'submitted', 'already_submitted' => true],
-                $base,
-                $runtime,
+                $this->mergeStudentExamStatePayload($fresh),
             ));
         }
 
@@ -339,7 +363,7 @@ class ExamSessionController extends Controller
     {
         $quiz = Quiz::query()->find((int) $examSession->exam_id);
         abort_if($quiz === null, 403);
-        $this->authorize('update', $quiz);
+        $this->authorize('reviewHeldResults', $quiz);
 
         $this->submitSession($examSession, 'submitted_held', 'force_submit');
 
@@ -350,7 +374,7 @@ class ExamSessionController extends Controller
     {
         $quiz = Quiz::query()->find((int) $examSession->exam_id);
         abort_if($quiz === null, 403);
-        $this->authorize('update', $quiz);
+        $this->authorize('view', $quiz);
 
         $events = ProctoringEvent::query()
             ->where('user_id', $examSession->student_id)
@@ -391,7 +415,7 @@ class ExamSessionController extends Controller
     {
         $quiz = Quiz::query()->find((int) $examSession->exam_id);
         abort_if($quiz === null, 403);
-        $this->authorize('update', $quiz);
+        $this->authorize('reviewHeldResults', $quiz);
 
         $this->applyReviewDecision($examSession, 'released', 'Result released after review.');
 
@@ -402,7 +426,7 @@ class ExamSessionController extends Controller
     {
         $quiz = Quiz::query()->find((int) $examSession->exam_id);
         abort_if($quiz === null, 403);
-        $this->authorize('update', $quiz);
+        $this->authorize('reviewHeldResults', $quiz);
 
         $this->applyReviewDecision($examSession, 'confirmed_fail', 'Result marked failed due to violations.');
 
@@ -413,7 +437,7 @@ class ExamSessionController extends Controller
     {
         $quiz = Quiz::query()->find((int) $examSession->exam_id);
         abort_if($quiz === null, 403);
-        $this->authorize('update', $quiz);
+        $this->authorize('reviewHeldResults', $quiz);
 
         $validated = $request->validate([
             'note' => ['nullable', 'string', 'max:1000'],
@@ -458,6 +482,53 @@ class ExamSessionController extends Controller
     {
         $this->authorizeStudentOwnsSession($request, $examSession);
         abort_unless(in_array($examSession->status, ['active', 'paused'], true), 422, 'Session is not active.');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mergeStudentExamStatePayload(ExamSession $examSession): array
+    {
+        $examSession->loadMissing(['exam', 'answers']);
+
+        $base = ExamSessionStateResolver::payload($examSession, $this->globalControl->getControl());
+        $runtime = ExamRuntimeStateExtension::forSession($examSession);
+        $merged = array_merge($base, $runtime);
+
+        if ($examSession->status === 'submitted' && $this->resultFinalization->resolveStatus($examSession) === 'held') {
+            return $this->scrubHeldStudentExamPayload($merged);
+        }
+
+        return $merged;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function scrubHeldStudentExamPayload(array $payload): array
+    {
+        unset($payload['violation_score']);
+
+        $payload['result_visible'] = false;
+        $payload['result_message'] = 'Your result is under review. Please contact your lecturer.';
+
+        if (isset($payload['exam']) && is_array($payload['exam'])) {
+            unset($payload['exam']['total_marks']);
+        }
+
+        if (! empty($payload['sections']) && is_array($payload['sections'])) {
+            foreach ($payload['sections'] as $si => $section) {
+                if (empty($section['questions']) || ! is_array($section['questions'])) {
+                    continue;
+                }
+                foreach ($section['questions'] as $qi => $question) {
+                    unset($payload['sections'][$si]['questions'][$qi]['marks']);
+                }
+            }
+        }
+
+        return $payload;
     }
 
     private function autoExpireIfTimedOut(ExamSession $examSession): bool

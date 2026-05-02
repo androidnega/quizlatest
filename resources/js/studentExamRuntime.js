@@ -4,7 +4,6 @@ import {
     fetchProctoringCapability,
 } from './proctoringRuntimeEngine';
 import { ProctoringEventBatcher } from './proctoringEventBatcher';
-import { ProctoringUploadManager } from './proctoringUploadManager';
 import { createProctoringEcho } from './proctoringRealtime';
 import { ExamStateEngine } from './examStateEngine';
 import {
@@ -33,6 +32,54 @@ function setupAxios() {
         axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
     }
     axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+}
+
+async function captureVerificationJpegBlob(videoElement) {
+    if (!videoElement || videoElement.readyState < 2) {
+        return null;
+    }
+    const sourceWidth = videoElement.videoWidth || 640;
+    const sourceHeight = videoElement.videoHeight || 480;
+    const targetWidth = Math.min(480, sourceWidth);
+    const scale = targetWidth / sourceWidth;
+    const targetHeight = Math.max(1, Math.floor(sourceHeight * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const context = canvas.getContext('2d');
+    if (!context) {
+        return null;
+    }
+
+    context.drawImage(videoElement, 0, 0, targetWidth, targetHeight);
+
+    return new Promise((resolve) => {
+        canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.72);
+    });
+}
+
+async function postVerificationImageOnce(videoElement, sessionIdStr) {
+    const storageKey = `qs_verification_image_${sessionIdStr}`;
+    try {
+        if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(storageKey)) {
+            return;
+        }
+        const blob = await captureVerificationJpegBlob(videoElement);
+        if (!blob) {
+            return;
+        }
+        const fd = new FormData();
+        fd.append('snapshot', blob, 'verification.jpg');
+        await axios.post(`/exam-sessions/${encodeURIComponent(sessionIdStr)}/verification-image`, fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.setItem(storageKey, '1');
+        }
+    } catch {
+        //
+    }
 }
 
 function escapeHtml(s) {
@@ -827,14 +874,10 @@ async function main() {
             eventBatcher: batcher,
         });
         await runtime.init();
-        runtime.start();
 
-        const uploads = new ProctoringUploadManager({
-            videoElement: els.video,
-            sessionId,
-            quizId: examId,
-        });
-        uploads.start();
+        await postVerificationImageOnce(els.video, sessionId);
+
+        runtime.start();
     } catch (e) {
         console.error(e);
         updateBanner(

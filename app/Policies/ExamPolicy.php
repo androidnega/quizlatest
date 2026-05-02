@@ -49,6 +49,28 @@ class ExamPolicy
         return $this->manageExam($user, $exam);
     }
 
+    /**
+     * Release / confirm / override held results and force-submit (invigilator tools).
+     * Department coordinators without an examiner assignment cannot perform these actions.
+     */
+    public function reviewHeldResults(User $user, Quiz $exam): bool
+    {
+        if ($user->role !== 'coordinator') {
+            return false;
+        }
+
+        $course = Course::query()->find($exam->course_id);
+        if ($course === null) {
+            return false;
+        }
+
+        return ExaminerCourseAssignment::query()
+            ->where('examiner_user_id', $user->id)
+            ->where('course_id', $course->id)
+            ->where('is_active', true)
+            ->exists();
+    }
+
     private function manageExam(User $user, Quiz $exam): bool
     {
         if ($user->role === 'admin') {
