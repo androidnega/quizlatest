@@ -4,16 +4,16 @@
 
     <div class="mb-4 grid gap-3 sm:grid-cols-3">
         <div class="rounded-xl border border-qs-soft bg-white p-4 shadow-sm">
-            <p class="text-sm text-gray-600">Rows Parsed</p>
+            <p class="text-sm text-qs-muted">Rows Parsed</p>
             <p class="mt-1 text-2xl font-semibold text-qs-text">{{ count($previewRows) }}</p>
         </div>
         <div class="rounded-xl border border-qs-soft bg-white p-4 shadow-sm">
-            <p class="text-sm text-gray-600">Valid Rows</p>
+            <p class="text-sm text-qs-muted">Valid Rows</p>
             <p class="mt-1 text-2xl font-semibold text-qs-text">{{ $validCount }}</p>
         </div>
         <div class="rounded-xl border border-qs-soft bg-white p-4 shadow-sm">
-            <p class="text-sm text-gray-600">Invalid Rows</p>
-            <p class="mt-1 text-2xl font-semibold {{ $invalidCount > 0 ? 'text-red-600' : 'text-qs-text' }}">{{ $invalidCount }}</p>
+            <p class="text-sm text-qs-muted">Invalid Rows</p>
+            <p class="mt-1 text-2xl font-semibold {{ $invalidCount > 0 ? 'text-qs-danger' : 'text-qs-text' }}">{{ $invalidCount }}</p>
         </div>
     </div>
 
@@ -32,7 +32,7 @@
             </thead>
             <tbody class="divide-y divide-beige">
                 @foreach ($previewRows as $row)
-                    <tr class="{{ empty($row['errors']) ? 'hover:bg-qs-card' : 'bg-red-50' }}">
+                    <tr class="{{ empty($row['errors']) ? 'hover:bg-qs-card' : 'bg-qs-danger-soft' }}">
                         <td class="px-4 py-3 text-sm">{{ $row['row_number'] }}</td>
                         <td class="px-4 py-3 text-sm">{{ $row['name'] }}</td>
                         <td class="px-4 py-3 text-sm">{{ $row['email'] }}</td>
@@ -41,9 +41,9 @@
                         <td class="px-4 py-3 text-sm">{{ $row['level'] ?: 'N/A' }}</td>
                         <td class="px-4 py-3 text-sm">
                             @if (empty($row['errors']))
-                                <span class="inline-flex rounded-full bg-qs-accent px-2 py-1 text-xs text-white">Valid</span>
+                                <span class="inline-flex rounded-full bg-qs-accent px-2 py-1 text-xs text-qs-text">Valid</span>
                             @else
-                                <ul class="list-disc ps-4 text-xs text-red-700">
+                                <ul class="list-disc ps-4 text-xs text-qs-danger">
                                     @foreach ($row['errors'] as $error)
                                         <li>{{ $error }}</li>
                                     @endforeach
@@ -57,11 +57,11 @@
     </div>
 
     <div class="mt-5 flex items-center justify-between">
-        <a href="{{ route('coordinator.students.upload') }}" class="rounded-lg border border-qs-accent bg-white px-4 py-2 text-sm text-gray-700 hover:bg-qs-card">Back to Upload</a>
+        <a href="{{ route('coordinator.students.upload') }}" class="rounded-lg border border-qs-accent bg-white px-4 py-2 text-sm text-qs-muted hover:bg-qs-card">Back to Upload</a>
 
         <form method="POST" action="{{ route('coordinator.students.import') }}">
             @csrf
-            <button type="submit" class="rounded-lg border border-qs-accent bg-qs-accent px-4 py-2 text-sm font-semibold text-white hover:opacity-95" {{ $validCount === 0 ? 'disabled' : '' }}>
+            <button type="submit" class="rounded-lg border border-qs-accent bg-qs-accent px-4 py-2 text-sm font-semibold text-qs-text hover:opacity-95" {{ $validCount === 0 ? 'disabled' : '' }}>
                 Import Valid Rows ({{ $validCount }})
             </button>
         </form>

@@ -5,21 +5,21 @@
     <div class="bg-white rounded-xl shadow-sm p-5">
         <div class="overflow-x-auto">
             <table class="min-w-full">
-                <thead class="bg-gray-50">
+                <thead class="bg-qs-card">
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">Level</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">Code</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">Status</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-600">Actions</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-muted">Level</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-muted">Code</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-muted">Status</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold uppercase text-qs-muted">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse ($levels as $level)
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-4 py-3 text-sm text-gray-800">{{ $level->name }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-700">{{ $level->code }}</td>
+                        <tr class="hover:bg-qs-card">
+                            <td class="px-4 py-3 text-sm text-qs-text">{{ $level->name }}</td>
+                            <td class="px-4 py-3 text-sm text-qs-muted">{{ $level->code }}</td>
                             <td class="px-4 py-3 text-sm">
-                                <span class="inline-flex rounded-full px-2 py-1 text-xs {{ $level->is_active ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-700' }}">
+                                <span class="inline-flex rounded-full px-2 py-1 text-xs {{ $level->is_active ? 'bg-qs-accent/20 text-qs-text border border-qs-accent/30' : 'bg-qs-card text-qs-muted' }}">
                                     {{ $level->is_active ? 'Active' : 'Inactive' }}
                                 </span>
                             </td>
@@ -27,7 +27,7 @@
                                 <form method="POST" action="{{ route('coordinator.levels.toggle-status', $level) }}">
                                     @csrf
                                     @method('PATCH')
-                                    <button type="submit" class="rounded-lg {{ $level->is_active ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700' }} px-3 py-1.5 text-xs font-semibold text-white">
+                                    <button type="submit" class="{{ $level->is_active ? 'qs-btn-danger-sm' : 'qs-btn-primary px-3 py-1.5 text-xs' }}">
                                         {{ $level->is_active ? 'Deactivate' : 'Activate' }}
                                     </button>
                                 </form>
@@ -35,7 +35,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="px-4 py-8 text-center text-sm text-gray-500">No levels found for your institution.</td>
+                            <td colspan="4" class="px-4 py-8 text-center text-sm text-qs-muted">No levels found for your institution.</td>
                         </tr>
                     @endforelse
                 </tbody>

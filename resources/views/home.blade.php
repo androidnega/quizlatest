@@ -26,7 +26,7 @@
         <main class="mx-auto max-w-7xl px-6 py-16">
             <section class="grid gap-8 lg:grid-cols-2 lg:items-start">
                 <div>
-                    <p class="text-sm font-semibold uppercase tracking-wide text-qs-soft">{{ __('Smart Exam Proctoring for Universities') }}</p>
+                    <p class="text-sm font-semibold uppercase tracking-wide text-qs-muted">{{ __('Smart Exam Proctoring for Universities') }}</p>
                     <h2 class="mt-4 text-3xl font-semibold leading-tight text-qs-text md:text-4xl">
                         {{ __('Secure online assessments made simple for every role.') }}
                     </h2>
@@ -44,19 +44,19 @@
                 <div class="qs-surface p-6">
                     <div class="grid gap-4 sm:grid-cols-2">
                         <div class="rounded-lg border border-qs-soft bg-qs-card p-4">
-                            <p class="text-xs font-semibold uppercase tracking-wide text-qs-soft">{{ __('Exam Integrity') }}</p>
+                            <p class="text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ __('Exam Integrity') }}</p>
                             <p class="mt-2 text-sm font-medium text-qs-text">{{ __('Protects assessment credibility with continuous proctoring oversight.') }}</p>
                         </div>
                         <div class="rounded-lg border border-qs-soft bg-qs-card p-4">
-                            <p class="text-xs font-semibold uppercase tracking-wide text-qs-soft">{{ __('Real-Time Monitoring') }}</p>
+                            <p class="text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ __('Real-Time Monitoring') }}</p>
                             <p class="mt-2 text-sm font-medium text-qs-text">{{ __('Tracks exam behavior live and supports fast incident response.') }}</p>
                         </div>
                         <div class="rounded-lg border border-qs-soft bg-qs-card p-4">
-                            <p class="text-xs font-semibold uppercase tracking-wide text-qs-soft">{{ __('Trusted Experience') }}</p>
+                            <p class="text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ __('Trusted Experience') }}</p>
                             <p class="mt-2 text-sm font-medium text-qs-text">{{ __('Creates a fair environment where genuine performance stands out.') }}</p>
                         </div>
                         <div class="rounded-lg border border-qs-soft bg-qs-card p-4">
-                            <p class="text-xs font-semibold uppercase tracking-wide text-qs-soft">{{ __('Smart Visibility') }}</p>
+                            <p class="text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ __('Smart Visibility') }}</p>
                             <p class="mt-2 text-sm font-medium text-qs-text">{{ __('Clear alerts and exam insights help teams make confident decisions.') }}</p>
                         </div>
                     </div>

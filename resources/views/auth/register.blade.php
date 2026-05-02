@@ -28,7 +28,7 @@
 
         <div class="mt-4 qs-surface p-4">
             <x-input-label for="face_image" :value="__('Portrait Capture (for face verification)')" />
-            <p class="mt-1 text-xs text-qs-soft">{{ __('Capture one clear portrait. Embedding is generated in-browser for fast verification.') }}</p>
+            <p class="mt-1 text-xs text-qs-muted">{{ __('Capture one clear portrait. Embedding is generated in-browser for fast verification.') }}</p>
             <video id="face-video" class="mt-2 hidden w-full rounded-lg border border-qs-soft bg-black" autoplay muted playsinline></video>
             <canvas id="face-canvas" class="hidden"></canvas>
             <input type="file" id="face_image" name="face_image" accept="image/jpeg,image/png" class="mt-2 block w-full text-sm text-qs-text file:mr-4 file:rounded-lg file:border file:border-qs-soft file:bg-qs-card file:px-3 file:py-2 file:text-sm file:font-medium file:text-qs-text" />
@@ -37,7 +37,7 @@
                 <button type="button" id="start-camera" class="qs-btn-secondary text-xs">{{ __('Start Camera') }}</button>
                 <button type="button" id="capture-face" class="qs-btn-primary text-xs">{{ __('Capture Face') }}</button>
             </div>
-            <p id="face-status" class="mt-2 text-xs text-qs-soft">{{ __('Face template not captured yet.') }}</p>
+            <p id="face-status" class="mt-2 text-xs text-qs-muted">{{ __('Face template not captured yet.') }}</p>
         </div>
 
         <div class="mt-4 flex items-center justify-end gap-3">

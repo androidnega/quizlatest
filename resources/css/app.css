@@ -5,10 +5,13 @@
 @layer base {
     :root {
         --qs-bg: #ffffff;
-        --qs-card: #fbf9eb;
-        --qs-text: #9aa77f;
+        --qs-card: #f4f7fb;
+        --qs-text: #0f172a;
+        --qs-muted: #64748b;
+        --qs-soft: #cbd5e1;
         --qs-accent: #f2a650;
-        --qs-soft: #acbaa5;
+        --qs-danger: #b42318;
+        --qs-danger-soft: #fbecec;
     }
 
     body {
@@ -35,19 +38,27 @@
     }
 
     .qs-btn-primary {
-        @apply inline-flex items-center justify-center rounded-lg border border-qs-accent bg-qs-accent px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-qs-accent focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+        @apply inline-flex items-center justify-center rounded-lg border border-qs-accent bg-qs-accent px-4 py-2 text-sm font-semibold text-qs-text shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-qs-accent focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
     }
 
     .qs-btn-secondary {
-        @apply inline-flex items-center justify-center rounded-lg border border-qs-soft bg-white px-4 py-2 text-sm font-semibold text-qs-text shadow-sm transition hover:bg-qs-card focus:outline-none focus:ring-2 focus:ring-qs-soft focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+        @apply inline-flex items-center justify-center rounded-lg border border-qs-soft bg-qs-bg px-4 py-2 text-sm font-semibold text-qs-text shadow-sm transition hover:bg-qs-card focus:outline-none focus:ring-2 focus:ring-qs-soft focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+    }
+
+    .qs-btn-danger {
+        @apply inline-flex items-center justify-center rounded-lg border border-qs-danger bg-qs-danger px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-qs-danger/45 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+    }
+
+    .qs-btn-danger-sm {
+        @apply inline-flex items-center justify-center rounded-lg border border-qs-danger bg-qs-danger px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-qs-danger/45 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
     }
 
     .qs-input {
-        @apply mt-1 block w-full rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm text-qs-text shadow-sm placeholder:text-qs-soft/80 focus:border-qs-accent focus:outline-none focus:ring-2 focus:ring-qs-accent/40;
+        @apply mt-1 block w-full rounded-lg border border-qs-soft bg-qs-bg px-3 py-2 text-sm text-qs-text shadow-sm placeholder:text-qs-muted/70 focus:border-qs-accent focus:outline-none focus:ring-2 focus:ring-qs-accent/40;
     }
 
     .qs-table-wrap {
-        @apply overflow-x-auto rounded-xl border border-qs-soft bg-white;
+        @apply overflow-x-auto rounded-xl border border-qs-soft bg-qs-bg;
     }
 
     .qs-table {
@@ -59,7 +70,7 @@
     }
 
     .qs-table th {
-        @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-qs-text;
+        @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-qs-muted;
     }
 
     .qs-table td {
@@ -67,6 +78,6 @@
     }
 
     .qs-table tbody tr {
-        @apply border-t border-qs-soft/60 hover:bg-qs-card/50;
+        @apply border-t border-qs-soft/80 hover:bg-qs-card/80;
     }
 }

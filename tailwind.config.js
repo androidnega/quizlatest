@@ -7,17 +7,23 @@ export default {
         './vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php',
         './storage/framework/views/*.php',
         './resources/views/**/*.blade.php',
+        './resources/js/**/*.js',
     ],
 
     theme: {
         extend: {
             colors: {
+                /** QUIZSNAP tokens: navy text, blue-gray structure, gold accent, white-heavy surfaces */
                 qs: {
                     bg: '#FFFFFF',
-                    card: '#FBF9EB',
-                    text: '#9AA77F',
+                    card: '#F4F7FB',
+                    text: '#0F172A',
+                    muted: '#64748B',
+                    soft: '#CBD5E1',
                     accent: '#F2A650',
-                    soft: '#ACBAA5',
+                    /** Semantic only: validation + destructive affordances */
+                    danger: '#B42318',
+                    'danger-soft': '#FBECEC',
                 },
             },
             fontFamily: {

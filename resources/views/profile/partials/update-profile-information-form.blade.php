@@ -4,7 +4,7 @@
             {{ __('Profile Information') }}
         </h2>
 
-        <p class="mt-1 text-sm text-qs-soft">
+        <p class="mt-1 text-sm text-qs-muted">
             {{ __("Update your account's profile information and email address.") }}
         </p>
     </header>
@@ -56,7 +56,7 @@
                     x-show="show"
                     x-transition
                     x-init="setTimeout(() => show = false, 2000)"
-                    class="text-sm text-qs-soft"
+                    class="text-sm text-qs-muted"
                 >{{ __('Saved.') }}</p>
             @endif
         </div>

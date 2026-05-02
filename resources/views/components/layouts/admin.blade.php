@@ -16,19 +16,19 @@
             <aside class="hidden border-r border-qs-soft bg-qs-bg md:flex md:w-64 md:flex-col">
                 <div class="border-b border-qs-soft px-6 py-5">
                     <h1 class="text-lg font-semibold text-qs-text">QUIZSNAP Admin</h1>
-                    <p class="mt-1 text-xs text-qs-soft">{{ auth()->user()->name }}</p>
+                    <p class="mt-1 text-xs text-qs-muted">{{ auth()->user()->name }}</p>
                 </div>
                 <nav class="flex-1 space-y-1 px-4 py-4">
-                    <a href="{{ route('admin.dashboard') }}" class="{{ request()->routeIs('admin.dashboard') ? 'bg-qs-accent text-white shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2 text-sm font-medium">
+                    <a href="{{ route('admin.dashboard') }}" class="{{ request()->routeIs('admin.dashboard') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2 text-sm font-medium">
                         Dashboard
                     </a>
-                    <a href="{{ route('admin.universities.index') }}" class="{{ request()->routeIs('admin.universities.*') ? 'bg-qs-accent text-white shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2 text-sm font-medium">
+                    <a href="{{ route('admin.universities.index') }}" class="{{ request()->routeIs('admin.universities.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2 text-sm font-medium">
                         Universities
                     </a>
-                    <a href="{{ route('admin.coordinators.index') }}" class="{{ request()->routeIs('admin.coordinators.*') ? 'bg-qs-accent text-white shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2 text-sm font-medium">
+                    <a href="{{ route('admin.coordinators.index') }}" class="{{ request()->routeIs('admin.coordinators.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2 text-sm font-medium">
                         Coordinators
                     </a>
-                    <a href="{{ route('admin.settings.index') }}" class="{{ request()->routeIs('admin.settings.*') ? 'bg-qs-accent text-white shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2 text-sm font-medium">
+                    <a href="{{ route('admin.settings.index') }}" class="{{ request()->routeIs('admin.settings.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2 text-sm font-medium">
                         Settings
                     </a>
                 </nav>
@@ -40,7 +40,7 @@
                         <div>
                             <h2 class="text-xl font-semibold text-qs-text">{{ $title ?? 'Admin Panel' }}</h2>
                             @isset($subtitle)
-                                <p class="text-sm text-qs-soft">{{ $subtitle }}</p>
+                                <p class="text-sm text-qs-muted">{{ $subtitle }}</p>
                             @endisset
                         </div>
 

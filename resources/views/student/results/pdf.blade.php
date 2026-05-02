@@ -4,12 +4,12 @@
     <meta charset="utf-8">
     <title>{{ __('Exam result') }}</title>
     <style>
-        body { font-family: DejaVu Sans, sans-serif; font-size: 11px; color: #111; }
+        body { font-family: DejaVu Sans, sans-serif; font-size: 11px; color: #0f172a; }
         h1 { font-size: 16px; margin: 0 0 12px; }
         table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-        th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; }
-        th { background: #f4f4f4; font-size: 10px; text-transform: uppercase; }
-        .muted { color: #555; margin: 4px 0; }
+        th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+        th { background: #f4f7fb; font-size: 10px; text-transform: uppercase; }
+        .muted { color: #64748b; margin: 4px 0; }
         .block { margin-bottom: 14px; }
     </style>
 </head>

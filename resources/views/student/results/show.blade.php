@@ -22,21 +22,21 @@
                 <div class="qs-surface rounded-lg p-6 shadow-sm">
                     <dl class="grid gap-3 text-sm sm:grid-cols-2">
                         <div>
-                            <dt class="text-qs-soft">{{ __('Score') }}</dt>
+                            <dt class="text-qs-muted">{{ __('Score') }}</dt>
                             <dd class="font-semibold text-qs-text">{{ $result->score }} / {{ $session->exam?->total_marks ?? '—' }}</dd>
                         </div>
                         <div>
-                            <dt class="text-qs-soft">{{ __('Percentage') }}</dt>
+                            <dt class="text-qs-muted">{{ __('Percentage') }}</dt>
                             <dd class="font-semibold text-qs-text">{{ $percentage !== null ? $percentage.'%' : '—' }}</dd>
                         </div>
                         <div>
-                            <dt class="text-qs-soft">{{ __('Status') }}</dt>
+                            <dt class="text-qs-muted">{{ __('Status') }}</dt>
                             <dd class="font-semibold text-qs-text">{{ ucfirst(str_replace('_', ' ', $result->status)) }}</dd>
                         </div>
                     </dl>
                     @if ($examinerFeedback)
                         <div class="mt-5 border-t border-qs-soft pt-4">
-                            <h3 class="text-xs font-semibold uppercase tracking-wide text-qs-soft">{{ __('Examiner feedback') }}</h3>
+                            <h3 class="text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ __('Examiner feedback') }}</h3>
                             <p class="mt-2 whitespace-pre-wrap text-sm text-qs-text">{{ $examinerFeedback }}</p>
                         </div>
                     @endif
@@ -54,7 +54,7 @@
                         </div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full text-left text-sm">
-                                <thead class="bg-qs-card text-xs uppercase text-qs-soft">
+                                <thead class="bg-qs-card text-xs uppercase text-qs-muted">
                                     <tr>
                                         <th class="px-4 py-2">#</th>
                                         <th class="px-4 py-2">{{ __('Type') }}</th>

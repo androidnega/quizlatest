@@ -8,40 +8,40 @@
 
     <div class="qs-card mb-6 rounded-xl p-5 shadow-sm">
         <h2 class="text-base font-semibold text-qs-text">Exam analytics</h2>
-        <p class="mt-1 text-xs text-qs-soft">Overview for all attempts on this exam (not affected by table filters).</p>
+        <p class="mt-1 text-xs text-qs-muted">Overview for all attempts on this exam (not affected by table filters).</p>
 
         <dl class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <div class="rounded-lg border border-qs-soft bg-white px-3 py-2">
-                <dt class="text-xs font-semibold uppercase tracking-wide text-qs-soft">Students (distinct)</dt>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-qs-muted">Students (distinct)</dt>
                 <dd class="mt-1 text-lg font-semibold text-qs-text">{{ $analytics['total_students'] }}</dd>
             </div>
             <div class="rounded-lg border border-qs-soft bg-white px-3 py-2">
-                <dt class="text-xs font-semibold uppercase tracking-wide text-qs-soft">Submitted</dt>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-qs-muted">Submitted</dt>
                 <dd class="mt-1 text-lg font-semibold text-qs-text">{{ $analytics['submitted_count'] }}</dd>
             </div>
             <div class="rounded-lg border border-qs-soft bg-white px-3 py-2">
-                <dt class="text-xs font-semibold uppercase tracking-wide text-qs-soft">Held</dt>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-qs-muted">Held</dt>
                 <dd class="mt-1 text-lg font-semibold text-qs-text">{{ $analytics['held_count'] }}</dd>
             </div>
             <div class="rounded-lg border border-qs-soft bg-white px-3 py-2">
-                <dt class="text-xs font-semibold uppercase tracking-wide text-qs-soft">Pending manual</dt>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-qs-muted">Pending manual</dt>
                 <dd class="mt-1 text-lg font-semibold text-qs-text">{{ $analytics['pending_manual_count'] }}</dd>
             </div>
             <div class="rounded-lg border border-qs-soft bg-white px-3 py-2">
-                <dt class="text-xs font-semibold uppercase tracking-wide text-qs-soft">Avg score</dt>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-qs-muted">Avg score</dt>
                 <dd class="mt-1 text-lg font-semibold text-qs-text">{{ $analytics['average_score'] !== null ? $analytics['average_score'] : '—' }}</dd>
             </div>
             <div class="rounded-lg border border-qs-soft bg-white px-3 py-2">
-                <dt class="text-xs font-semibold uppercase tracking-wide text-qs-soft">High-risk sessions</dt>
+                <dt class="text-xs font-semibold uppercase tracking-wide text-qs-muted">High-risk sessions</dt>
                 <dd class="mt-1 text-lg font-semibold text-qs-text">{{ $analytics['high_risk_session_count'] }}</dd>
-                <p class="mt-0.5 text-[10px] text-qs-soft">Suspicious, critical, or locked</p>
+                <p class="mt-0.5 text-[10px] text-qs-muted">Suspicious, critical, or locked</p>
             </div>
         </dl>
 
         <div class="mt-6 grid gap-4 lg:grid-cols-2">
             <div>
                 <h3 class="text-sm font-semibold text-qs-text">Risk distribution</h3>
-                <p class="text-xs text-qs-soft">Critical includes locked sessions.</p>
+                <p class="text-xs text-qs-muted">Critical includes locked sessions.</p>
                 <ul class="mt-2 space-y-1 text-sm text-qs-text">
                     @foreach ($analytics['risk_distribution'] as $label => $count)
                         <li class="flex justify-between rounded border border-qs-soft/80 bg-white px-3 py-1.5">
@@ -53,7 +53,7 @@
             </div>
             <div>
                 <h3 class="text-sm font-semibold text-qs-text">Top violation signals</h3>
-                <p class="text-xs text-qs-soft">Totals from proctoring events for this exam.</p>
+                <p class="text-xs text-qs-muted">Totals from proctoring events for this exam.</p>
                 <ul class="mt-2 space-y-1 text-sm text-qs-text">
                     @foreach ($analytics['violation_totals'] as $type => $count)
                         <li class="flex justify-between rounded border border-qs-soft/80 bg-white px-3 py-1.5">
@@ -67,7 +67,7 @@
 
         <div class="mt-6">
             <h3 class="text-sm font-semibold text-qs-text">Flagged students</h3>
-            <p class="mt-1 text-xs text-qs-soft">High risk session or held result (max 100, by violation count).</p>
+            <p class="mt-1 text-xs text-qs-muted">High risk session or held result (max 100, by violation count).</p>
             <div class="qs-table-wrap mt-3 overflow-x-auto rounded-lg border border-qs-soft">
                 <table class="qs-table min-w-full">
                     <thead>
@@ -90,7 +90,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="4" class="px-4 py-6 text-center text-sm text-qs-soft">No flagged sessions.</td>
+                                <td colspan="4" class="px-4 py-6 text-center text-sm text-qs-muted">No flagged sessions.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -102,7 +102,7 @@
     <div class="qs-card rounded-xl p-5 shadow-sm">
         <form method="GET" action="{{ route('coordinator.exams.sessions.index', $exam) }}" class="mb-5 flex flex-wrap items-end gap-3">
             <div>
-                <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-qs-soft">Status</label>
+                <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-qs-muted">Status</label>
                 <select name="status" class="qs-input min-w-[11rem] py-2">
                     <option value="">All</option>
                     <option value="in_progress" @selected(request('status') === 'in_progress')>In progress</option>
@@ -113,7 +113,7 @@
                 </select>
             </div>
             <div>
-                <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-qs-soft">Risk state</label>
+                <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-qs-muted">Risk state</label>
                 <select name="risk_state" class="qs-input min-w-[11rem] py-2">
                     <option value="">All</option>
                     @foreach ($riskStates as $rs)
@@ -157,7 +157,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="px-4 py-8 text-center text-sm text-qs-soft">No sessions match your filters.</td>
+                            <td colspan="5" class="px-4 py-8 text-center text-sm text-qs-muted">No sessions match your filters.</td>
                         </tr>
                     @endforelse
                 </tbody>

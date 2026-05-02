@@ -167,8 +167,9 @@ async function main() {
             return;
         }
         els.saveIndicator.textContent = text;
-        els.saveIndicator.classList.toggle('text-emerald-700', ok);
-        els.saveIndicator.classList.toggle('text-red-600', !ok);
+        els.saveIndicator.classList.toggle('text-qs-muted', ok);
+        els.saveIndicator.classList.toggle('text-qs-danger', !ok);
+        els.saveIndicator.classList.toggle('font-medium', !ok);
     }
 
     function updateBanner(message, show) {
@@ -446,8 +447,8 @@ async function main() {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className =
-                'text-left text-sm px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 w-full md:w-auto ' +
-                (i === currentIdx ? 'bg-[#CFAC81]/30 border-[#CFAC81]' : '');
+                'text-left text-sm px-2 py-1 rounded border border-qs-soft hover:bg-qs-card w-full md:w-auto ' +
+                (i === currentIdx ? 'bg-qs-accent/25 border-qs-accent' : '');
             btn.textContent = `${i + 1}`;
             btn.addEventListener('click', () => {
                 currentIdx = i;
@@ -491,11 +492,11 @@ async function main() {
         wrap.className = 'space-y-4 max-w-3xl';
 
         const title = document.createElement('div');
-        title.className = 'text-sm text-slate-500';
+        title.className = 'text-sm text-qs-muted';
         title.textContent = `Question ${currentIdx + 1} of ${flatQuestions.length} · ${q.marks} marks`;
 
         const body = document.createElement('div');
-        body.className = 'prose prose-slate max-w-none';
+        body.className = 'max-w-none text-base leading-relaxed text-qs-text';
         body.innerHTML = escapeHtml(q.question_text || '').replace(/\n/g, '<br/>');
 
         wrap.appendChild(title);
@@ -568,7 +569,8 @@ async function main() {
             for (let i = 0; i < n; i += 1) {
                 const inp = document.createElement('input');
                 inp.type = 'text';
-                inp.className = 'block w-full border rounded px-3 py-2 border-slate-300';
+                inp.className =
+                    'block w-full rounded border border-qs-soft bg-qs-bg px-3 py-2 text-qs-text shadow-sm focus:border-qs-accent focus:outline-none focus:ring-2 focus:ring-qs-accent/40';
                 inp.value = blanks[i] ?? '';
                 inp.addEventListener('input', () => {
                     const vals = [];
@@ -582,7 +584,8 @@ async function main() {
         } else if (q.type === 'essay') {
             const ta = document.createElement('textarea');
             ta.rows = 10;
-            ta.className = 'block w-full border rounded px-3 py-2 border-slate-300 font-sans';
+            ta.className =
+                'block w-full rounded border border-qs-soft bg-qs-bg px-3 py-2 font-sans text-qs-text shadow-sm focus:border-qs-accent focus:outline-none focus:ring-2 focus:ring-qs-accent/40';
             ta.value = saved?.text ?? '';
             ta.addEventListener('input', () => {
                 scheduleSave(q.id, () => ({ type: 'essay', text: ta.value }));

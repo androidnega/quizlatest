@@ -6,10 +6,10 @@
         <table class="min-w-full text-sm">
             <thead class="bg-qs-soft/30">
                 <tr>
-                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-600">Student</th>
-                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-600">Exam</th>
-                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-600">Question</th>
-                    <th class="px-3 py-2 text-right text-xs font-semibold uppercase text-gray-600">Action</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-qs-muted">Student</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-qs-muted">Exam</th>
+                    <th class="px-3 py-2 text-left text-xs font-semibold uppercase text-qs-muted">Question</th>
+                    <th class="px-3 py-2 text-right text-xs font-semibold uppercase text-qs-muted">Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -19,12 +19,12 @@
                         <td class="px-3 py-2">{{ $answer->examSession?->exam?->title ?? '—' }}</td>
                         <td class="px-3 py-2 line-clamp-2">{{ \Illuminate\Support\Str::limit($answer->question?->question_text ?? '', 80) }}</td>
                         <td class="px-3 py-2 text-right">
-                            <a href="{{ route('coordinator.grading.show', $answer) }}" class="rounded-lg bg-sage px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">Grade</a>
+                            <a href="{{ route('coordinator.grading.show', $answer) }}" class="qs-btn-primary px-3 py-1.5 text-xs">Grade</a>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="4" class="px-3 py-8 text-center text-gray-600">No pending essay answers.</td>
+                        <td colspan="4" class="px-3 py-8 text-center text-qs-muted">No pending essay answers.</td>
                     </tr>
                 @endforelse
             </tbody>
