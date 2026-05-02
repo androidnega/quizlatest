@@ -4,32 +4,69 @@
 
 @layer base {
     :root {
-        --qs-bg: #FFFFFF;
-        --qs-surface: #EBE6DE;
-        --qs-accent: #CFAC81;
-        --qs-text-accent: #70866F;
+        --qs-bg: #ffffff;
+        --qs-card: #fbf9eb;
+        --qs-text: #9aa77f;
+        --qs-accent: #f2a650;
+        --qs-soft: #acbaa5;
     }
 
     body {
         background-color: var(--qs-bg);
-        color: #1f2937;
+        color: var(--qs-text);
     }
 }
 
 @layer components {
     .qs-surface {
-        background-color: var(--qs-surface);
+        @apply rounded-xl border border-qs-soft bg-qs-card;
     }
 
     .qs-heading {
-        color: var(--qs-text-accent);
+        @apply font-semibold text-qs-text;
     }
 
     .qs-link {
-        color: var(--qs-text-accent);
+        @apply text-qs-text underline-offset-2 hover:underline;
     }
 
-    .qs-link:hover {
-        color: #5f735e;
+    .qs-card {
+        @apply rounded-xl border border-qs-soft bg-qs-card p-6;
+    }
+
+    .qs-btn-primary {
+        @apply inline-flex items-center justify-center rounded-lg border border-qs-accent bg-qs-accent px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-qs-accent focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+    }
+
+    .qs-btn-secondary {
+        @apply inline-flex items-center justify-center rounded-lg border border-qs-soft bg-white px-4 py-2 text-sm font-semibold text-qs-text shadow-sm transition hover:bg-qs-card focus:outline-none focus:ring-2 focus:ring-qs-soft focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+    }
+
+    .qs-input {
+        @apply mt-1 block w-full rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm text-qs-text shadow-sm placeholder:text-qs-soft/80 focus:border-qs-accent focus:outline-none focus:ring-2 focus:ring-qs-accent/40;
+    }
+
+    .qs-table-wrap {
+        @apply overflow-x-auto rounded-xl border border-qs-soft bg-white;
+    }
+
+    .qs-table {
+        @apply min-w-full divide-y divide-qs-soft text-sm text-qs-text;
+    }
+
+    .qs-table thead {
+        @apply bg-qs-card;
+    }
+
+    .qs-table th {
+        @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-qs-text;
+    }
+
+    .qs-table td {
+        @apply px-4 py-3 align-middle;
+    }
+
+    .qs-table tbody tr {
+        @apply border-t border-qs-soft/60 hover:bg-qs-card/50;
     }
 }

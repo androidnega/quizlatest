@@ -2,7 +2,7 @@
 
 @section('content')
 <div id="exam-app" class="min-h-screen flex flex-col">
-    <header class="border-b border-[#CFAC81] bg-white shadow-sm shrink-0">
+    <header class="border-b border-qs-soft bg-white shadow-sm shrink-0">
         <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
             <div>
                 <h1 id="exam-title" class="text-lg font-semibold qs-heading">{{ __('Loading…') }}</h1>
@@ -10,7 +10,7 @@
             </div>
             <div class="flex items-center gap-4">
                 <button type="button" id="btn-fullscreen"
-                    class="text-sm px-3 py-1.5 rounded border border-[#CFAC81] hover:bg-amber-50">
+                    class="text-sm px-3 py-1.5 rounded border border-qs-soft bg-white hover:bg-qs-card">
                     {{ __('Fullscreen') }}
                 </button>
                 <div id="exam-timer" class="font-mono text-xl font-semibold tabular-nums text-[#6E8B43]"
@@ -22,7 +22,7 @@
     </header>
 
     <div class="flex flex-1 flex-col md:flex-row max-w-6xl mx-auto w-full min-h-0">
-        <aside class="w-full md:w-52 shrink-0 border-b md:border-b-0 md:border-r border-[#CFAC81] bg-white p-3 overflow-y-auto max-h-48 md:max-h-none">
+        <aside class="w-full md:w-52 shrink-0 border-b md:border-b-0 md:border-r border-qs-soft bg-white p-3 overflow-y-auto max-h-48 md:max-h-none">
             <p class="text-xs font-semibold text-slate-500 uppercase mb-2">{{ __('Questions') }}</p>
             <nav id="question-nav" class="flex flex-wrap md:flex-col gap-2"></nav>
         </aside>
@@ -36,7 +36,7 @@
         </main>
     </div>
 
-    <footer class="border-t border-[#CFAC81] bg-white shrink-0">
+    <footer class="border-t border-qs-soft bg-white shrink-0">
         <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
             <div id="save-indicator" class="text-sm text-slate-500">{{ __('Answers save automatically.') }}</div>
             <div class="flex items-center gap-2">

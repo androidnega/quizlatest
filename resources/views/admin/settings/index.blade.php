@@ -1,80 +1,149 @@
 <x-layouts.admin>
     <x-slot name="title">System settings</x-slot>
-    <x-slot name="subtitle">Integrations and defaults (secrets are encrypted; API keys are never shown in full)</x-slot>
+    <x-slot name="subtitle">Institution policy and integrations. Secrets are encrypted; API keys are never shown in full.</x-slot>
 
-    <form method="post" action="{{ route('admin.settings.update') }}" class="space-y-10">
+    @php
+        $lockable = [
+            'enable_otp' => 'Enable OTP',
+            'otp_expiry' => 'OTP expiry (seconds)',
+            'otp_attempt_limit' => 'OTP attempt limit',
+            'enable_sms' => 'Enable SMS',
+            'arkesel_api_key' => 'Arkesel API key',
+            'arkesel_sender_id' => 'Arkesel sender ID',
+            'enable_proctoring' => 'Enable proctoring',
+            'face_verification_required' => 'Face verification required',
+            'phone_detection_enabled' => 'Phone detection enabled',
+            'fullscreen_required' => 'Fullscreen required',
+            'auto_submit_enabled' => 'Auto-submit enabled',
+            'default_proctoring_settings' => 'Default proctoring JSON',
+            'enable_ai' => 'Enable AI',
+            'ai_api_key' => 'AI API key',
+            'ai_model_name' => 'AI model name',
+        ];
+    @endphp
+
+    <form method="post" action="{{ route('admin.settings.update') }}" class="space-y-8">
         @csrf
         @method('PUT')
 
-        <div class="qs-surface border border-camel rounded-lg p-6 space-y-4">
-            <div class="flex items-center justify-between">
-                <h3 class="text-lg font-semibold qs-heading">SMS (Arkesel)</h3>
+        <section class="qs-surface rounded-xl p-6 space-y-4">
+            <h3 class="text-base font-semibold text-qs-text">OTP</h3>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="enable_otp" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent"
+                    @checked(old('enable_otp', $enable_otp)) @disabled($lock_enable_otp) />
+                Enable OTP for exam start
+            </label>
+            @if ($lock_enable_otp)
+                <p class="text-xs text-qs-soft">Locked.</p>
+            @endif
+            <div>
+                <label class="mb-1 block text-sm text-qs-soft">OTP expiry (seconds)</label>
+                <input type="number" name="otp_expiry" min="60" max="7200" value="{{ old('otp_expiry', $otp_expiry) }}"
+                    class="qs-input max-w-xs" @disabled($lock_otp_expiry) />
             </div>
             <div>
-                <label class="block text-sm text-gray-700 mb-1">API key</label>
-                <input type="password" name="arkesel_api_key" autocomplete="off"
-                    class="w-full max-w-xl rounded border border-gray-300 px-3 py-2 text-sm"
+                <label class="mb-1 block text-sm text-qs-soft">OTP verify attempt limit</label>
+                <input type="number" name="otp_attempt_limit" min="1" max="20" value="{{ old('otp_attempt_limit', $otp_attempt_limit) }}"
+                    class="qs-input max-w-xs" @disabled($lock_otp_attempt_limit) />
+            </div>
+        </section>
+
+        <section class="qs-surface rounded-xl p-6 space-y-4">
+            <h3 class="text-base font-semibold text-qs-text">SMS (Arkesel)</h3>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="enable_sms" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent"
+                    @checked(old('enable_sms', $enable_sms)) @disabled($lock_enable_sms) />
+                Enable SMS delivery
+            </label>
+            <div>
+                <label class="mb-1 block text-sm text-qs-soft">API key</label>
+                <input type="password" name="arkesel_api_key" autocomplete="off" class="qs-input max-w-xl"
                     placeholder="{{ $arkesel_api_key_masked ? '•••••••• (enter new to replace)' : 'Not set' }}"
-                    @if($arkesel_key_locked) disabled @endif />
-                @if($arkesel_key_locked)
-                    <p class="text-xs text-amber-700 mt-1">Locked. Unlock below to change.</p>
-                @endif
+                    @disabled($arkesel_key_locked) />
             </div>
             <div>
-                <label class="block text-sm text-gray-700 mb-1">Sender ID</label>
+                <label class="mb-1 block text-sm text-qs-soft">Sender ID</label>
                 <input type="text" name="arkesel_sender_id" value="{{ old('arkesel_sender_id', $arkesel_sender_id) }}"
-                    class="w-full max-w-xl rounded border border-gray-300 px-3 py-2 text-sm"
-                    @if($arkesel_sender_locked) disabled @endif />
+                    class="qs-input max-w-xl" @disabled($arkesel_sender_locked) />
             </div>
-        </div>
+        </section>
 
-        <div class="qs-surface border border-camel rounded-lg p-6 space-y-4">
-            <h3 class="text-lg font-semibold qs-heading">AI API</h3>
+        <section class="qs-surface rounded-xl p-6 space-y-4">
+            <h3 class="text-base font-semibold text-qs-text">Proctoring policy</h3>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="enable_proctoring" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent"
+                    @checked(old('enable_proctoring', $enable_proctoring)) @disabled($lock_enable_proctoring) />
+                Enable proctoring
+            </label>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="face_verification_required" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent"
+                    @checked(old('face_verification_required', $face_verification_required)) @disabled($lock_face_verification_required) />
+                Face verification required
+            </label>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="phone_detection_enabled" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent"
+                    @checked(old('phone_detection_enabled', $phone_detection_enabled)) @disabled($lock_phone_detection_enabled) />
+                Phone detection enabled
+            </label>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="fullscreen_required" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent"
+                    @checked(old('fullscreen_required', $fullscreen_required)) @disabled($lock_fullscreen_required) />
+                Fullscreen required
+            </label>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="auto_submit_enabled" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent"
+                    @checked(old('auto_submit_enabled', $auto_submit_enabled)) @disabled($lock_auto_submit_enabled) />
+                Auto-submit enabled
+            </label>
             <div>
-                <label class="block text-sm text-gray-700 mb-1">API key</label>
-                <input type="password" name="ai_api_key" autocomplete="off"
-                    class="w-full max-w-xl rounded border border-gray-300 px-3 py-2 text-sm"
+                <label class="mb-1 block text-sm text-qs-soft">Default exam proctoring (JSON)</label>
+                <textarea name="default_proctoring_settings" rows="8" class="qs-input font-mono text-xs"
+                    @disabled($proctoring_locked)>{{ old('default_proctoring_settings', $proctoring_json) }}</textarea>
+            </div>
+        </section>
+
+        <section class="qs-surface rounded-xl p-6 space-y-4">
+            <h3 class="text-base font-semibold text-qs-text">AI</h3>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="enable_ai" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent"
+                    @checked(old('enable_ai', $enable_ai)) @disabled($lock_enable_ai) />
+                Enable AI integrations
+            </label>
+            <div>
+                <label class="mb-1 block text-sm text-qs-soft">API key</label>
+                <input type="password" name="ai_api_key" autocomplete="off" class="qs-input max-w-xl"
                     placeholder="{{ $ai_api_key_masked ? '•••••••• (enter new to replace)' : 'Not set' }}"
-                    @if($ai_key_locked) disabled @endif />
+                    @disabled($ai_key_locked) />
             </div>
             <div>
-                <label class="block text-sm text-gray-700 mb-1">Model name</label>
+                <label class="mb-1 block text-sm text-qs-soft">Model name</label>
                 <input type="text" name="ai_model_name" value="{{ old('ai_model_name', $ai_model_name) }}"
-                    class="w-full max-w-xl rounded border border-gray-300 px-3 py-2 text-sm"
-                    @if($ai_model_locked) disabled @endif />
+                    class="qs-input max-w-xl" @disabled($ai_model_locked) />
             </div>
-        </div>
-
-        <div class="qs-surface border border-camel rounded-lg p-6 space-y-4">
-            <h3 class="text-lg font-semibold qs-heading">Default proctoring (JSON)</h3>
-            <textarea name="default_proctoring_settings" rows="8" class="w-full font-mono text-sm rounded border border-gray-300 px-3 py-2"
-                @if($proctoring_locked) disabled @endif>{{ old('default_proctoring_settings', $proctoring_json) }}</textarea>
-        </div>
+        </section>
 
         <div class="flex gap-3">
-            <button type="submit" class="inline-flex items-center px-4 py-2 text-sm font-semibold text-white bg-camel border border-camel rounded-md hover:bg-camel/90">
-                Save changes
-            </button>
+            <button type="submit" class="qs-btn-primary">Save changes</button>
         </div>
     </form>
 
-    <div class="mt-10 qs-surface border border-beige rounded-lg p-6">
-        <h3 class="text-sm font-semibold text-gray-800 mb-3">Lock / unlock (admin only)</h3>
-        <p class="text-xs text-gray-600 mb-4">When locked, only a super admin can change the value. In this app, the <code class="text-xs">admin</code> role is treated as super admin.</p>
-        <ul class="text-sm space-y-2">
-            @foreach (['arkesel_api_key' => 'Arkesel API key', 'arkesel_sender_id' => 'Arkesel sender ID', 'ai_api_key' => 'AI API key', 'ai_model_name' => 'AI model name', 'default_proctoring_settings' => 'Default proctoring JSON'] as $k => $label)
-                <li class="flex flex-wrap items-center gap-2">
-                    <span class="text-gray-700">{{ $label }}</span>
+    <section class="qs-surface mt-10 rounded-xl p-6">
+        <h3 class="text-sm font-semibold text-qs-text">Lock / unlock</h3>
+        <p class="mb-4 mt-1 text-xs text-qs-soft">When locked, only an admin can change the value.</p>
+        <ul class="space-y-2 text-sm">
+            @foreach ($lockable as $k => $label)
+                <li class="flex flex-wrap items-center gap-2 border-t border-qs-soft/50 pt-2 first:border-0 first:pt-0">
+                    <span class="min-w-[10rem] text-qs-text">{{ $label }}</span>
                     <form method="post" action="{{ route('admin.settings.lock') }}" class="inline">@csrf
                         <input type="hidden" name="key" value="{{ $k }}" />
-                        <button type="submit" class="text-xs px-2 py-1 rounded bg-sage text-white">Lock</button>
+                        <button type="submit" class="rounded border border-qs-soft bg-qs-card px-2 py-1 text-xs text-qs-text hover:bg-white">Lock</button>
                     </form>
                     <form method="post" action="{{ route('admin.settings.unlock') }}" class="inline">@csrf
                         <input type="hidden" name="key" value="{{ $k }}" />
-                        <button type="submit" class="text-xs px-2 py-1 rounded border border-gray-300">Unlock</button>
+                        <button type="submit" class="rounded border border-qs-soft bg-white px-2 py-1 text-xs text-qs-text hover:bg-qs-card">Unlock</button>
                     </form>
                 </li>
             @endforeach
         </ul>
-    </div>
+    </section>
 </x-layouts.admin>

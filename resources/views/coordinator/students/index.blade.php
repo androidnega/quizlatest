@@ -48,24 +48,24 @@
 
         <div class="overflow-hidden rounded-xl bg-white shadow-sm">
             <table class="min-w-full divide-y divide-beige">
-                <thead class="bg-beige/60">
+                <thead class="bg-qs-soft/30">
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-text">
                             <input type="checkbox" onclick="document.querySelectorAll('.student-checkbox').forEach(cb => cb.checked = this.checked)" class="rounded border-gray-300 text-blue-600 focus:ring-blue-600">
                         </th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Name</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Index Number</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Program</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Level</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Class</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Email</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Status</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-sage">Actions</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-text">Name</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-text">Index Number</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-text">Program</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-text">Level</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-text">Class</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-text">Email</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-text">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-text">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-beige">
                     @forelse ($students as $student)
-                        <tr class="hover:bg-beige/30">
+                        <tr class="hover:bg-qs-card">
                             <td class="px-4 py-3 text-sm">
                                 <input type="checkbox" name="student_ids[]" value="{{ $student->id }}" class="student-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-600">
                             </td>

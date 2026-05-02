@@ -8,8 +8,8 @@
         <span>Total marks: <strong class="text-gray-900">{{ $exam->total_marks }}</strong></span>
     </div>
 
-    <div class="mb-8 rounded-xl border border-beige bg-white p-5 shadow-sm">
-        <h3 class="text-sm font-semibold text-sage mb-3">Add section</h3>
+    <div class="mb-8 rounded-xl border border-qs-soft bg-white p-5 shadow-sm">
+        <h3 class="text-sm font-semibold text-qs-text mb-3">Add section</h3>
         <form method="post" action="{{ route('examiner.exams.sections.store', $exam) }}" class="flex flex-wrap gap-2 items-end">
             @csrf
             <div class="flex-1 min-w-[200px]">
@@ -21,14 +21,14 @@
     </div>
 
     @forelse ($exam->sections as $section)
-        <div class="mb-10 rounded-xl border border-beige bg-white p-5 shadow-sm">
-            <div class="flex items-center justify-between mb-4 border-b border-beige pb-3">
-                <h3 class="text-lg font-semibold text-sage">{{ $section->title }}</h3>
+        <div class="mb-10 rounded-xl border border-qs-soft bg-white p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-4 border-b border-qs-soft pb-3">
+                <h3 class="text-lg font-semibold text-qs-text">{{ $section->title }}</h3>
                 <span class="text-xs text-gray-500">Order {{ $section->section_order }}</span>
             </div>
 
             @foreach ($section->questions as $q)
-                <div class="mb-4 rounded-lg bg-beige/40 p-4 text-sm">
+                <div class="mb-4 rounded-lg bg-qs-card p-4 text-sm">
                     <div class="flex justify-between gap-2">
                         <span class="font-medium text-gray-800">{{ $loop->iteration }}. {{ $q->type }}</span>
                         <span class="text-gray-600">{{ $q->marks }} pts</span>
@@ -44,7 +44,7 @@
                 </div>
             @endforeach
 
-            <div class="mt-4 border-t border-beige pt-4">
+            <div class="mt-4 border-t border-qs-soft pt-4">
                 <h4 class="text-sm font-semibold text-gray-800 mb-3">New question in this section</h4>
                 <form method="post" action="{{ route('examiner.exams.questions.store', [$exam, $section]) }}" class="space-y-3">
                     @csrf
@@ -95,7 +95,7 @@
                         Essay questions are graded manually after submission.
                     </div>
 
-                    <button type="submit" class="rounded-lg bg-camel px-4 py-2 text-sm font-semibold text-white hover:bg-camel/90">Save question</button>
+                    <button type="submit" class="rounded-lg bg-qs-accent px-4 py-2 text-sm font-semibold text-white hover:opacity-95">Save question</button>
                 </form>
             </div>
         </div>
@@ -104,7 +104,7 @@
     @endforelse
 
     <div class="mt-8">
-        <a href="{{ route('examiner.exams.index') }}" class="text-sm font-medium text-sage hover:underline">← Back to exams</a>
+        <a href="{{ route('examiner.exams.index') }}" class="text-sm font-medium text-qs-text hover:underline">← Back to exams</a>
     </div>
 
     <script>

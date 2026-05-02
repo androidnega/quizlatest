@@ -1,45 +1,36 @@
 <x-guest-layout>
-    <!-- Session Status -->
     <x-auth-session-status class="mb-4" :status="session('status')" />
 
     <form method="POST" action="{{ route('login') }}">
         @csrf
 
-        <!-- Email -->
         <div>
             <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" class="block mt-1 w-full border-[#CFAC81] focus:border-[#CFAC81] focus:ring-[#CFAC81]" type="text" name="email" :value="old('email')" required autofocus autocomplete="username" />
+            <x-text-input id="email" class="block w-full" type="text" name="email" :value="old('email')" required autofocus autocomplete="username" />
             <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
 
-        <!-- Password -->
         <div class="mt-4">
             <x-input-label for="password" :value="__('Password')" />
-
-            <x-text-input id="password" class="block mt-1 w-full border-[#CFAC81] focus:border-[#CFAC81] focus:ring-[#CFAC81]"
-                            type="password"
-                            name="password"
-                            required autocomplete="current-password" />
-
+            <x-text-input id="password" class="block w-full" type="password" name="password" required autocomplete="current-password" />
             <x-input-error :messages="$errors->get('password')" class="mt-2" />
         </div>
 
-        <!-- Remember Me -->
-        <div class="block mt-4">
+        <div class="mt-4 block">
             <label for="remember_me" class="inline-flex items-center">
-                <input id="remember_me" type="checkbox" class="rounded border-[#CFAC81] text-[#CFAC81] shadow-sm focus:ring-[#CFAC81]" name="remember">
-                <span class="ms-2 text-sm text-gray-700">{{ __('Remember me') }}</span>
+                <input id="remember_me" type="checkbox" class="rounded border-qs-soft text-qs-accent shadow-sm focus:ring-qs-accent" name="remember">
+                <span class="ms-2 text-sm text-qs-text">{{ __('Remember me') }}</span>
             </label>
         </div>
 
-        <div class="flex items-center justify-end mt-4">
+        <div class="mt-4 flex items-center justify-end">
             @if (Route::has('password.request'))
-                <a class="underline text-sm qs-link rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#CFAC81]" href="{{ route('password.request') }}">
+                <a class="qs-link rounded-md text-sm" href="{{ route('password.request') }}">
                     {{ __('Forgot your password?') }}
                 </a>
             @endif
 
-            <x-primary-button class="ms-3 bg-[#CFAC81] hover:bg-[#b9966f] focus:bg-[#b9966f] active:bg-[#a6845f] focus:ring-[#CFAC81]">
+            <x-primary-button class="ms-3">
                 {{ __('Log in') }}
             </x-primary-button>
         </div>

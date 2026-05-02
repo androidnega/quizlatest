@@ -224,6 +224,23 @@ final class ExamRedisService
         }
     }
 
+    public function getGlobalActiveSessionCount(): int
+    {
+        if (! $this->redisHealth->isAvailable()) {
+            return 0;
+        }
+
+        try {
+            $v = Redis::get('qs:exam_active_sessions:global');
+
+            return is_numeric($v) ? max(0, (int) $v) : 0;
+        } catch (\Throwable $e) {
+            Log::warning('exam_redis.active_count_read_failed', ['error' => $e->getMessage()]);
+
+            return 0;
+        }
+    }
+
     private function decrNonNegative(string $key): void
     {
         $v = Redis::get($key);

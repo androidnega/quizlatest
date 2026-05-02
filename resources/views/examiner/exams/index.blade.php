@@ -3,15 +3,15 @@
     <x-slot name="subtitle">Build assessments for your assigned courses</x-slot>
 
     <div class="mb-6 flex justify-end">
-        <a href="{{ route('examiner.exams.create') }}" class="rounded-lg bg-camel px-4 py-2 text-sm font-semibold text-white hover:bg-camel/90">
+        <a href="{{ route('examiner.exams.create') }}" class="rounded-lg bg-qs-accent px-4 py-2 text-sm font-semibold text-white hover:opacity-95">
             Create exam
         </a>
     </div>
 
-    <div class="bg-white rounded-xl border border-beige shadow-sm p-5">
+    <div class="bg-white rounded-xl border border-qs-soft shadow-sm p-5">
         <div class="overflow-x-auto">
             <table class="min-w-full">
-                <thead class="bg-beige/60">
+                <thead class="bg-qs-soft/30">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">Title</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">Course</th>
@@ -21,7 +21,7 @@
                 </thead>
                 <tbody>
                     @forelse ($exams as $exam)
-                        <tr class="border-t border-beige hover:bg-beige/30">
+                        <tr class="border-t border-qs-soft hover:bg-qs-card">
                             <td class="px-4 py-3 text-sm text-gray-900">{{ $exam->title }}</td>
                             <td class="px-4 py-3 text-sm text-gray-700">{{ $exam->course?->code }} — {{ $exam->course?->title }}</td>
                             <td class="px-4 py-3 text-sm">

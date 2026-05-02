@@ -12,7 +12,7 @@
 
     @vite(['resources/css/app.css', 'resources/js/studentExamRuntime.js'])
 </head>
-<body class="font-sans antialiased bg-slate-50 text-slate-900">
+<body class="font-sans antialiased bg-qs-bg text-qs-text">
     @yield('content')
 </body>
 </html>
