@@ -2,65 +2,47 @@
     <form method="POST" action="{{ route('register') }}" enctype="multipart/form-data">
         @csrf
 
-        <!-- Name -->
         <div>
             <x-input-label for="name" :value="__('Name')" />
-            <x-text-input id="name" class="block mt-1 w-full border-gray-300 focus:border-blue-600 focus:ring-blue-600" type="text" name="name" :value="old('name')" required autofocus autocomplete="name" />
+            <x-text-input id="name" class="mt-1 block w-full" type="text" name="name" :value="old('name')" required autofocus autocomplete="name" />
             <x-input-error :messages="$errors->get('name')" class="mt-2" />
         </div>
 
-        <!-- Email Address -->
         <div class="mt-4">
             <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" class="block mt-1 w-full border-gray-300 focus:border-blue-600 focus:ring-blue-600" type="email" name="email" :value="old('email')" required autocomplete="username" />
+            <x-text-input id="email" class="mt-1 block w-full" type="email" name="email" :value="old('email')" required autocomplete="username" />
             <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
 
-        <!-- Password -->
         <div class="mt-4">
             <x-input-label for="password" :value="__('Password')" />
-
-            <x-text-input id="password" class="block mt-1 w-full border-gray-300 focus:border-blue-600 focus:ring-blue-600"
-                            type="password"
-                            name="password"
-                            required autocomplete="new-password" />
-
+            <x-text-input id="password" class="mt-1 block w-full" type="password" name="password" required autocomplete="new-password" />
             <x-input-error :messages="$errors->get('password')" class="mt-2" />
         </div>
 
-        <!-- Confirm Password -->
         <div class="mt-4">
             <x-input-label for="password_confirmation" :value="__('Confirm Password')" />
-
-            <x-text-input id="password_confirmation" class="block mt-1 w-full border-gray-300 focus:border-blue-600 focus:ring-blue-600"
-                            type="password"
-                            name="password_confirmation" required autocomplete="new-password" />
-
+            <x-text-input id="password_confirmation" class="mt-1 block w-full" type="password" name="password_confirmation" required autocomplete="new-password" />
             <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
         </div>
 
-        <div class="mt-4 rounded-lg border border-gray-200 p-4">
+        <div class="mt-4 qs-surface p-4">
             <x-input-label for="face_image" :value="__('Portrait Capture (for face verification)')" />
-            <p class="mt-1 text-xs text-gray-500">Capture one clear portrait. Embedding is generated in-browser for fast verification.</p>
-            <video id="face-video" class="mt-2 hidden w-full rounded-md bg-black" autoplay muted playsinline></video>
+            <p class="mt-1 text-xs text-qs-soft">{{ __('Capture one clear portrait. Embedding is generated in-browser for fast verification.') }}</p>
+            <video id="face-video" class="mt-2 hidden w-full rounded-lg border border-qs-soft bg-black" autoplay muted playsinline></video>
             <canvas id="face-canvas" class="hidden"></canvas>
-            <input type="file" id="face_image" name="face_image" accept="image/jpeg,image/png" class="mt-2 block w-full text-sm text-gray-700" />
+            <input type="file" id="face_image" name="face_image" accept="image/jpeg,image/png" class="mt-2 block w-full text-sm text-qs-text file:mr-4 file:rounded-lg file:border file:border-qs-soft file:bg-qs-card file:px-3 file:py-2 file:text-sm file:font-medium file:text-qs-text" />
             <input type="hidden" id="face_embedding" name="face_embedding" />
-            <div class="mt-2 flex gap-2">
-                <button type="button" id="start-camera" class="rounded-lg bg-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-300">Start Camera</button>
-                <button type="button" id="capture-face" class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700">Capture Face</button>
+            <div class="mt-2 flex flex-wrap gap-2">
+                <button type="button" id="start-camera" class="qs-btn-secondary text-xs">{{ __('Start Camera') }}</button>
+                <button type="button" id="capture-face" class="qs-btn-primary text-xs">{{ __('Capture Face') }}</button>
             </div>
-            <p id="face-status" class="mt-2 text-xs text-gray-600">Face template not captured yet.</p>
+            <p id="face-status" class="mt-2 text-xs text-qs-soft">{{ __('Face template not captured yet.') }}</p>
         </div>
 
-        <div class="flex items-center justify-end mt-4">
-            <a class="underline text-sm text-blue-600 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600" href="{{ route('login') }}">
-                {{ __('Already registered?') }}
-            </a>
-
-            <x-primary-button class="ms-4 bg-blue-600 hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-800 focus:ring-blue-600">
-                {{ __('Register') }}
-            </x-primary-button>
+        <div class="mt-4 flex items-center justify-end gap-3">
+            <a class="qs-link text-sm" href="{{ route('login') }}">{{ __('Already registered?') }}</a>
+            <x-primary-button>{{ __('Register') }}</x-primary-button>
         </div>
     </form>
 </x-guest-layout>
