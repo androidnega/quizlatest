@@ -22,6 +22,9 @@
                     <a href="{{ route('coordinator.dashboard') }}" class="{{ request()->routeIs('coordinator.dashboard') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
                         Dashboard
                     </a>
+                    <a href="{{ route('examiner.dashboard') }}" class="{{ request()->routeIs('examiner.dashboard') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
+                        Examiner dashboard
+                    </a>
                     <a href="{{ route('coordinator.students.index') }}" class="{{ request()->routeIs('coordinator.students.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
                         Students
                     </a>

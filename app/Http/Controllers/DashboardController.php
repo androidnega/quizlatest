@@ -2,70 +2,137 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Classroom;
-use App\Models\ExaminerCourseAssignment;
-use App\Models\Program;
-use App\Models\University;
+use App\Models\ExamSession;
+use App\Models\Quiz;
+use App\Models\Result;
 use App\Models\User;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
-    public function index(): View
+    public function index(): View|RedirectResponse
     {
         $user = auth()->user();
-        $stats = [];
 
         if ($user->role === 'admin') {
-            $stats = [
-                'universities' => University::query()->count(),
-                'coordinators' => User::query()->where('role', 'coordinator')->count(),
-                'students' => User::query()->where('role', 'student')->count(),
-            ];
+            return redirect()->route('admin.dashboard');
         }
 
         if ($user->role === 'coordinator') {
-            $departmentIds = $user->coordinatorAssignments()
-                ->where('is_active', true)
-                ->pluck('department_id');
-
-            $stats = [
-                'students' => User::query()
-                    ->join('programs', 'users.program_id', '=', 'programs.id')
-                    ->whereIn('programs.department_id', $departmentIds)
-                    ->where('users.role', 'student')
-                    ->distinct('users.id')
-                    ->count('users.id'),
-                'programs' => Program::query()
-                    ->whereIn('department_id', $departmentIds)
-                    ->where('is_active', true)
-                    ->count(),
-                'classes' => Classroom::query()
-                    ->join('programs', 'classes.program_id', '=', 'programs.id')
-                    ->whereIn('programs.department_id', $departmentIds)
-                    ->where('classes.is_active', true)
-                    ->count(),
-                'assigned_courses' => ExaminerCourseAssignment::query()
-                    ->join('courses', 'examiner_course_assignments.course_id', '=', 'courses.id')
-                    ->where('examiner_course_assignments.examiner_user_id', $user->id)
-                    ->where('examiner_course_assignments.is_active', true)
-                    ->whereIn('courses.department_id', $departmentIds)
-                    ->distinct('examiner_course_assignments.course_id')
-                    ->count('examiner_course_assignments.course_id'),
-            ];
+            return redirect()->route('coordinator.dashboard');
         }
 
-        if ($user->role === 'student') {
-            $stats = [
-                'program' => $user->program?->name,
-                'level' => $user->level?->name,
-                'results_published' => $user->results()->where('status', 'published')->count(),
-            ];
+        if ($user->role !== 'student') {
+            return view('dashboard', [
+                'user' => $user,
+                'stats' => [],
+            ]);
         }
 
-        return view('dashboard', [
+        return view('student.dashboard', $this->buildStudentDashboardData($user));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildStudentDashboardData(User $user): array
+    {
+        $now = Carbon::now();
+
+        $activeSession = ExamSession::query()
+            ->where('student_id', $user->id)
+            ->whereIn('status', ['active', 'paused'])
+            ->with(['exam.course:id,code,title'])
+            ->first();
+
+        $courseIds = collect();
+        if ($user->class_id !== null) {
+            $courseIds = DB::table('class_course')
+                ->where('class_id', $user->class_id)
+                ->pluck('course_id');
+        }
+
+        $publishedExams = collect();
+        if ($courseIds->isNotEmpty()) {
+            $publishedExams = Quiz::query()
+                ->whereIn('course_id', $courseIds)
+                ->where('status', 'published')
+                ->where('university_id', $user->university_id)
+                ->with(['course:id,code,title'])
+                ->orderBy('available_from')
+                ->orderBy('title')
+                ->get();
+        }
+
+        $submittedExamIds = ExamSession::query()
+            ->where('student_id', $user->id)
+            ->where('status', 'submitted')
+            ->pluck('exam_id');
+
+        $availableNow = collect();
+        $upcoming = collect();
+
+        foreach ($publishedExams as $exam) {
+            if ($submittedExamIds->contains($exam->id)) {
+                continue;
+            }
+
+            if ($activeSession !== null && (int) $activeSession->exam_id !== (int) $exam->id) {
+                continue;
+            }
+
+            $from = $exam->available_from;
+            $to = $exam->available_to;
+
+            if ($from !== null && $now->lt($from)) {
+                $upcoming->push($exam);
+
+                continue;
+            }
+
+            if ($to !== null && $now->gt($to)) {
+                continue;
+            }
+
+            $availableNow->push($exam);
+        }
+
+        $gradedCount = Result::query()
+            ->where('user_id', $user->id)
+            ->where('status', 'graded')
+            ->count();
+
+        $heldResults = Result::query()
+            ->where('user_id', $user->id)
+            ->where('status', 'held')
+            ->with(['quiz:id,title'])
+            ->orderByDesc('id')
+            ->limit(5)
+            ->get();
+
+        $pendingManual = Result::query()
+            ->where('user_id', $user->id)
+            ->where('status', 'pending_manual')
+            ->with(['quiz:id,title'])
+            ->orderByDesc('id')
+            ->limit(5)
+            ->get();
+
+        $faceReady = is_array($user->face_embedding) && count($user->face_embedding) >= 3;
+
+        return [
             'user' => $user,
-            'stats' => $stats,
-        ]);
+            'activeSession' => $activeSession,
+            'availableExams' => $availableNow,
+            'upcomingExams' => $upcoming,
+            'gradedResultsCount' => $gradedCount,
+            'heldResults' => $heldResults,
+            'pendingManualResults' => $pendingManual,
+            'faceProfileReady' => $faceReady,
+            'hasClass' => $user->class_id !== null,
+        ];
     }
 }

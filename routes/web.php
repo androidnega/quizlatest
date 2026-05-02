@@ -15,11 +15,13 @@ use App\Http\Controllers\Coordinator\ManualGradingController;
 use App\Http\Controllers\Coordinator\ProgramController;
 use App\Http\Controllers\Coordinator\StudentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Examiner\DashboardController as ExaminerDashboardController;
 use App\Http\Controllers\Examiner\ExamBuilderController;
 use App\Http\Controllers\ExamSessionController;
 use App\Http\Controllers\ProctoringUploadController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Student\StudentExamController;
+use App\Http\Controllers\Student\StudentExamEntryController;
 use App\Http\Controllers\Student\StudentResultController;
 use Illuminate\Support\Facades\Route;
 
@@ -34,6 +36,11 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 Route::middleware('auth')->group(function () {
     Route::get('/student/exam/{examSession}', [StudentExamController::class, 'take'])
         ->name('student.exam.take');
+
+    Route::middleware(['verified', 'student'])->group(function () {
+        Route::get('/student/exams/{quiz}/prepare', [StudentExamEntryController::class, 'prepare'])
+            ->name('student.exam.prepare');
+    });
 
     Route::prefix('student/results')
         ->name('student.results.')
@@ -161,6 +168,7 @@ Route::prefix('examiner')
     ->name('examiner.')
     ->middleware(['auth', 'verified', 'coordinator'])
     ->group(function () {
+        Route::get('/dashboard', [ExaminerDashboardController::class, 'index'])->name('dashboard');
         Route::get('/exams', [ExamBuilderController::class, 'index'])->name('exams.index');
         Route::get('/exams/create', [ExamBuilderController::class, 'create'])->name('exams.create');
         Route::post('/exams', [ExamBuilderController::class, 'store'])->name('exams.store');

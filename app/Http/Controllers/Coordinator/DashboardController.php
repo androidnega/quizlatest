@@ -4,9 +4,10 @@ namespace App\Http\Controllers\Coordinator;
 
 use App\Http\Controllers\Controller;
 use App\Models\Classroom;
+use App\Models\Course;
 use App\Models\ExaminerCourseAssignment;
 use App\Models\Program;
-use App\Models\Result;
+use App\Models\User;
 use Illuminate\Contracts\View\View;
 
 class DashboardController extends Controller
@@ -18,24 +19,33 @@ class DashboardController extends Controller
             ->where('is_active', true)
             ->pluck('department_id');
 
-        $studentCount = Result::query()
-            ->join('quizzes', 'results.quiz_id', '=', 'quizzes.id')
-            ->join('courses', 'quizzes.course_id', '=', 'courses.id')
-            ->join('users', 'results.user_id', '=', 'users.id')
-            ->whereIn('courses.department_id', $departmentIds)
-            ->where('users.role', 'student')
-            ->distinct('results.user_id')
-            ->count('results.user_id');
+        $studentCount = User::query()
+            ->where('role', 'student')
+            ->whereHas('program', fn ($query) => $query->whereIn('department_id', $departmentIds))
+            ->count();
+
+        $studentsWithoutClass = User::query()
+            ->where('role', 'student')
+            ->whereNull('class_id')
+            ->whereHas('program', fn ($query) => $query->whereIn('department_id', $departmentIds))
+            ->count();
 
         $activeProgramCount = Program::query()
             ->whereIn('department_id', $departmentIds)
             ->where('is_active', true)
             ->count();
 
+        $programTotal = Program::query()
+            ->whereIn('department_id', $departmentIds)
+            ->count();
+
         $classCount = Classroom::query()
-            ->join('programs', 'classes.program_id', '=', 'programs.id')
-            ->whereIn('programs.department_id', $departmentIds)
-            ->where('classes.is_active', true)
+            ->whereHas('program', fn ($query) => $query->whereIn('department_id', $departmentIds))
+            ->where('is_active', true)
+            ->count();
+
+        $courseCount = Course::query()
+            ->whereIn('department_id', $departmentIds)
             ->count();
 
         $assignedCourseCount = ExaminerCourseAssignment::query()
@@ -46,11 +56,22 @@ class DashboardController extends Controller
             ->distinct('examiner_course_assignments.course_id')
             ->count('examiner_course_assignments.course_id');
 
+        $recentStudents = User::query()
+            ->where('role', 'student')
+            ->whereHas('program', fn ($query) => $query->whereIn('department_id', $departmentIds))
+            ->orderByDesc('created_at')
+            ->limit(8)
+            ->get(['id', 'name', 'email', 'created_at']);
+
         return view('coordinator.dashboard', [
             'studentCount' => $studentCount,
+            'studentsWithoutClass' => $studentsWithoutClass,
             'activeProgramCount' => $activeProgramCount,
+            'programTotal' => $programTotal,
             'classCount' => $classCount,
+            'courseCount' => $courseCount,
             'assignedCourseCount' => $assignedCourseCount,
+            'recentStudents' => $recentStudents,
         ]);
     }
 }

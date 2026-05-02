@@ -1,16 +1,120 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl qs-heading leading-tight">
-            {{ __('Student Dashboard') }}
+            {{ __('Student dashboard') }}
         </h2>
     </x-slot>
 
-    <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="qs-surface overflow-hidden shadow-sm sm:rounded-lg">
-                <div class="p-6 text-qs-text">
-                    Student dashboard placeholder. Assessment and results views will appear here in upcoming phases.
+    <div class="py-10">
+        <div class="mx-auto max-w-7xl space-y-8 px-4 sm:px-6 lg:px-8">
+            @if ($errors->has('exam'))
+                <div class="rounded-xl border border-qs-danger/35 bg-qs-danger-soft px-4 py-3 text-sm text-qs-danger">
+                    {{ $errors->first('exam') }}
                 </div>
+            @endif
+
+            <div class="grid gap-4 md:grid-cols-3">
+                <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ __('Program') }}</p>
+                    <p class="mt-2 text-lg font-semibold text-qs-text">{{ $user->program?->name ?? '—' }}</p>
+                    <p class="mt-1 text-sm text-qs-muted">{{ __('Level') }}: {{ $user->level?->name ?? '—' }}</p>
+                </div>
+                <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ __('Face profile') }}</p>
+                    @if ($faceProfileReady)
+                        <p class="mt-2 text-sm font-medium text-qs-text">{{ __('Enrolled — ready for verification') }}</p>
+                    @else
+                        <p class="mt-2 text-sm font-medium text-qs-danger">{{ __('Not enrolled') }}</p>
+                        <p class="mt-1 text-xs text-qs-muted">{{ __('Complete portrait enrollment on your profile or registration before high-stakes exams.') }}</p>
+                    @endif
+                </div>
+                <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ __('Graded results') }}</p>
+                    <p class="mt-2 text-3xl font-semibold text-qs-text">{{ $gradedResultsCount }}</p>
+                    <a href="{{ route('student.results.index') }}" class="mt-2 inline-block text-sm font-medium text-qs-text underline-offset-2 hover:underline">
+                        {{ __('View all results') }}
+                    </a>
+                </div>
+            </div>
+
+            @if ($heldResults->isNotEmpty())
+                <div class="rounded-xl border border-qs-accent/40 bg-qs-accent/10 px-5 py-4 text-sm text-qs-text">
+                    <p class="font-semibold">{{ __('Results under review') }}</p>
+                    <ul class="mt-2 list-disc space-y-1 ps-5 text-qs-muted">
+                        @foreach ($heldResults as $row)
+                            <li>{{ $row->quiz?->title ?? __('Exam') }}</li>
+                        @endforeach
+                    </ul>
+                    <p class="mt-2 text-xs text-qs-muted">{{ __('Your institution is reviewing these outcomes. You will be notified when a decision is recorded.') }}</p>
+                </div>
+            @endif
+
+            @if ($pendingManualResults->isNotEmpty())
+                <div class="rounded-xl border border-qs-soft bg-qs-card px-5 py-4 text-sm text-qs-text">
+                    <p class="font-semibold">{{ __('Awaiting grading') }}</p>
+                    <ul class="mt-2 list-disc space-y-1 ps-5 text-qs-muted">
+                        @foreach ($pendingManualResults as $row)
+                            <li>{{ $row->quiz?->title ?? __('Exam') }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
+            @if ($activeSession)
+                <div class="rounded-xl border border-qs-accent bg-qs-bg p-6 shadow-sm">
+                    <div class="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ __('Exam in progress') }}</p>
+                            <p class="mt-2 text-lg font-semibold text-qs-text">{{ $activeSession->exam?->title }}</p>
+                            <p class="mt-1 text-sm text-qs-muted">{{ $activeSession->exam?->course?->code }} — {{ $activeSession->exam?->course?->title }}</p>
+                        </div>
+                        <a href="{{ route('student.exam.take', $activeSession) }}" class="qs-btn-primary shrink-0">
+                            {{ __('Continue exam') }}
+                        </a>
+                    </div>
+                </div>
+            @endif
+
+            <div>
+                <h3 class="text-lg font-semibold text-qs-text">{{ __('Available exams') }}</h3>
+                @if (! $hasClass)
+                    <p class="mt-2 text-sm text-qs-muted">{{ __('You are not assigned to a class yet. Contact your coordinator.') }}</p>
+                @elseif ($availableExams->isEmpty() && ! $activeSession)
+                    <p class="mt-2 text-sm text-qs-muted">{{ __('No exams are open for you right now.') }}</p>
+                @else
+                    <ul class="mt-4 space-y-3">
+                        @foreach ($availableExams as $exam)
+                            <li class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-qs-soft bg-qs-bg px-4 py-4 shadow-sm">
+                                <div>
+                                    <p class="font-semibold text-qs-text">{{ $exam->title }}</p>
+                                    <p class="text-sm text-qs-muted">{{ $exam->course?->code }} · {{ $exam->duration_minutes }} {{ __('min') }}</p>
+                                </div>
+                                <a href="{{ route('student.exam.prepare', $exam) }}" class="qs-btn-primary text-sm">
+                                    {{ __('Start exam') }}
+                                </a>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+            </div>
+
+            <div>
+                <h3 class="text-lg font-semibold text-qs-text">{{ __('Upcoming exams') }}</h3>
+                @if ($upcomingExams->isEmpty())
+                    <p class="mt-2 text-sm text-qs-muted">{{ __('No upcoming windows scheduled.') }}</p>
+                @else
+                    <ul class="mt-4 space-y-3">
+                        @foreach ($upcomingExams as $exam)
+                            <li class="rounded-xl border border-qs-soft bg-qs-card px-4 py-4">
+                                <p class="font-semibold text-qs-text">{{ $exam->title }}</p>
+                                <p class="text-sm text-qs-muted">{{ $exam->course?->code }}</p>
+                                @if ($exam->available_from)
+                                    <p class="mt-2 text-xs text-qs-muted">{{ __('Opens') }}: {{ $exam->available_from->timezone(config('app.timezone'))->format('Y-m-d H:i') }}</p>
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
             </div>
         </div>
     </div>
