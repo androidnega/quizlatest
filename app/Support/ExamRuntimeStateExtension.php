@@ -33,6 +33,11 @@ final class ExamRuntimeStateExtension
         $durationMinutes = (int) ($exam->duration_minutes ?? 0);
         $start = $examSession->start_time;
 
+        $examEndAtIso = null;
+        if ($start !== null && $durationMinutes > 0) {
+            $examEndAtIso = $start->copy()->addMinutes($durationMinutes)->toAtomString();
+        }
+
         $timeRemainingSeconds = 0;
         if ($examSession->status !== 'submitted' && $start !== null && $durationMinutes > 0) {
             $endAt = $start->copy()->addMinutes($durationMinutes);
@@ -73,6 +78,7 @@ final class ExamRuntimeStateExtension
 
         return [
             'server_time' => $now->toAtomString(),
+            'exam_end_at' => $examEndAtIso,
             'time_remaining_seconds' => $timeRemainingSeconds,
             'duration_minutes' => $durationMinutes,
             'exam' => [
@@ -94,6 +100,7 @@ final class ExamRuntimeStateExtension
     {
         return [
             'server_time' => now()->toAtomString(),
+            'exam_end_at' => null,
             'time_remaining_seconds' => 0,
             'duration_minutes' => 0,
             'exam' => null,

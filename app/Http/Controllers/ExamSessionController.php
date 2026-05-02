@@ -264,7 +264,24 @@ class ExamSessionController extends Controller
 
     public function submit(Request $request, ExamSession $examSession): JsonResponse
     {
-        $this->authorizeStudentSession($request, $examSession);
+        $this->authorizeStudentOwnsSession($request, $examSession);
+
+        $fresh = $examSession->fresh();
+        abort_if($fresh === null, 404);
+
+        if ($fresh->status === 'submitted') {
+            $base = ExamSessionStateResolver::payload($fresh, $this->globalControl->getControl());
+            $runtime = ExamRuntimeStateExtension::forSession($fresh);
+
+            return response()->json(array_merge(
+                ['status' => 'submitted', 'already_submitted' => true],
+                $base,
+                $runtime,
+            ));
+        }
+
+        abort_unless(in_array($fresh->status, ['active', 'paused'], true), 422, 'Session is not active.');
+
         $this->submitSession($examSession, 'submitted', 'manual_submit');
 
         return response()->json(['status' => 'submitted']);

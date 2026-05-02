@@ -7,10 +7,17 @@ import { ProctoringEventBatcher } from './proctoringEventBatcher';
 import { ProctoringUploadManager } from './proctoringUploadManager';
 import { createProctoringEcho } from './proctoringRealtime';
 import { ExamStateEngine } from './examStateEngine';
+import {
+    queuePendingAnswer,
+    clearPendingAnswer,
+    listPendingForSession,
+} from './examAnswerOfflineQueue';
 
 const DEBOUNCE_MS = 1600;
 const POLL_MS = 12000;
 const SAVE_RETRY = 3;
+const SUBMIT_RETRIES = 3;
+const SUBMIT_PERSIST_INTERVAL_MS = 12000;
 
 function meta(name) {
     return document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') ?? '';
@@ -38,26 +45,6 @@ function flattenQuestions(sections) {
         }
     }
     return out;
-}
-
-async function postAnswerWithRetry(sessionId, questionId, payload) {
-    let attempt = 0;
-    let lastErr = null;
-    while (attempt < SAVE_RETRY) {
-        try {
-            await axios.post(`/exam-sessions/${encodeURIComponent(sessionId)}/answers`, {
-                question_id: questionId,
-                answer_payload: payload,
-            });
-            return true;
-        } catch (e) {
-            lastErr = e;
-            attempt += 1;
-            await new Promise((r) => setTimeout(r, 400 * attempt));
-        }
-    }
-    console.error(lastErr);
-    return false;
 }
 
 function fillBlankCount(q) {
@@ -104,12 +91,22 @@ async function main() {
     let flatQuestions = [];
     let currentIdx = 0;
     let latestPayload = null;
-    let timerRemainingSec = 0;
     let timerHandle = null;
-    let submittedLocked = false;
-    let inputsDisabled = false;
+    /** Server has accepted submission (terminal for answers). */
+    let serverDone = false;
+    /** Invigilator / risk UI state (ExamStateEngine). */
+    let riskInputsDisabled = false;
+    /** True while submit is in progress or background retrying after failures. */
+    let submitInputLock = false;
     let autoSubmitTriggered = false;
     const debouncers = new Map();
+    const questionRevision = new Map();
+    let serverSkewMs = 0;
+    let examEndAtMs = null;
+    let timedExam = false;
+    let timeoutSubmitFired = false;
+    let submitPersistTimer = null;
+    let submitUiDefaultText = els.btnSubmit?.textContent ?? 'Submit';
 
     function setSaveIndicator(text, ok = true) {
         if (!els.saveIndicator) {
@@ -146,43 +143,185 @@ async function main() {
         }
     }
 
-    function syncTimerFromPayload(payload) {
-        const r = Number(payload?.time_remaining_seconds ?? 0);
-        timerRemainingSec = Number.isFinite(r) ? Math.max(0, r) : 0;
-        if (els.timer) {
-            els.timer.textContent = formatMmSs(timerRemainingSec);
+    function syncTimerAnchors(payload) {
+        const st = payload?.server_time;
+        if (st) {
+            const serverMs = Date.parse(st);
+            if (!Number.isNaN(serverMs)) {
+                serverSkewMs = serverMs - Date.now();
+            }
         }
+        const endIso = payload?.exam_end_at;
+        if (endIso) {
+            const endMs = Date.parse(endIso);
+            if (!Number.isNaN(endMs)) {
+                examEndAtMs = endMs;
+                timedExam = true;
+                return;
+            }
+        }
+        const dur = Number(payload?.duration_minutes ?? 0);
+        if (dur > 0 && st) {
+            const rem = Number(payload?.time_remaining_seconds ?? 0);
+            const anchor = Date.parse(st);
+            if (!Number.isNaN(anchor)) {
+                examEndAtMs = anchor + Math.max(0, rem) * 1000;
+                timedExam = true;
+                return;
+            }
+        }
+        examEndAtMs = null;
+        timedExam = false;
+    }
+
+    function computeRemainingSeconds() {
+        if (serverDone || !timedExam || examEndAtMs === null) {
+            return null;
+        }
+        const serverNow = Date.now() + serverSkewMs;
+        return Math.max(0, Math.floor((examEndAtMs - serverNow) / 1000));
+    }
+
+    function renderTimerDisplay(sec) {
+        if (!els.timer) {
+            return;
+        }
+        if (sec === null) {
+            els.timer.textContent = '—';
+            return;
+        }
+        els.timer.textContent = formatMmSs(sec);
     }
 
     function startTimerClock() {
         stopTimer();
         timerHandle = window.setInterval(() => {
-            if (submittedLocked) {
+            if (serverDone) {
                 stopTimer();
                 return;
             }
-            timerRemainingSec = Math.max(0, timerRemainingSec - 1);
-            if (els.timer) {
-                els.timer.textContent = formatMmSs(timerRemainingSec);
+            const sec = computeRemainingSeconds();
+            if (sec === null) {
+                return;
             }
-            if (timerRemainingSec <= 0) {
+            renderTimerDisplay(sec);
+            if (sec <= 0 && !timeoutSubmitFired) {
+                timeoutSubmitFired = true;
                 stopTimer();
                 void submitExam('timeout');
             }
         }, 1000);
     }
 
-    function applyInputsDisabled(disabled) {
-        inputsDisabled = disabled;
+    function effectiveInputsLocked() {
+        return serverDone || riskInputsDisabled || submitInputLock;
+    }
+
+    function applyRiskInputsDisabled(disabled) {
+        riskInputsDisabled = !!disabled;
+        syncControlDisabled();
+    }
+
+    function syncControlDisabled() {
+        const locked = effectiveInputsLocked();
         const controls = document.querySelectorAll(
             '#question-container input, #question-container textarea, #question-container button[data-q-action]',
         );
         controls.forEach((el) => {
-            el.disabled = !!disabled;
+            el.disabled = locked;
         });
-        if (els.btnSubmit) {
-            els.btnSubmit.disabled = !!disabled || submittedLocked;
+        syncSubmitButtonState();
+    }
+
+    function syncSubmitButtonState() {
+        if (!els.btnSubmit) {
+            return;
         }
+        els.btnSubmit.disabled = serverDone || riskInputsDisabled || submitInputLock;
+    }
+
+    function setSubmitButtonSubmitting(isSubmitting) {
+        if (!els.btnSubmit) {
+            return;
+        }
+        if (isSubmitting) {
+            els.btnSubmit.disabled = true;
+            els.btnSubmit.textContent = 'Submitting…';
+        } else if (!serverDone) {
+            els.btnSubmit.disabled = riskInputsDisabled || submitInputLock;
+            els.btnSubmit.textContent = submitUiDefaultText;
+        }
+    }
+
+    function stopSubmitPersistence() {
+        if (submitPersistTimer) {
+            clearInterval(submitPersistTimer);
+            submitPersistTimer = null;
+        }
+    }
+
+    function onSubmitSucceeded() {
+        serverDone = true;
+        submitInputLock = false;
+        stopSubmitPersistence();
+        stopTimer();
+        syncControlDisabled();
+        updateBanner('Exam submitted. You may close this page.', true);
+        setSaveIndicator('Submitted', true);
+        if (els.btnSubmit) {
+            els.btnSubmit.disabled = true;
+            els.btnSubmit.textContent = submitUiDefaultText;
+        }
+    }
+
+    async function postAnswerOnce(questionId, payload) {
+        await axios.post(`/exam-sessions/${encodeURIComponent(sessionId)}/answers`, {
+            question_id: questionId,
+            answer_payload: payload,
+        });
+        return true;
+    }
+
+    async function flushOfflineAnswerQueue() {
+        if (!navigator.onLine || serverDone) {
+            return;
+        }
+        const pending = await listPendingForSession(sessionId);
+        pending.sort((a, b) => a.questionId - b.questionId);
+        for (const row of pending) {
+            let ok = false;
+            for (let a = 0; a < SAVE_RETRY && !ok; a += 1) {
+                try {
+                    await postAnswerOnce(row.questionId, row.payload);
+                    ok = true;
+                } catch {
+                    await new Promise((r) => setTimeout(r, 400 * (a + 1)));
+                }
+            }
+            if (ok) {
+                await clearPendingAnswer(sessionId, row.questionId);
+            }
+        }
+    }
+
+    async function sendAnswerWithOfflineQueue(questionId, payload) {
+        const rev = (questionRevision.get(questionId) ?? 0) + 1;
+        questionRevision.set(questionId, rev);
+
+        let attempt = 0;
+        while (attempt < SAVE_RETRY) {
+            try {
+                await postAnswerOnce(questionId, payload);
+                await clearPendingAnswer(sessionId, questionId);
+                await flushOfflineAnswerQueue();
+                return true;
+            } catch {
+                attempt += 1;
+                await new Promise((r) => setTimeout(r, 400 * attempt));
+            }
+        }
+        await queuePendingAnswer(sessionId, questionId, rev, payload);
+        return false;
     }
 
     function renderNav() {
@@ -219,8 +358,8 @@ async function main() {
                 if (!payload) {
                     return;
                 }
-                const ok = await postAnswerWithRetry(sessionId, questionId, payload);
-                setSaveIndicator(ok ? 'Saved' : 'Could not save — check connection', ok);
+                const ok = await sendAnswerWithOfflineQueue(questionId, payload);
+                setSaveIndicator(ok ? 'Saved' : 'Offline or unsaved — will retry when online', ok);
             }, DEBOUNCE_MS),
         );
     }
@@ -339,7 +478,26 @@ async function main() {
         }
 
         els.main.appendChild(wrap);
-        applyInputsDisabled(inputsDisabled);
+        syncControlDisabled();
+    }
+
+    function applySubmittedFromState(data) {
+        if (data.session_status === 'submitted') {
+            serverDone = true;
+            submitInputLock = false;
+            stopSubmitPersistence();
+            stopTimer();
+            syncControlDisabled();
+            updateBanner(
+                data.exam_ui_state === 'held' ? 'Under review — your result is held.' : 'Exam submitted.',
+                true,
+            );
+            setSaveIndicator('Submitted', true);
+            if (els.btnSubmit) {
+                els.btnSubmit.disabled = true;
+                els.btnSubmit.textContent = submitUiDefaultText;
+            }
+        }
     }
 
     async function fetchState() {
@@ -365,65 +523,114 @@ async function main() {
             renderQuestion();
         }
 
-        syncTimerFromPayload(data);
+        syncTimerAnchors(data);
+        const rem = computeRemainingSeconds();
+        renderTimerDisplay(rem === null ? null : rem);
 
-        if (data.session_status === 'submitted') {
-            submittedLocked = true;
-            stopTimer();
-            applyInputsDisabled(true);
-            updateBanner(
-                data.exam_ui_state === 'held' ? 'Under review — your result is held.' : 'Exam submitted.',
-                true,
-            );
-            setSaveIndicator('Submitted', true);
-        }
+        applySubmittedFromState(data);
+
+        await flushOfflineAnswerQueue();
 
         return data;
     }
 
     async function submitExam(reason = 'manual') {
-        if (submittedLocked) {
+        if (serverDone) {
             return;
         }
-        submittedLocked = true;
-        applyInputsDisabled(true);
+
+        submitInputLock = true;
+        syncControlDisabled();
         setSaveIndicator(reason === 'timeout' ? 'Time expired — submitting…' : 'Submitting…', true);
-        try {
-            await axios.post(`/exam-sessions/${encodeURIComponent(sessionId)}/submit`);
-            updateBanner('Exam submitted. You may close this page.', true);
-            setSaveIndicator('Submitted', true);
-            stopTimer();
-        } catch {
-            submittedLocked = false;
-            applyInputsDisabled(inputsDisabled);
-            setSaveIndicator('Submit failed — try again', false);
+
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+        for (let attempt = 1; attempt <= SUBMIT_RETRIES; attempt += 1) {
+            try {
+                const { data } = await axios.post(`/exam-sessions/${encodeURIComponent(sessionId)}/submit`);
+                if (data?.status === 'submitted') {
+                    onSubmitSucceeded();
+                    return;
+                }
+            } catch {
+                await sleep(500 * attempt);
+            }
         }
+
+        updateBanner(
+            'Submission failed. Do not close this page. Retrying in the background…',
+            true,
+        );
+        setSaveIndicator('Still submitting — keep this tab open', false);
+
+        stopSubmitPersistence();
+        submitPersistTimer = window.setInterval(() => {
+            void (async () => {
+                if (serverDone) {
+                    stopSubmitPersistence();
+                    return;
+                }
+                try {
+                    await fetchState();
+                } catch {
+                    //
+                }
+                if (serverDone) {
+                    stopSubmitPersistence();
+                    return;
+                }
+                try {
+                    const { data } = await axios.post(`/exam-sessions/${encodeURIComponent(sessionId)}/submit`);
+                    if (data?.status === 'submitted') {
+                        onSubmitSucceeded();
+                    }
+                } catch {
+                    //
+                }
+            })();
+        }, SUBMIT_PERSIST_INTERVAL_MS);
     }
 
     examStateEngine.subscribe(({ state }) => {
         if (state === 'warning') {
             updateBanner('Warning: please stay focused on the exam.', true);
-            applyInputsDisabled(false);
+            if (!serverDone) {
+                applyRiskInputsDisabled(false);
+            }
         } else if (state === 'locked') {
             updateBanner('Exam locked by invigilator or policy.', true);
-            applyInputsDisabled(true);
+            applyRiskInputsDisabled(true);
         } else if (state === 'auto_submitting') {
             updateBanner('Submitting exam due to proctoring policy…', true);
+            applyRiskInputsDisabled(true);
+            stopTimer();
             if (!autoSubmitTriggered) {
                 autoSubmitTriggered = true;
                 void submitExam('auto');
             }
         } else if (state === 'held') {
             updateBanner('Under review — your result is held.', true);
-            applyInputsDisabled(true);
+            applyRiskInputsDisabled(true);
+            stopTimer();
+            syncControlDisabled();
         } else if (state === 'submitted') {
             updateBanner('Exam submitted.', true);
-            applyInputsDisabled(true);
-            submittedLocked = true;
+            applyRiskInputsDisabled(true);
             stopTimer();
+            serverDone = true;
+            submitInputLock = false;
+            stopSubmitPersistence();
+            setSaveIndicator('Submitted', true);
+            if (els.btnSubmit) {
+                els.btnSubmit.disabled = true;
+                els.btnSubmit.textContent = submitUiDefaultText;
+            }
+            syncControlDisabled();
         } else if (state === 'active') {
-            updateBanner('', false);
-            applyInputsDisabled(false);
+            if (!serverDone) {
+                updateBanner('', false);
+                applyRiskInputsDisabled(false);
+            }
         }
     });
 
@@ -440,17 +647,38 @@ async function main() {
     });
 
     els.btnSubmit?.addEventListener('click', async () => {
-        if (submittedLocked) {
+        if (serverDone) {
             return;
         }
         if (!window.confirm('Submit your exam? You cannot undo this.')) {
             return;
         }
+        setSubmitButtonSubmitting(true);
         await submitExam('manual');
+        if (!serverDone) {
+            setSubmitButtonSubmitting(false);
+        }
     });
 
-    await fetchState();
-    startTimerClock();
+    window.addEventListener('online', () => {
+        void flushOfflineAnswerQueue().then(() => {
+            if (!serverDone) {
+                setSaveIndicator('Back online', true);
+            }
+        });
+    });
+
+    try {
+        await fetchState();
+    } catch {
+        updateBanner('Could not load exam state. Check your connection and refresh.', true);
+        return;
+    }
+
+    if (!serverDone) {
+        startTimerClock();
+    }
+
     window.setInterval(() => void fetchState().catch(() => {}), POLL_MS);
 
     const echo = createProctoringEcho();
