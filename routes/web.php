@@ -9,6 +9,7 @@ use App\Http\Controllers\Coordinator\ClassCourseAssignmentController;
 use App\Http\Controllers\Coordinator\ClassroomController;
 use App\Http\Controllers\Coordinator\CourseController;
 use App\Http\Controllers\Coordinator\DashboardController as CoordinatorDashboardController;
+use App\Http\Controllers\Coordinator\ExamSessionReviewController;
 use App\Http\Controllers\Coordinator\LevelController;
 use App\Http\Controllers\Coordinator\ManualGradingController;
 use App\Http\Controllers\Coordinator\ProgramController;
@@ -138,6 +139,9 @@ Route::prefix('coordinator')
         Route::get('/grading/pending-essays', [ManualGradingController::class, 'index'])->name('grading.pending');
         Route::get('/grading/answers/{answer}', [ManualGradingController::class, 'show'])->name('grading.show');
         Route::post('/grading/answers/{answer}', [ManualGradingController::class, 'grade'])->name('grading.grade');
+
+        Route::get('/exams/{exam}/sessions', [ExamSessionReviewController::class, 'index'])->name('exams.sessions.index');
+        Route::get('/exam-sessions/{examSession}', [ExamSessionReviewController::class, 'show'])->name('exam-sessions.show');
     });
 
 Route::prefix('examiner')

@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\Classroom;
 use App\Models\Course;
+use App\Models\ExamSession;
 use App\Models\Level;
 use App\Models\Program;
 use App\Models\Quiz;
@@ -12,6 +13,7 @@ use App\Models\User;
 use App\Policies\ClassroomPolicy;
 use App\Policies\CoursePolicy;
 use App\Policies\ExamPolicy;
+use App\Policies\ExamSessionPolicy;
 use App\Policies\LevelPolicy;
 use App\Policies\ProgramPolicy;
 use App\Policies\UniversityPolicy;
@@ -35,6 +37,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::policy(Quiz::class, ExamPolicy::class);
+        Gate::policy(ExamSession::class, ExamSessionPolicy::class);
         Gate::policy(University::class, UniversityPolicy::class);
         Gate::policy(Course::class, CoursePolicy::class);
         Gate::policy(Program::class, ProgramPolicy::class);

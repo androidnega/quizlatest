@@ -27,8 +27,11 @@
                             <td class="px-4 py-3 text-sm">
                                 <span class="inline-flex rounded-full px-2 py-1 text-xs bg-gray-100 text-gray-800">{{ $exam->status }}</span>
                             </td>
-                            <td class="px-4 py-3 text-sm text-right">
-                                <a href="{{ route('examiner.exams.builder', $exam) }}" class="rounded-lg bg-sage px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
+                            <td class="px-4 py-3 text-sm text-right space-x-2">
+                                <a href="{{ route('coordinator.exams.sessions.index', $exam) }}" class="qs-btn-secondary inline-block px-3 py-1.5 text-xs font-semibold">
+                                    Sessions
+                                </a>
+                                <a href="{{ route('examiner.exams.builder', $exam) }}" class="qs-btn-primary inline-block px-3 py-1.5 text-xs font-semibold">
                                     Builder
                                 </a>
                             </td>
