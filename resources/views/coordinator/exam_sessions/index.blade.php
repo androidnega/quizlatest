@@ -11,27 +11,27 @@
         <p class="mt-1 text-xs text-qs-muted">Overview for all attempts on this exam (not affected by table filters).</p>
 
         <dl class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            <div class="rounded-lg border border-qs-soft bg-white px-3 py-2">
+            <div class="rounded-lg border border-qs-soft bg-qs-bg px-3 py-2">
                 <dt class="text-xs font-semibold uppercase tracking-wide text-qs-muted">Students (distinct)</dt>
                 <dd class="mt-1 text-lg font-semibold text-qs-text">{{ $analytics['total_students'] }}</dd>
             </div>
-            <div class="rounded-lg border border-qs-soft bg-white px-3 py-2">
+            <div class="rounded-lg border border-qs-soft bg-qs-bg px-3 py-2">
                 <dt class="text-xs font-semibold uppercase tracking-wide text-qs-muted">Submitted</dt>
                 <dd class="mt-1 text-lg font-semibold text-qs-text">{{ $analytics['submitted_count'] }}</dd>
             </div>
-            <div class="rounded-lg border border-qs-soft bg-white px-3 py-2">
+            <div class="rounded-lg border border-qs-soft bg-qs-bg px-3 py-2">
                 <dt class="text-xs font-semibold uppercase tracking-wide text-qs-muted">Held</dt>
                 <dd class="mt-1 text-lg font-semibold text-qs-text">{{ $analytics['held_count'] }}</dd>
             </div>
-            <div class="rounded-lg border border-qs-soft bg-white px-3 py-2">
+            <div class="rounded-lg border border-qs-soft bg-qs-bg px-3 py-2">
                 <dt class="text-xs font-semibold uppercase tracking-wide text-qs-muted">Pending manual</dt>
                 <dd class="mt-1 text-lg font-semibold text-qs-text">{{ $analytics['pending_manual_count'] }}</dd>
             </div>
-            <div class="rounded-lg border border-qs-soft bg-white px-3 py-2">
+            <div class="rounded-lg border border-qs-soft bg-qs-bg px-3 py-2">
                 <dt class="text-xs font-semibold uppercase tracking-wide text-qs-muted">Avg score</dt>
                 <dd class="mt-1 text-lg font-semibold text-qs-text">{{ $analytics['average_score'] !== null ? $analytics['average_score'] : '—' }}</dd>
             </div>
-            <div class="rounded-lg border border-qs-soft bg-white px-3 py-2">
+            <div class="rounded-lg border border-qs-soft bg-qs-bg px-3 py-2">
                 <dt class="text-xs font-semibold uppercase tracking-wide text-qs-muted">High-risk sessions</dt>
                 <dd class="mt-1 text-lg font-semibold text-qs-text">{{ $analytics['high_risk_session_count'] }}</dd>
                 <p class="mt-0.5 text-[10px] text-qs-muted">Suspicious, critical, or locked</p>
@@ -44,7 +44,7 @@
                 <p class="text-xs text-qs-muted">Critical includes locked sessions.</p>
                 <ul class="mt-2 space-y-1 text-sm text-qs-text">
                     @foreach ($analytics['risk_distribution'] as $label => $count)
-                        <li class="flex justify-between rounded border border-qs-soft/80 bg-white px-3 py-1.5">
+                        <li class="flex justify-between rounded border border-qs-soft/80 bg-qs-bg px-3 py-1.5">
                             <span>{{ $label }}</span>
                             <span class="font-semibold">{{ $count }}</span>
                         </li>
@@ -56,7 +56,7 @@
                 <p class="text-xs text-qs-muted">Totals from proctoring events for this exam.</p>
                 <ul class="mt-2 space-y-1 text-sm text-qs-text">
                     @foreach ($analytics['violation_totals'] as $type => $count)
-                        <li class="flex justify-between rounded border border-qs-soft/80 bg-white px-3 py-1.5">
+                        <li class="flex justify-between rounded border border-qs-soft/80 bg-qs-bg px-3 py-1.5">
                             <span>{{ str_replace('_', ' ', $type) }}</span>
                             <span class="font-semibold">{{ $count }}</span>
                         </li>

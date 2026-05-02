@@ -3,7 +3,7 @@
     <x-slot name="subtitle">Department-scoped academic and student activity overview</x-slot>
 
     <div class="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        <div class="rounded-xl border border-qs-soft bg-white p-5 shadow-sm hover:shadow-md transition">
+        <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm hover:shadow-md transition">
             <div class="flex items-start justify-between">
                 <p class="text-sm font-medium text-qs-muted">Total Students</p>
                 <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-qs-card text-qs-text">
@@ -17,7 +17,7 @@
             <p class="mt-4 text-3xl font-semibold text-qs-text">{{ $studentCount }}</p>
         </div>
 
-        <div class="rounded-xl border border-qs-soft bg-white p-5 shadow-sm hover:shadow-md transition">
+        <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm hover:shadow-md transition">
             <div class="flex items-start justify-between">
                 <p class="text-sm font-medium text-qs-muted">Active Programs</p>
                 <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-qs-card text-qs-text">
@@ -29,7 +29,7 @@
             <p class="mt-4 text-3xl font-semibold text-qs-text">{{ $activeProgramCount }}</p>
         </div>
 
-        <div class="rounded-xl border border-qs-soft bg-white p-5 shadow-sm hover:shadow-md transition">
+        <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm hover:shadow-md transition">
             <div class="flex items-start justify-between">
                 <p class="text-sm font-medium text-qs-muted">Active Classes</p>
                 <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-qs-card text-qs-text">
@@ -41,7 +41,7 @@
             <p class="mt-4 text-3xl font-semibold text-qs-text">{{ $classCount }}</p>
         </div>
 
-        <div class="rounded-xl border border-qs-soft bg-white p-5 shadow-sm hover:shadow-md transition">
+        <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm hover:shadow-md transition">
             <div class="flex items-start justify-between">
                 <p class="text-sm font-medium text-qs-muted">Courses Assigned</p>
                 <span class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-qs-card text-qs-text">

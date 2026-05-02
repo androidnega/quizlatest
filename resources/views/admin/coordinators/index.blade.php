@@ -30,7 +30,7 @@
                             @else
                                 <div class="flex flex-wrap gap-1">
                                     @foreach ($coordinator->coordinatorAssignments as $assignment)
-                                        <span class="inline-flex items-center px-2 py-1 rounded-md text-xs bg-white border border-qs-soft">
+                                        <span class="inline-flex items-center px-2 py-1 rounded-md text-xs bg-qs-bg border border-qs-soft">
                                             {{ $assignment->department?->name }} ({{ $assignment->faculty?->name }})
                                         </span>
                                     @endforeach

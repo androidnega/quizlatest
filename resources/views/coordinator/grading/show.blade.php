@@ -3,22 +3,22 @@
     <x-slot name="subtitle">{{ $answer->examSession?->exam?->title }}</x-slot>
 
     <div class="max-w-3xl space-y-6">
-        <div class="bg-white rounded-xl border border-qs-soft p-5 text-sm">
+        <div class="bg-qs-bg rounded-xl border border-qs-soft p-5 text-sm">
             <p class="text-xs font-semibold uppercase text-qs-muted">Student</p>
             <p class="mt-1 font-medium text-qs-text">{{ $answer->examSession?->student?->name }}</p>
         </div>
 
-        <div class="bg-white rounded-xl border border-qs-soft p-5 text-sm">
+        <div class="bg-qs-bg rounded-xl border border-qs-soft p-5 text-sm">
             <p class="text-xs font-semibold uppercase text-qs-muted">Question (max {{ $answer->question->marks }} marks)</p>
             <p class="mt-2 whitespace-pre-wrap text-qs-text">{{ $answer->question->question_text }}</p>
         </div>
 
-        <div class="bg-white rounded-xl border border-qs-soft p-5 text-sm">
+        <div class="bg-qs-bg rounded-xl border border-qs-soft p-5 text-sm">
             <p class="text-xs font-semibold uppercase text-qs-muted">Submitted answer</p>
             <p class="mt-2 whitespace-pre-wrap text-qs-text">{{ $answer->answer_payload['text'] ?? '' }}</p>
         </div>
 
-        <form method="post" action="{{ route('coordinator.grading.grade', $answer) }}" class="bg-white rounded-xl border border-qs-soft p-5 space-y-4">
+        <form method="post" action="{{ route('coordinator.grading.grade', $answer) }}" class="bg-qs-bg rounded-xl border border-qs-soft p-5 space-y-4">
             @csrf
             <div>
                 <label class="block text-sm font-medium text-qs-muted mb-1">Points</label>

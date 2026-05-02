@@ -2,7 +2,7 @@
     <x-slot name="title">Assign Student Class</x-slot>
     <x-slot name="subtitle">Assign or edit class for selected student</x-slot>
 
-    <div class="rounded-xl bg-white p-6 shadow-sm">
+    <div class="rounded-xl bg-qs-bg p-6 shadow-sm">
         <div class="mb-4 rounded-lg border border-qs-soft bg-qs-card p-4">
             <p class="text-sm text-qs-muted"><span class="font-semibold">Student:</span> {{ $student->name }}</p>
             <p class="text-sm text-qs-muted"><span class="font-semibold">Program:</span> {{ $student->program?->name ?? 'N/A' }}</p>
@@ -15,7 +15,7 @@
 
             <div>
                 <label for="class_id" class="block text-sm font-medium text-qs-muted">Class</label>
-                <select id="class_id" name="class_id" class="mt-1 block w-full rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
+                <select id="class_id" name="class_id" class="mt-1 block w-full rounded-lg border border-qs-soft bg-qs-bg px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
                     <option value="">Unassigned</option>
                     @foreach ($classes as $classroom)
                         <option value="{{ $classroom->id }}" {{ (int) old('class_id', $student->class_id) === $classroom->id ? 'selected' : '' }}>

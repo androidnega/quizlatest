@@ -2,7 +2,7 @@
     <x-slot name="title">Create Course</x-slot>
     <x-slot name="subtitle">Add a course in your coordinator department scope</x-slot>
 
-    <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="bg-qs-bg rounded-xl shadow-sm p-5">
         <form method="POST" action="{{ route('coordinator.courses.store') }}" class="space-y-4">
             @csrf
             <input type="hidden" name="department_id" value="{{ $departmentId }}">

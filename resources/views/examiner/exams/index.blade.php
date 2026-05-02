@@ -8,7 +8,7 @@
         </a>
     </div>
 
-    <div class="bg-white rounded-xl border border-qs-soft shadow-sm p-5">
+    <div class="bg-qs-bg rounded-xl border border-qs-soft shadow-sm p-5">
         <div class="overflow-x-auto">
             <table class="min-w-full">
                 <thead class="bg-qs-soft/30">

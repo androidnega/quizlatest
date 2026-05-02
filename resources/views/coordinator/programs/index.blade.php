@@ -9,7 +9,7 @@
         </a>
     </div>
 
-    <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="bg-qs-bg rounded-xl shadow-sm p-5">
         <div class="overflow-x-auto">
             <table class="min-w-full">
                 <thead class="bg-qs-card">

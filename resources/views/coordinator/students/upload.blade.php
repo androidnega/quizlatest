@@ -2,13 +2,13 @@
     <x-slot name="title">Upload Students CSV</x-slot>
     <x-slot name="subtitle">Upload and preview student records before import</x-slot>
 
-    <div class="rounded-xl border border-qs-soft bg-white p-6 shadow-sm">
+    <div class="rounded-xl border border-qs-soft bg-qs-bg p-6 shadow-sm">
         <form method="POST" action="{{ route('coordinator.students.preview') }}" enctype="multipart/form-data" class="space-y-5">
             @csrf
 
             <div>
                 <label class="block text-sm font-medium text-qs-text" for="csv_file">CSV File</label>
-                <input type="file" name="csv_file" id="csv_file" accept=".csv,text/csv" required class="mt-1 block w-full rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
+                <input type="file" name="csv_file" id="csv_file" accept=".csv,text/csv" required class="mt-1 block w-full rounded-lg border border-qs-soft bg-qs-bg px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
                 @error('csv_file')
                     <p class="mt-1 text-sm text-qs-danger">{{ $message }}</p>
                 @enderror
@@ -42,7 +42,7 @@
             </div>
 
             <div class="flex items-center justify-end gap-2">
-                <a href="{{ route('coordinator.students.index') }}" class="rounded-lg border border-qs-soft bg-white px-4 py-2 text-sm text-qs-muted hover:bg-qs-card">Back</a>
+                <a href="{{ route('coordinator.students.index') }}" class="rounded-lg border border-qs-soft bg-qs-bg px-4 py-2 text-sm text-qs-muted hover:bg-qs-card">Back</a>
                 <button type="submit" class="rounded-lg border border-qs-accent bg-qs-accent px-4 py-2 text-sm font-semibold text-qs-text hover:opacity-95">
                     Preview Import
                 </button>

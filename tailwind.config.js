@@ -13,15 +13,19 @@ export default {
     theme: {
         extend: {
             colors: {
-                /** QUIZSNAP tokens: navy text, blue-gray structure, gold accent, white-heavy surfaces */
+                /**
+                 * QUIZSNAP official palette (single token system).
+                 * qs-bg: page chrome | qs-card / qs-surface: calm panels | qs-text: navy | qs-soft: blue-gray structure | qs-accent: gold
+                 * qs-muted: darker blue-gray for readable secondary typography (same family as qs-soft)
+                 */
                 qs: {
                     bg: '#FFFFFF',
                     card: '#F4F7FB',
+                    surface: '#F4F7FB',
                     text: '#0F172A',
                     muted: '#64748B',
                     soft: '#CBD5E1',
                     accent: '#F2A650',
-                    /** Semantic only: validation + destructive affordances */
                     danger: '#B42318',
                     'danger-soft': '#FBECEC',
                 },

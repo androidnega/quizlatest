@@ -2,7 +2,7 @@
     <x-slot name="title">Create exam</x-slot>
     <x-slot name="subtitle">Choose a course and basic settings</x-slot>
 
-    <div class="max-w-xl bg-white rounded-xl border border-qs-soft shadow-sm p-6">
+    <div class="max-w-xl bg-qs-bg rounded-xl border border-qs-soft shadow-sm p-6">
         <form method="post" action="{{ route('examiner.exams.store') }}" class="space-y-4">
             @csrf
             <div>

@@ -41,7 +41,7 @@
                         </div>
                     @endif
                     <div class="mt-6">
-                        <a href="{{ route('student.results.pdf', $session) }}" class="inline-flex items-center rounded-lg border border-qs-soft bg-white px-4 py-2 text-sm font-medium text-qs-text hover:bg-qs-card">
+                        <a href="{{ route('student.results.pdf', $session) }}" class="inline-flex items-center rounded-lg border border-qs-soft bg-qs-bg px-4 py-2 text-sm font-medium text-qs-text hover:bg-qs-card">
                             {{ __('Download PDF') }}
                         </a>
                     </div>

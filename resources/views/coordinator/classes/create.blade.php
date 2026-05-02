@@ -2,7 +2,7 @@
     <x-slot name="title">Create Class</x-slot>
     <x-slot name="subtitle">Add a class in your assigned department scope</x-slot>
 
-    <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="bg-qs-bg rounded-xl shadow-sm p-5">
         <form method="POST" action="{{ route('coordinator.classes.store') }}" class="space-y-4">
             @csrf
 

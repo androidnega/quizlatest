@@ -3,21 +3,21 @@
     <x-slot name="subtitle">Validate records before final import</x-slot>
 
     <div class="mb-4 grid gap-3 sm:grid-cols-3">
-        <div class="rounded-xl border border-qs-soft bg-white p-4 shadow-sm">
+        <div class="rounded-xl border border-qs-soft bg-qs-bg p-4 shadow-sm">
             <p class="text-sm text-qs-muted">Rows Parsed</p>
             <p class="mt-1 text-2xl font-semibold text-qs-text">{{ count($previewRows) }}</p>
         </div>
-        <div class="rounded-xl border border-qs-soft bg-white p-4 shadow-sm">
+        <div class="rounded-xl border border-qs-soft bg-qs-bg p-4 shadow-sm">
             <p class="text-sm text-qs-muted">Valid Rows</p>
             <p class="mt-1 text-2xl font-semibold text-qs-text">{{ $validCount }}</p>
         </div>
-        <div class="rounded-xl border border-qs-soft bg-white p-4 shadow-sm">
+        <div class="rounded-xl border border-qs-soft bg-qs-bg p-4 shadow-sm">
             <p class="text-sm text-qs-muted">Invalid Rows</p>
             <p class="mt-1 text-2xl font-semibold {{ $invalidCount > 0 ? 'text-qs-danger' : 'text-qs-text' }}">{{ $invalidCount }}</p>
         </div>
     </div>
 
-    <div class="overflow-hidden rounded-xl border border-qs-soft bg-white shadow-sm">
+    <div class="overflow-hidden rounded-xl border border-qs-soft bg-qs-bg shadow-sm">
         <table class="min-w-full divide-y divide-beige">
             <thead class="bg-qs-soft/30">
                 <tr>
@@ -57,7 +57,7 @@
     </div>
 
     <div class="mt-5 flex items-center justify-between">
-        <a href="{{ route('coordinator.students.upload') }}" class="rounded-lg border border-qs-accent bg-white px-4 py-2 text-sm text-qs-muted hover:bg-qs-card">Back to Upload</a>
+        <a href="{{ route('coordinator.students.upload') }}" class="rounded-lg border border-qs-accent bg-qs-bg px-4 py-2 text-sm text-qs-muted hover:bg-qs-card">Back to Upload</a>
 
         <form method="POST" action="{{ route('coordinator.students.import') }}">
             @csrf

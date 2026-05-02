@@ -8,7 +8,7 @@
         <span>Total marks: <strong class="text-qs-text">{{ $exam->total_marks }}</strong></span>
     </div>
 
-    <div class="mb-8 rounded-xl border border-qs-soft bg-white p-5 shadow-sm">
+    <div class="mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
         <h3 class="text-sm font-semibold text-qs-text mb-3">Add section</h3>
         <form method="post" action="{{ route('examiner.exams.sections.store', $exam) }}" class="flex flex-wrap gap-2 items-end">
             @csrf
@@ -21,7 +21,7 @@
     </div>
 
     @forelse ($exam->sections as $section)
-        <div class="mb-10 rounded-xl border border-qs-soft bg-white p-5 shadow-sm">
+        <div class="mb-10 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
             <div class="flex items-center justify-between mb-4 border-b border-qs-soft pb-3">
                 <h3 class="text-lg font-semibold text-qs-text">{{ $section->title }}</h3>
                 <span class="text-xs text-qs-muted">Order {{ $section->section_order }}</span>

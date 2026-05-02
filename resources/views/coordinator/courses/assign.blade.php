@@ -2,11 +2,11 @@
     <x-slot name="title">Assign Courses to Class</x-slot>
     <x-slot name="subtitle">Select a class and assign multiple courses in the same department</x-slot>
 
-    <div class="rounded-xl bg-white p-5 shadow-sm">
+    <div class="rounded-xl bg-qs-bg p-5 shadow-sm">
         <form method="GET" action="{{ route('coordinator.courses.assign.edit') }}" class="grid gap-3 sm:grid-cols-4">
             <div class="sm:col-span-3">
                 <label for="class_id" class="block text-sm font-medium text-qs-muted">Class</label>
-                <select id="class_id" name="class_id" class="mt-1 block w-full rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
+                <select id="class_id" name="class_id" class="mt-1 block w-full rounded-lg border border-qs-soft bg-qs-bg px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
                     <option value="">Select class</option>
                     @foreach ($classes as $classroom)
                         <option value="{{ $classroom->id }}" {{ (int) request('class_id', $selectedClass?->id) === $classroom->id ? 'selected' : '' }}>
@@ -22,7 +22,7 @@
     </div>
 
     @if ($selectedClass)
-        <div class="mt-6 rounded-xl bg-white p-5 shadow-sm">
+        <div class="mt-6 rounded-xl bg-qs-bg p-5 shadow-sm">
             <div class="mb-4 rounded-lg border border-qs-soft bg-qs-card p-4 text-sm text-qs-muted">
                 <span class="font-semibold">Selected class:</span> {{ $selectedClass->name }}
                 ({{ $selectedClass->program?->name }} - {{ $selectedClass->level?->name }})

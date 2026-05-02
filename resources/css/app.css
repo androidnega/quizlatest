@@ -6,6 +6,7 @@
     :root {
         --qs-bg: #ffffff;
         --qs-card: #f4f7fb;
+        --qs-surface: #f4f7fb;
         --qs-text: #0f172a;
         --qs-muted: #64748b;
         --qs-soft: #cbd5e1;
@@ -22,7 +23,7 @@
 
 @layer components {
     .qs-surface {
-        @apply rounded-xl border border-qs-soft bg-qs-card;
+        @apply rounded-xl border border-qs-soft bg-qs-surface;
     }
 
     .qs-heading {
@@ -34,7 +35,7 @@
     }
 
     .qs-card {
-        @apply rounded-xl border border-qs-soft bg-qs-card p-6;
+        @apply rounded-xl border border-qs-soft bg-qs-surface p-6;
     }
 
     .qs-btn-primary {

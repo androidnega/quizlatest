@@ -140,7 +140,7 @@
                     </form>
                     <form method="post" action="{{ route('admin.settings.unlock') }}" class="inline">@csrf
                         <input type="hidden" name="key" value="{{ $k }}" />
-                        <button type="submit" class="rounded border border-qs-soft bg-white px-2 py-1 text-xs text-qs-text hover:bg-qs-card">Unlock</button>
+                        <button type="submit" class="rounded border border-qs-soft bg-qs-bg px-2 py-1 text-xs text-qs-text hover:bg-qs-card">Unlock</button>
                     </form>
                 </li>
             @endforeach

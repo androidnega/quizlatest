@@ -2,7 +2,7 @@
     <x-slot name="title">Create Program</x-slot>
     <x-slot name="subtitle">Add a program in your assigned department</x-slot>
 
-    <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="bg-qs-bg rounded-xl shadow-sm p-5">
         <form method="POST" action="{{ route('coordinator.programs.store') }}" class="space-y-4">
             @csrf
             <input type="hidden" name="department_id" value="{{ $departmentId }}">

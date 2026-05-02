@@ -10,16 +10,16 @@
 
     <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
         <form method="GET" action="{{ route('coordinator.students.index') }}" class="flex flex-wrap items-center gap-2">
-            <input type="text" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Search name, index number or email" class="w-64 rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40" />
+            <input type="text" name="search" value="{{ $filters['search'] ?? '' }}" placeholder="Search name, index number or email" class="w-64 rounded-lg border border-qs-soft bg-qs-bg px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40" />
 
-            <select name="program_id" class="rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
+            <select name="program_id" class="rounded-lg border border-qs-soft bg-qs-bg px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
                 <option value="">All Programs</option>
                 @foreach ($programs as $program)
                     <option value="{{ $program->id }}" @selected(($filters['program_id'] ?? '') == $program->id)>{{ $program->name }}</option>
                 @endforeach
             </select>
 
-            <select name="level_id" class="rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
+            <select name="level_id" class="rounded-lg border border-qs-soft bg-qs-bg px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
                 <option value="">All Levels</option>
                 @foreach ($levels as $level)
                     <option value="{{ $level->id }}" @selected(($filters['level_id'] ?? '') == $level->id)>{{ $level->name }}</option>
@@ -38,7 +38,7 @@
     <form method="POST" action="{{ route('coordinator.students.bulk-status') }}">
         @csrf
         <div class="mb-3 flex items-center gap-2">
-            <select name="action" class="rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40" required>
+            <select name="action" class="rounded-lg border border-qs-soft bg-qs-bg px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40" required>
                 <option value="">Bulk Actions</option>
                 <option value="activate">Activate Selected</option>
                 <option value="deactivate">Deactivate Selected</option>
@@ -46,7 +46,7 @@
             <button type="submit" class="rounded-lg bg-qs-card px-4 py-2 text-sm text-qs-muted hover:bg-qs-soft">Apply</button>
         </div>
 
-        <div class="overflow-hidden rounded-xl bg-white shadow-sm">
+        <div class="overflow-hidden rounded-xl bg-qs-bg shadow-sm">
             <table class="min-w-full divide-y divide-beige">
                 <thead class="bg-qs-soft/30">
                     <tr>
@@ -96,14 +96,14 @@
         </div>
     </form>
 
-    <div class="mt-6 rounded-xl bg-white p-5 shadow-sm">
+    <div class="mt-6 rounded-xl bg-qs-bg p-5 shadow-sm">
         <h3 class="text-base font-semibold text-qs-text">Bulk Assign Class</h3>
         <p class="mt-1 text-sm text-qs-muted">Filter by program and level, then assign one class to all matching students.</p>
         <form method="POST" action="{{ route('coordinator.students.bulk-assign-class') }}" class="mt-4 grid gap-3 sm:grid-cols-4">
             @csrf
             <div>
                 <label for="bulk_program_id" class="block text-xs font-medium text-qs-muted">Program</label>
-                <select id="bulk_program_id" name="program_id" required class="mt-1 block w-full rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
+                <select id="bulk_program_id" name="program_id" required class="mt-1 block w-full rounded-lg border border-qs-soft bg-qs-bg px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
                     <option value="">Select program</option>
                     @foreach ($programs as $program)
                         <option value="{{ $program->id }}">{{ $program->name }}</option>
@@ -112,7 +112,7 @@
             </div>
             <div>
                 <label for="bulk_level_id" class="block text-xs font-medium text-qs-muted">Level</label>
-                <select id="bulk_level_id" name="level_id" required class="mt-1 block w-full rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
+                <select id="bulk_level_id" name="level_id" required class="mt-1 block w-full rounded-lg border border-qs-soft bg-qs-bg px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
                     <option value="">Select level</option>
                     @foreach ($levels as $level)
                         <option value="{{ $level->id }}">{{ $level->name }}</option>
@@ -121,7 +121,7 @@
             </div>
             <div>
                 <label for="bulk_class_id" class="block text-xs font-medium text-qs-muted">Class</label>
-                <select id="bulk_class_id" name="class_id" required class="mt-1 block w-full rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
+                <select id="bulk_class_id" name="class_id" required class="mt-1 block w-full rounded-lg border border-qs-soft bg-qs-bg px-3 py-2 text-sm focus:border-qs-accent focus:ring-qs-accent/40">
                     <option value="">Select class</option>
                     @foreach ($classes as $classroom)
                         <option value="{{ $classroom->id }}">{{ $classroom->name }} ({{ $classroom->program?->code ?? $classroom->program?->name }} - {{ $classroom->level?->name }})</option>

@@ -2,7 +2,7 @@
     <x-slot name="title">Essay grading</x-slot>
     <x-slot name="subtitle">Pending manual grades</x-slot>
 
-    <div class="bg-white rounded-xl border border-qs-soft shadow-sm p-5 overflow-x-auto">
+    <div class="bg-qs-bg rounded-xl border border-qs-soft shadow-sm p-5 overflow-x-auto">
         <table class="min-w-full text-sm">
             <thead class="bg-qs-soft/30">
                 <tr>

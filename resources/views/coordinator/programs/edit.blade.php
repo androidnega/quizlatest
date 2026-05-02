@@ -2,7 +2,7 @@
     <x-slot name="title">Edit Program</x-slot>
     <x-slot name="subtitle">Update program details in your department</x-slot>
 
-    <div class="bg-white rounded-xl shadow-sm p-5">
+    <div class="bg-qs-bg rounded-xl shadow-sm p-5">
         <form method="POST" action="{{ route('coordinator.programs.update', $program) }}" class="space-y-4">
             @csrf
             @method('PUT')
