@@ -175,6 +175,11 @@ Route::prefix('examiner')
         Route::get('/exams/{exam}/builder', [ExamBuilderController::class, 'builder'])->name('exams.builder');
         Route::post('/exams/{exam}/sections', [ExamBuilderController::class, 'storeSection'])->name('exams.sections.store');
         Route::post('/exams/{exam}/sections/{section}/questions', [ExamBuilderController::class, 'storeQuestion'])->name('exams.questions.store');
+        Route::post('/exams/{exam}/questions/import/preview', [ExamBuilderController::class, 'previewQuestionImport'])->name('exams.questions.import.preview');
+        Route::post('/exams/{exam}/questions/import/cancel', [ExamBuilderController::class, 'cancelQuestionImport'])->name('exams.questions.import.cancel');
+        Route::post('/exams/{exam}/questions/import/commit', [ExamBuilderController::class, 'commitQuestionImport'])->name('exams.questions.import.commit');
+        Route::post('/exams/{exam}/questions/ai/prompt', [ExamBuilderController::class, 'buildAiPrompt'])->name('exams.questions.ai.prompt');
+        Route::post('/exams/{exam}/questions/ai/generate', [ExamBuilderController::class, 'generateWithAi'])->name('exams.questions.ai.generate');
     });
 
 require __DIR__.'/auth.php';

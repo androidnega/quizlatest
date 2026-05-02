@@ -8,6 +8,10 @@ use App\Models\ExaminerCourseAssignment;
 use App\Models\ExamSection;
 use App\Models\Question;
 use App\Models\Quiz;
+use App\Services\ExamAiPromptBuilder;
+use App\Services\ExamAiQuestionGenerator;
+use App\Services\ExamQuestionImportValidator;
+use App\Services\SystemSettingsService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -81,7 +85,7 @@ class ExamBuilderController extends Controller
             ->with('status', 'Exam created. Add sections and questions below.');
     }
 
-    public function builder(Request $request, Quiz $exam): View
+    public function builder(Request $request, Quiz $exam, SystemSettingsService $systemSettings): View
     {
         $this->authorize('view', $exam);
 
@@ -90,9 +94,13 @@ class ExamBuilderController extends Controller
             'sections.questions' => fn ($q) => $q->orderBy('question_order'),
         ]);
 
+        $importPreview = session('exam_question_import_'.$exam->id);
+
         return view('examiner.exams.builder', [
             'exam' => $exam,
             'questionTypes' => ['mcq', 'true_false', 'fill_blank', 'essay'],
+            'aiEnabled' => $systemSettings->getBool('enable_ai', true),
+            'importPreview' => is_array($importPreview) ? $importPreview : null,
         ]);
     }
 
@@ -179,6 +187,162 @@ class ExamBuilderController extends Controller
         });
 
         return back()->with('status', 'Question saved.');
+    }
+
+    public function previewQuestionImport(Request $request, Quiz $exam, ExamQuestionImportValidator $validator): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+
+        $validated = $request->validate([
+            'import_json' => ['required', 'string', 'max:500000'],
+        ]);
+
+        $result = $validator->validateJsonString($validated['import_json']);
+        if (! $result['ok']) {
+            return back()
+                ->withErrors(['import_json' => implode("\n", $result['errors'])])
+                ->withInput();
+        }
+
+        session()->put('exam_question_import_'.$exam->id, [
+            'sections' => $result['sections'],
+            'source' => 'paste',
+        ]);
+
+        return back()->with('status', 'Import preview ready — review below and save.');
+    }
+
+    public function cancelQuestionImport(Request $request, Quiz $exam): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+        session()->forget('exam_question_import_'.$exam->id);
+
+        return back()->with('status', 'Import preview cleared.');
+    }
+
+    public function commitQuestionImport(Request $request, Quiz $exam): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+
+        $bundle = session('exam_question_import_'.$exam->id);
+        if (! is_array($bundle) || ! isset($bundle['sections']) || ! is_array($bundle['sections'])) {
+            return back()->withErrors(['import_json' => 'No import preview found. Paste JSON and preview again.']);
+        }
+
+        $this->persistImportedSections($exam, $bundle['sections']);
+        session()->forget('exam_question_import_'.$exam->id);
+
+        return back()->with('status', 'Imported questions saved.');
+    }
+
+    public function buildAiPrompt(Request $request, Quiz $exam, ExamAiPromptBuilder $promptBuilder): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+
+        $validated = $request->validate([
+            'ai_topic' => ['required', 'string', 'max:2000'],
+            'ai_count' => ['required', 'integer', 'min:1', 'max:50'],
+            'ai_question_types' => ['nullable', 'array'],
+            'ai_question_types.*' => ['string', 'in:mcq,true_false,fill_blank,essay'],
+            'ai_difficulty' => ['nullable', 'string', 'max:120'],
+            'ai_marks' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+        ]);
+
+        $prompt = $promptBuilder->build([
+            'topic' => $validated['ai_topic'],
+            'count' => (int) $validated['ai_count'],
+            'types' => $validated['ai_question_types'] ?? ['mcq'],
+            'difficulty' => $validated['ai_difficulty'] ?? 'mixed',
+            'marks_per_question' => (float) ($validated['ai_marks'] ?? 1),
+        ]);
+
+        return back()->with('generated_ai_prompt', $prompt)->withInput();
+    }
+
+    public function generateWithAi(Request $request, Quiz $exam, ExamAiQuestionGenerator $generator, SystemSettingsService $systemSettings): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+
+        if (! $systemSettings->getBool('enable_ai', true)) {
+            return back()->withErrors(['ai' => 'AI generation is turned off in system settings.']);
+        }
+
+        $request->merge([
+            'ai_custom_prompt' => trim((string) $request->input('ai_custom_prompt', '')),
+        ]);
+
+        $validated = $request->validate([
+            'ai_custom_prompt' => ['nullable', 'string', 'max:16000'],
+            'ai_topic' => ['required_without:ai_custom_prompt', 'nullable', 'string', 'max:2000'],
+            'ai_count' => ['required_without:ai_custom_prompt', 'nullable', 'integer', 'min:1', 'max:50'],
+            'ai_question_types' => ['nullable', 'array'],
+            'ai_question_types.*' => ['string', 'in:mcq,true_false,fill_blank,essay'],
+            'ai_difficulty' => ['nullable', 'string', 'max:120'],
+            'ai_marks' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+        ]);
+
+        $custom = trim((string) ($validated['ai_custom_prompt'] ?? ''));
+        if ($custom !== '') {
+            $prompt = $custom;
+        } else {
+            $prompt = app(ExamAiPromptBuilder::class)->build([
+                'topic' => (string) ($validated['ai_topic'] ?? ''),
+                'count' => (int) ($validated['ai_count'] ?? 5),
+                'types' => $validated['ai_question_types'] ?? ['mcq'],
+                'difficulty' => $validated['ai_difficulty'] ?? 'mixed',
+                'marks_per_question' => (float) ($validated['ai_marks'] ?? 1),
+            ]);
+        }
+
+        $result = $generator->generateFromPrompt($prompt);
+        if (! $result['ok']) {
+            return back()->withErrors(['ai' => implode("\n", $result['errors'])])->withInput();
+        }
+
+        session()->put('exam_question_import_'.$exam->id, [
+            'sections' => $result['sections'],
+            'source' => 'ai',
+        ]);
+
+        return back()->with('status', 'AI draft validated — review preview below before saving.');
+    }
+
+    /**
+     * @param  list<array{title: string, questions: list<array<string, mixed>>}>  $sections
+     */
+    private function persistImportedSections(Quiz $exam, array $sections): void
+    {
+        DB::transaction(function () use ($exam, $sections): void {
+            $baseOrder = (int) ExamSection::query()->where('exam_id', $exam->id)->max('section_order');
+
+            foreach ($sections as $sec) {
+                $baseOrder++;
+                $section = ExamSection::query()->create([
+                    'exam_id' => $exam->id,
+                    'title' => $sec['title'],
+                    'section_order' => $baseOrder,
+                ]);
+
+                $qOrder = 0;
+                foreach ($sec['questions'] as $q) {
+                    $qOrder++;
+                    Question::query()->create([
+                        'quiz_id' => $exam->id,
+                        'section_id' => $section->id,
+                        'question_text' => $q['question_text'],
+                        'type' => $q['type'],
+                        'options' => $q['options'],
+                        'correct_answer' => $q['correct_answer'],
+                        'answer_schema' => $q['answer_schema'],
+                        'marks' => $q['marks'],
+                        'question_order' => $qOrder,
+                    ]);
+                }
+            }
+
+            $total = (float) Question::query()->where('quiz_id', $exam->id)->sum('marks');
+            $exam->update(['total_marks' => $total]);
+        });
     }
 
     /**
