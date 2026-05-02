@@ -73,6 +73,7 @@ final class ExamRuntimeStateExtension
             $savedAnswers[(string) $answer->question_id] = [
                 'answer_payload' => $answer->answer_payload,
                 'saved_at' => $answer->saved_at?->toAtomString(),
+                'client_revision' => (int) ($answer->client_revision ?? 0),
             ];
         }
 

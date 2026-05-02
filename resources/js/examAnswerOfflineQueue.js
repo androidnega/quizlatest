@@ -125,3 +125,34 @@ export async function listPendingForSession(sessionId) {
         return [];
     }
 }
+
+/**
+ * Remove all queued answers for an exam session (e.g. after successful submit).
+ *
+ * @param {string} sessionId
+ */
+export async function clearSessionPending(sessionId) {
+    try {
+        const db = await openDb();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE, 'readwrite');
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+            const os = tx.objectStore(STORE);
+            const req = os.openCursor();
+            req.onsuccess = () => {
+                const c = req.result;
+                if (!c) {
+                    return;
+                }
+                if (c.value.sessionId === sessionId) {
+                    c.delete();
+                }
+                c.continue();
+            };
+            req.onerror = () => reject(req.error);
+        });
+    } catch {
+        //
+    }
+}

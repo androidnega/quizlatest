@@ -17,6 +17,7 @@ class ExamSessionAnswer extends Model
         'evaluation_detail',
         'grader_feedback',
         'saved_at',
+        'client_revision',
     ];
 
     protected $hidden = [
@@ -27,6 +28,7 @@ class ExamSessionAnswer extends Model
         'answer_payload' => 'array',
         'evaluation_detail' => 'array',
         'saved_at' => 'datetime',
+        'client_revision' => 'integer',
     ];
 
     public function examSession(): BelongsTo

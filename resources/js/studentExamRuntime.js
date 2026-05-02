@@ -10,6 +10,7 @@ import { ExamStateEngine } from './examStateEngine';
 import {
     queuePendingAnswer,
     clearPendingAnswer,
+    clearSessionPending,
     listPendingForSession,
 } from './examAnswerOfflineQueue';
 
@@ -18,6 +19,9 @@ const POLL_MS = 12000;
 const SAVE_RETRY = 3;
 const SUBMIT_RETRIES = 3;
 const SUBMIT_PERSIST_INTERVAL_MS = 12000;
+/** Max wall-clock time for background submit retries after initial failures. */
+const SUBMIT_PERSIST_MAX_MS = 15 * 60 * 1000;
+const FULLSCREEN_EXIT_NOTICE_MS = 7000;
 
 function meta(name) {
     return document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') ?? '';
@@ -81,6 +85,7 @@ async function main() {
         saveIndicator: document.getElementById('save-indicator'),
         btnSubmit: document.getElementById('btn-submit'),
         btnFullscreen: document.getElementById('btn-fullscreen'),
+        fullscreenExitNotice: document.getElementById('fullscreen-exit-notice'),
         video: document.getElementById('proctoring-video'),
     };
 
@@ -107,6 +112,8 @@ async function main() {
     let timeoutSubmitFired = false;
     let submitPersistTimer = null;
     let submitUiDefaultText = els.btnSubmit?.textContent ?? 'Submit';
+    let fullscreenExitNoticeTimer = null;
+    let examDocumentWasFullscreen = false;
 
     function setSaveIndicator(text, ok = true) {
         if (!els.saveIndicator) {
@@ -260,11 +267,47 @@ async function main() {
         }
     }
 
+    function sessionIsSubmittedForQueue() {
+        return serverDone || latestPayload?.session_status === 'submitted';
+    }
+
+    function mergeRevisionsFromState(data) {
+        const sa = data?.saved_answers;
+        if (!sa || typeof sa !== 'object') {
+            return;
+        }
+        for (const [qid, row] of Object.entries(sa)) {
+            const id = Number(qid);
+            if (!Number.isFinite(id)) {
+                continue;
+            }
+            const r = Number(row?.client_revision ?? 0);
+            if (!Number.isFinite(r) || r < 0) {
+                continue;
+            }
+            const cur = questionRevision.get(id) ?? 0;
+            if (r > cur) {
+                questionRevision.set(id, r);
+            }
+        }
+    }
+
+    function applyServerRevisionHint(questionId, rev) {
+        if (!Number.isFinite(rev)) {
+            return;
+        }
+        const cur = questionRevision.get(questionId) ?? 0;
+        if (rev > cur) {
+            questionRevision.set(questionId, rev);
+        }
+    }
+
     function onSubmitSucceeded() {
         serverDone = true;
         submitInputLock = false;
         stopSubmitPersistence();
         stopTimer();
+        void clearSessionPending(sessionId);
         syncControlDisabled();
         updateBanner('Exam submitted. You may close this page.', true);
         setSaveIndicator('Submitted', true);
@@ -274,26 +317,40 @@ async function main() {
         }
     }
 
-    async function postAnswerOnce(questionId, payload) {
-        await axios.post(`/exam-sessions/${encodeURIComponent(sessionId)}/answers`, {
+    /**
+     * @returns {Promise<'saved' | 'stale'>}
+     */
+    async function postAnswerOnce(questionId, payload, revision) {
+        const { data } = await axios.post(`/exam-sessions/${encodeURIComponent(sessionId)}/answers`, {
             question_id: questionId,
             answer_payload: payload,
+            client_revision: revision,
         });
-        return true;
+        if (data?.status === 'noop' && data?.reason === 'stale_revision') {
+            applyServerRevisionHint(questionId, Number(data.client_revision));
+            return 'stale';
+        }
+        applyServerRevisionHint(questionId, Number(data?.client_revision));
+        return 'saved';
     }
 
     async function flushOfflineAnswerQueue() {
-        if (!navigator.onLine || serverDone) {
+        if (!navigator.onLine || sessionIsSubmittedForQueue()) {
             return;
         }
         const pending = await listPendingForSession(sessionId);
         pending.sort((a, b) => a.questionId - b.questionId);
         for (const row of pending) {
+            if (sessionIsSubmittedForQueue()) {
+                return;
+            }
             let ok = false;
             for (let a = 0; a < SAVE_RETRY && !ok; a += 1) {
                 try {
-                    await postAnswerOnce(row.questionId, row.payload);
-                    ok = true;
+                    const outcome = await postAnswerOnce(row.questionId, row.payload, row.revision);
+                    if (outcome === 'saved' || outcome === 'stale') {
+                        ok = true;
+                    }
                 } catch {
                     await new Promise((r) => setTimeout(r, 400 * (a + 1)));
                 }
@@ -305,16 +362,25 @@ async function main() {
     }
 
     async function sendAnswerWithOfflineQueue(questionId, payload) {
+        if (sessionIsSubmittedForQueue()) {
+            return true;
+        }
+
         const rev = (questionRevision.get(questionId) ?? 0) + 1;
         questionRevision.set(questionId, rev);
 
         let attempt = 0;
         while (attempt < SAVE_RETRY) {
-            try {
-                await postAnswerOnce(questionId, payload);
-                await clearPendingAnswer(sessionId, questionId);
-                await flushOfflineAnswerQueue();
+            if (sessionIsSubmittedForQueue()) {
                 return true;
+            }
+            try {
+                const outcome = await postAnswerOnce(questionId, payload, rev);
+                if (outcome === 'saved' || outcome === 'stale') {
+                    await clearPendingAnswer(sessionId, questionId);
+                    await flushOfflineAnswerQueue();
+                    return true;
+                }
             } catch {
                 attempt += 1;
                 await new Promise((r) => setTimeout(r, 400 * attempt));
@@ -503,6 +569,7 @@ async function main() {
     async function fetchState() {
         const { data } = await axios.get(`/exam-sessions/${encodeURIComponent(sessionId)}/state`);
         latestPayload = data;
+        mergeRevisionsFromState(data);
         examStateEngine.syncFromBackend(data);
 
         if (data.exam?.title && els.title) {
@@ -564,8 +631,21 @@ async function main() {
         setSaveIndicator('Still submitting — keep this tab open', false);
 
         stopSubmitPersistence();
+        const persistStartedAt = Date.now();
         submitPersistTimer = window.setInterval(() => {
             void (async () => {
+                if (Date.now() - persistStartedAt > SUBMIT_PERSIST_MAX_MS) {
+                    stopSubmitPersistence();
+                    submitInputLock = false;
+                    updateBanner(
+                        'Could not confirm submission after several minutes. Check your connection, then use Submit again or refresh this page.',
+                        true,
+                    );
+                    setSaveIndicator('Submit not confirmed', false);
+                    syncControlDisabled();
+                    setSubmitButtonSubmitting(false);
+                    return;
+                }
                 if (serverDone) {
                     stopSubmitPersistence();
                     return;
@@ -634,6 +714,41 @@ async function main() {
         }
     });
 
+    function hideFullscreenExitNotice() {
+        if (fullscreenExitNoticeTimer) {
+            clearTimeout(fullscreenExitNoticeTimer);
+            fullscreenExitNoticeTimer = null;
+        }
+        if (els.fullscreenExitNotice) {
+            els.fullscreenExitNotice.classList.add('hidden');
+            els.fullscreenExitNotice.textContent = '';
+        }
+    }
+
+    function showFullscreenExitNotice() {
+        if (!els.fullscreenExitNotice || serverDone) {
+            return;
+        }
+        els.fullscreenExitNotice.textContent =
+            'You left fullscreen. Return to fullscreen when you are ready (exam continues).';
+        els.fullscreenExitNotice.classList.remove('hidden');
+        if (fullscreenExitNoticeTimer) {
+            clearTimeout(fullscreenExitNoticeTimer);
+        }
+        fullscreenExitNoticeTimer = window.setTimeout(() => hideFullscreenExitNotice(), FULLSCREEN_EXIT_NOTICE_MS);
+    }
+
+    document.addEventListener('fullscreenchange', () => {
+        if (document.fullscreenElement === document.documentElement) {
+            examDocumentWasFullscreen = true;
+            hideFullscreenExitNotice();
+            return;
+        }
+        if (examDocumentWasFullscreen && !serverDone) {
+            showFullscreenExitNotice();
+        }
+    });
+
     els.btnFullscreen?.addEventListener('click', async () => {
         try {
             if (!document.fullscreenElement) {
@@ -661,6 +776,9 @@ async function main() {
     });
 
     window.addEventListener('online', () => {
+        if (sessionIsSubmittedForQueue()) {
+            return;
+        }
         void flushOfflineAnswerQueue().then(() => {
             if (!serverDone) {
                 setSaveIndicator('Back online', true);

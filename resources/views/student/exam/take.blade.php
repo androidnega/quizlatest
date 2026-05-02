@@ -15,6 +15,8 @@
                 </button>
                 <div id="exam-timer" class="font-mono text-xl font-semibold tabular-nums text-[#6E8B43]"
                     aria-live="polite">--:--</div>
+                <span id="fullscreen-exit-notice" class="hidden max-w-[220px] shrink-0 text-xs text-amber-800"
+                    role="status"></span>
             </div>
         </div>
     </header>

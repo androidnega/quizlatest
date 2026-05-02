@@ -103,6 +103,7 @@ class ExamSessionController extends Controller
         $validated = $request->validate([
             'question_id' => ['required', 'integer', 'exists:questions,id'],
             'answer_payload' => ['required', 'array'],
+            'client_revision' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $question = Question::query()
@@ -120,6 +121,24 @@ class ExamSessionController extends Controller
             ], 422);
         }
 
+        $incomingRev = $validated['client_revision'] ?? null;
+        $existing = ExamSessionAnswer::query()
+            ->where('exam_session_id', $examSession->id)
+            ->where('question_id', $validated['question_id'])
+            ->first();
+
+        if ($incomingRev !== null && $existing !== null && (int) $existing->client_revision > (int) $incomingRev) {
+            return response()->json([
+                'status' => 'noop',
+                'reason' => 'stale_revision',
+                'client_revision' => (int) $existing->client_revision,
+            ]);
+        }
+
+        $storedRevision = $incomingRev === null
+            ? (int) ($existing?->client_revision ?? 0)
+            : max((int) ($existing?->client_revision ?? 0), (int) $incomingRev);
+
         ExamSessionAnswer::query()->updateOrCreate(
             [
                 'exam_session_id' => $examSession->id,
@@ -129,10 +148,14 @@ class ExamSessionController extends Controller
                 'answer_text' => null,
                 'answer_payload' => $normalized,
                 'saved_at' => now(),
+                'client_revision' => $storedRevision,
             ],
         );
 
-        return response()->json(['status' => 'saved']);
+        return response()->json([
+            'status' => 'saved',
+            'client_revision' => $storedRevision,
+        ]);
     }
 
     public function heartbeat(Request $request, ExamSession $examSession): JsonResponse
