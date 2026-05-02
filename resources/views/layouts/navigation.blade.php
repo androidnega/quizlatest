@@ -12,6 +12,11 @@
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                         {{ __('Dashboard') }}
                     </x-nav-link>
+                    @if (Auth::user()?->role === 'student')
+                        <x-nav-link :href="route('student.results.index')" :active="request()->routeIs('student.results.*')">
+                            {{ __('Results') }}
+                        </x-nav-link>
+                    @endif
                 </div>
             </div>
 
@@ -60,6 +65,11 @@
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
+            @if (Auth::user()?->role === 'student')
+                <x-responsive-nav-link :href="route('student.results.index')" :active="request()->routeIs('student.results.*')">
+                    {{ __('Results') }}
+                </x-responsive-nav-link>
+            @endif
         </div>
 
         <div class="border-t border-qs-soft pb-1 pt-4">

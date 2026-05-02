@@ -20,6 +20,7 @@ use App\Http\Controllers\ExamSessionController;
 use App\Http\Controllers\ProctoringUploadController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Student\StudentExamController;
+use App\Http\Controllers\Student\StudentResultController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -33,6 +34,15 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 Route::middleware('auth')->group(function () {
     Route::get('/student/exam/{examSession}', [StudentExamController::class, 'take'])
         ->name('student.exam.take');
+
+    Route::prefix('student/results')
+        ->name('student.results.')
+        ->middleware(['verified', 'student'])
+        ->group(function () {
+            Route::get('/', [StudentResultController::class, 'index'])->name('index');
+            Route::get('/{examSession}/pdf', [StudentResultController::class, 'pdf'])->name('pdf');
+            Route::get('/{examSession}', [StudentResultController::class, 'show'])->name('show');
+        });
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

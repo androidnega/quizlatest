@@ -68,4 +68,15 @@ class Quiz extends Model
     {
         return $this->hasMany(ProctoringEvent::class);
     }
+
+    /**
+     * When true, student result views may include correct-answer summaries (exam-level setting).
+     */
+    public function revealsCorrectAnswersForStudentResults(): bool
+    {
+        return filter_var(
+            data_get($this->proctoring_settings, 'show_correct_answers_to_students', false),
+            FILTER_VALIDATE_BOOLEAN,
+        );
+    }
 }
