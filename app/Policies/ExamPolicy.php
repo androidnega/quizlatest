@@ -50,10 +50,9 @@ class ExamPolicy
     }
 
     /**
-     * Release / confirm / override held results and force-submit (invigilator tools).
-     * Department coordinators without an examiner assignment cannot perform these actions.
+     * Examiner-only: held-result actions, force-submit, session/result review surfaces for an exam.
      */
-    public function reviewHeldResults(User $user, Quiz $exam): bool
+    public function manageResults(User $user, Quiz $exam): bool
     {
         if ($user->role !== 'coordinator') {
             return false;

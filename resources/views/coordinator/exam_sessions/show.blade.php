@@ -65,7 +65,7 @@
             </dl>
         </div>
 
-        @if ($isHeld && $canReviewHeld)
+        @if ($isHeld && $canManageResults)
             <div class="qs-card rounded-xl border border-qs-accent/40 p-5 shadow-sm">
                 <h3 class="text-sm font-semibold text-qs-text">Held result review</h3>
                 <p class="mt-2 text-sm text-qs-soft">Choose an action. Changes apply immediately.</p>
@@ -135,7 +135,7 @@
         @endif
     </div>
 
-    @if ($isHeld && $canReviewHeld)
+    @if ($isHeld && $canManageResults)
         @push('scripts')
             <script>
                 (function () {

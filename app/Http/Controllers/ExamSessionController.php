@@ -24,7 +24,6 @@ use App\Support\ProctoringCapabilityResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ExamSessionController extends Controller
@@ -110,15 +109,13 @@ class ExamSessionController extends Controller
             'snapshot' => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:2048'],
         ]);
 
-        $safeSessionKey = preg_replace('/[^A-Za-z0-9_-]/', '', $examSession->session_id) ?: 'session';
         $dir = sprintf(
-            'proctoring/user_%d/session_%s',
+            'proctoring/user_%d/session_%d',
             (int) $examSession->student_id,
-            $safeSessionKey,
+            (int) $examSession->id,
         );
 
-        $filename = 'verification_'.now()->format('YmdHis').'_'.Str::random(8).'.jpg';
-        $path = $dir.'/'.$filename;
+        $path = $dir.'/verification.jpg';
 
         Storage::disk('public')->put($path, file_get_contents($validated['snapshot']->getRealPath()));
 
@@ -363,7 +360,7 @@ class ExamSessionController extends Controller
     {
         $quiz = Quiz::query()->find((int) $examSession->exam_id);
         abort_if($quiz === null, 403);
-        $this->authorize('reviewHeldResults', $quiz);
+        $this->authorize('manageResults', $quiz);
 
         $this->submitSession($examSession, 'submitted_held', 'force_submit');
 
@@ -374,7 +371,7 @@ class ExamSessionController extends Controller
     {
         $quiz = Quiz::query()->find((int) $examSession->exam_id);
         abort_if($quiz === null, 403);
-        $this->authorize('view', $quiz);
+        $this->authorize('manageResults', $quiz);
 
         $events = ProctoringEvent::query()
             ->where('user_id', $examSession->student_id)
@@ -391,10 +388,6 @@ class ExamSessionController extends Controller
             ->where('user_id', $examSession->student_id)
             ->where('quiz_id', $examSession->exam_id)
             ->first(['score', 'status', 'exam_status']);
-
-        if ($result !== null) {
-            $this->authorize('view', $result);
-        }
 
         return response()->json([
             'session_id' => $examSession->session_id,
@@ -415,7 +408,7 @@ class ExamSessionController extends Controller
     {
         $quiz = Quiz::query()->find((int) $examSession->exam_id);
         abort_if($quiz === null, 403);
-        $this->authorize('reviewHeldResults', $quiz);
+        $this->authorize('manageResults', $quiz);
 
         $this->applyReviewDecision($examSession, 'released', 'Result released after review.');
 
@@ -426,7 +419,7 @@ class ExamSessionController extends Controller
     {
         $quiz = Quiz::query()->find((int) $examSession->exam_id);
         abort_if($quiz === null, 403);
-        $this->authorize('reviewHeldResults', $quiz);
+        $this->authorize('manageResults', $quiz);
 
         $this->applyReviewDecision($examSession, 'confirmed_fail', 'Result marked failed due to violations.');
 
@@ -437,7 +430,7 @@ class ExamSessionController extends Controller
     {
         $quiz = Quiz::query()->find((int) $examSession->exam_id);
         abort_if($quiz === null, 403);
-        $this->authorize('reviewHeldResults', $quiz);
+        $this->authorize('manageResults', $quiz);
 
         $validated = $request->validate([
             'note' => ['nullable', 'string', 'max:1000'],
@@ -495,7 +488,19 @@ class ExamSessionController extends Controller
         $runtime = ExamRuntimeStateExtension::forSession($examSession);
         $merged = array_merge($base, $runtime);
 
-        if ($examSession->status === 'submitted' && $this->resultFinalization->resolveStatus($examSession) === 'held') {
+        $resultRow = Result::query()
+            ->where('user_id', $examSession->student_id)
+            ->where('quiz_id', $examSession->exam_id)
+            ->first(['status']);
+
+        $held =
+            $examSession->status === 'submitted'
+            && (
+                ($resultRow !== null && $resultRow->status === 'held')
+                || $this->resultFinalization->resolveStatus($examSession) === 'held'
+            );
+
+        if ($held) {
             return $this->scrubHeldStudentExamPayload($merged);
         }
 
@@ -510,8 +515,10 @@ class ExamSessionController extends Controller
     {
         unset($payload['violation_score']);
 
-        $payload['result_visible'] = false;
-        $payload['result_message'] = 'Your result is under review. Please contact your lecturer.';
+        $payload['result'] = [
+            'status' => 'held',
+            'message' => 'Your result is under review. Contact your examiner.',
+        ];
 
         if (isset($payload['exam']) && is_array($payload['exam'])) {
             unset($payload['exam']['total_marks']);

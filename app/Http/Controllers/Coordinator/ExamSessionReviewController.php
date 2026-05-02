@@ -25,7 +25,7 @@ class ExamSessionReviewController extends Controller
 
     public function index(Request $request, Quiz $exam): View
     {
-        $this->authorize('view', $exam);
+        $this->authorize('manageResults', $exam);
 
         $analytics = $this->examAnalyticsSnapshot($exam);
 
@@ -178,15 +178,11 @@ class ExamSessionReviewController extends Controller
 
         $examSession->setRelation('result', $result);
 
-        if ($result !== null) {
-            $this->authorize('view', $result);
-        }
-
         $finalization = app(ResultFinalizationService::class);
         $workflowStatus = $finalization->resolveStatus($examSession);
 
         $exam = $examSession->exam;
-        $canReviewHeld = $exam !== null && Gate::forUser($request->user())->allows('reviewHeldResults', $exam);
+        $canManageResults = $exam !== null && Gate::forUser($request->user())->allows('manageResults', $exam);
 
         $events = ProctoringEvent::query()
             ->where('user_id', $examSession->student_id)
@@ -235,7 +231,7 @@ class ExamSessionReviewController extends Controller
             'timeline' => $timeline,
             'thumbnails' => $thumbnails,
             'isHeld' => $workflowStatus === 'held',
-            'canReviewHeld' => $canReviewHeld,
+            'canManageResults' => $canManageResults,
             'verificationImageUrl' => $verificationImageUrl,
             'releaseUrl' => route('exam-sessions.review.release', $examSession),
             'confirmFailUrl' => route('exam-sessions.review.confirm-fail', $examSession),

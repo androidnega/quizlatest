@@ -110,6 +110,15 @@ class HeldResultReviewAndStudentVisibilityTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_department_coordinator_without_examiner_assignment_cannot_open_sessions_index(): void
+    {
+        $ctx = $this->seedExamSessionContext();
+
+        $this->actingAs($ctx['coord']);
+        $this->get(route('coordinator.exams.sessions.index', $ctx['exam']))
+            ->assertForbidden();
+    }
+
     public function test_examiner_assigned_to_course_can_release_held(): void
     {
         $ctx = $this->seedExamSessionContext();
@@ -142,8 +151,12 @@ class HeldResultReviewAndStudentVisibilityTest extends TestCase
         $response->assertOk();
         $data = $response->json();
         $this->assertArrayNotHasKey('violation_score', $data);
-        $this->assertFalse($data['result_visible']);
-        $this->assertSame('Your result is under review. Please contact your lecturer.', $data['result_message']);
+        $this->assertArrayNotHasKey('result_visible', $data);
+        $this->assertArrayNotHasKey('result_message', $data);
+        $this->assertSame([
+            'status' => 'held',
+            'message' => 'Your result is under review. Contact your examiner.',
+        ], $data['result']);
         $this->assertArrayNotHasKey('total_marks', $data['exam'] ?? []);
     }
 }

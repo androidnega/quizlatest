@@ -39,6 +39,18 @@ class CoordinatorExamSessionReviewTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        DB::table('examiner_course_assignments')->insert([
+            'course_id' => $courseId,
+            'examiner_user_id' => $coord->id,
+            'assigned_by' => null,
+            'is_active' => true,
+            'permissions' => null,
+            'starts_at' => null,
+            'ends_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         $classId = DB::table('classes')->insertGetId([
             'university_id' => $uniId,
             'program_id' => $programId,
