@@ -10,6 +10,8 @@ use App\Models\Result;
 use App\Services\ResultFinalizationService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
@@ -17,9 +19,14 @@ class ExamSessionReviewController extends Controller
 {
     private const RISK_STATES = ['normal', 'warning', 'suspicious', 'critical', 'locked'];
 
+    /** @var list<string> */
+    private const VIOLATION_EVENT_TYPES = ['tab_switch', 'phone_detected', 'face_missing', 'fullscreen_exit'];
+
     public function index(Request $request, Quiz $exam): View
     {
         $this->authorize('view', $exam);
+
+        $analytics = $this->examAnalyticsSnapshot($exam);
 
         $query = ExamSession::query()
             ->where('exam_id', $exam->id)
@@ -64,7 +71,97 @@ class ExamSessionReviewController extends Controller
             'exam' => $exam,
             'sessions' => $sessions,
             'riskStates' => self::RISK_STATES,
+            'analytics' => $analytics,
         ]);
+    }
+
+    /**
+     * Lightweight aggregates for the session list page (no event bodies, no images).
+     *
+     * @return array{
+     *     total_students:int,
+     *     submitted_count:int,
+     *     held_count:int,
+     *     pending_manual_count:int,
+     *     average_score:?float,
+     *     high_risk_session_count:int,
+     *     risk_distribution: array{normal:int,warning:int,suspicious:int,critical:int},
+     *     violation_totals: array<string,int>,
+     *     flagged_sessions: Collection<int, ExamSession>
+     * }
+     */
+    private function examAnalyticsSnapshot(Quiz $exam): array
+    {
+        $examId = (int) $exam->id;
+
+        $sessionRow = ExamSession::query()
+            ->where('exam_id', $examId)
+            ->selectRaw('COUNT(DISTINCT student_id) as total_students')
+            ->selectRaw("SUM(CASE WHEN status = 'submitted' THEN 1 ELSE 0 END) as submitted_count")
+            ->selectRaw("SUM(CASE WHEN risk_state IN ('suspicious','critical','locked') THEN 1 ELSE 0 END) as high_risk_session_count")
+            ->first();
+
+        $resultRow = Result::query()
+            ->where('quiz_id', $examId)
+            ->selectRaw("SUM(CASE WHEN status = 'held' THEN 1 ELSE 0 END) as held_count")
+            ->selectRaw("SUM(CASE WHEN status = 'pending_manual' THEN 1 ELSE 0 END) as pending_manual_count")
+            ->selectRaw('AVG(score) as average_score')
+            ->first();
+
+        $riskCounts = ExamSession::query()
+            ->where('exam_id', $examId)
+            ->select(['risk_state', DB::raw('COUNT(*) as c')])
+            ->groupBy('risk_state')
+            ->pluck('c', 'risk_state');
+
+        $riskDistribution = [
+            'normal' => (int) ($riskCounts['normal'] ?? 0),
+            'warning' => (int) ($riskCounts['warning'] ?? 0),
+            'suspicious' => (int) ($riskCounts['suspicious'] ?? 0),
+            'critical' => (int) (($riskCounts['critical'] ?? 0) + ($riskCounts['locked'] ?? 0)),
+        ];
+
+        $violationTotals = ProctoringEvent::query()
+            ->where('quiz_id', $examId)
+            ->whereIn('event_type', self::VIOLATION_EVENT_TYPES)
+            ->select(['event_type', DB::raw('COUNT(*) as cnt')])
+            ->groupBy('event_type')
+            ->pluck('cnt', 'event_type');
+
+        $violationTotalsFilled = Collection::make(self::VIOLATION_EVENT_TYPES)
+            ->mapWithKeys(fn (string $type) => [$type => (int) ($violationTotals[$type] ?? 0)])
+            ->all();
+
+        $flaggedSessions = ExamSession::query()
+            ->where('exam_id', $examId)
+            ->where(function ($q) use ($examId): void {
+                $q->whereIn('risk_state', ['suspicious', 'critical', 'locked'])
+                    ->orWhereExists(function (Builder $sub) use ($examId): void {
+                        $sub->from('results')
+                            ->whereColumn('results.user_id', 'exam_sessions.student_id')
+                            ->where('results.quiz_id', $examId)
+                            ->where('results.status', 'held')
+                            ->selectRaw('1');
+                    });
+            })
+            ->with(['student:id,name'])
+            ->orderByDesc('violation_count')
+            ->limit(100)
+            ->get(['id', 'session_id', 'student_id', 'risk_state', 'violation_count']);
+
+        $avg = optional($resultRow)->average_score;
+
+        return [
+            'total_students' => (int) ($sessionRow->total_students ?? 0),
+            'submitted_count' => (int) ($sessionRow->submitted_count ?? 0),
+            'held_count' => (int) (optional($resultRow)->held_count ?? 0),
+            'pending_manual_count' => (int) (optional($resultRow)->pending_manual_count ?? 0),
+            'average_score' => $avg !== null ? round((float) $avg, 2) : null,
+            'high_risk_session_count' => (int) ($sessionRow->high_risk_session_count ?? 0),
+            'risk_distribution' => $riskDistribution,
+            'violation_totals' => $violationTotalsFilled,
+            'flagged_sessions' => $flaggedSessions,
+        ];
     }
 
     public function show(ExamSession $examSession): View

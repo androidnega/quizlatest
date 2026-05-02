@@ -105,6 +105,8 @@ class CoordinatorExamSessionReviewTest extends TestCase
         $this->actingAs($ctx['coord']);
         $this->get(route('coordinator.exams.sessions.index', $ctx['exam']))
             ->assertOk()
+            ->assertSeeText('Exam analytics')
+            ->assertSeeText('Risk distribution')
             ->assertSeeText($ctx['session']->student->name);
     }
 
