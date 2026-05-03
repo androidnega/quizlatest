@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AcademicYear;
+use App\Models\Classroom;
 use App\Models\ExamSession;
 use App\Models\Quiz;
 use App\Models\Result;
@@ -41,6 +43,14 @@ class DashboardController extends Controller
     private function buildStudentDashboardData(User $user): array
     {
         $now = Carbon::now();
+
+        $activeYearId = AcademicYear::activeForUniversity((int) $user->university_id)?->id;
+
+        $classYearOk = true;
+        if ($user->class_id !== null && $activeYearId !== null) {
+            $cid = Classroom::query()->whereKey($user->class_id)->value('academic_year_id');
+            $classYearOk = $cid === null || (int) $cid === (int) $activeYearId;
+        }
 
         $activeSession = ExamSession::query()
             ->where('student_id', $user->id)
@@ -103,11 +113,23 @@ class DashboardController extends Controller
         $gradedCount = Result::query()
             ->where('user_id', $user->id)
             ->where('status', 'graded')
+            ->when($activeYearId !== null, function ($q) use ($activeYearId) {
+                $q->where(function ($q2) use ($activeYearId) {
+                    $q2->whereNull('academic_year_id')
+                        ->orWhere('academic_year_id', $activeYearId);
+                });
+            })
             ->count();
 
         $heldResults = Result::query()
             ->where('user_id', $user->id)
             ->where('status', 'held')
+            ->when($activeYearId !== null, function ($q) use ($activeYearId) {
+                $q->where(function ($q2) use ($activeYearId) {
+                    $q2->whereNull('academic_year_id')
+                        ->orWhere('academic_year_id', $activeYearId);
+                });
+            })
             ->with(['quiz:id,title'])
             ->orderByDesc('id')
             ->limit(5)
@@ -116,6 +138,12 @@ class DashboardController extends Controller
         $pendingManual = Result::query()
             ->where('user_id', $user->id)
             ->where('status', 'pending_manual')
+            ->when($activeYearId !== null, function ($q) use ($activeYearId) {
+                $q->where(function ($q2) use ($activeYearId) {
+                    $q2->whereNull('academic_year_id')
+                        ->orWhere('academic_year_id', $activeYearId);
+                });
+            })
             ->with(['quiz:id,title'])
             ->orderByDesc('id')
             ->limit(5)

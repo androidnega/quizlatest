@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AcademicResetSnapshot;
+use App\Models\AcademicYear;
 use App\Models\ActivityLog;
 use App\Models\Classroom;
 use App\Models\User;
@@ -40,6 +41,13 @@ class AcademicResetFlowTest extends TestCase
         return (int) DB::table('levels')->where('code', '200')->value('id');
     }
 
+    private function activeAcademicYearId(int $universityId): int
+    {
+        $id = AcademicYear::activeForUniversity($universityId)?->id;
+
+        return (int) $id;
+    }
+
     public function test_student_cannot_access_academic_reset(): void
     {
         $this->seed(InitialSetupSeeder::class);
@@ -54,6 +62,9 @@ class AcademicResetFlowTest extends TestCase
         $coord = $this->coordinator();
         $uniId = (int) $coord->university_id;
 
+        $ayId = $this->activeAcademicYearId($uniId);
+        $this->assertGreaterThan(0, $ayId);
+
         $classId = Classroom::query()->create([
             'university_id' => $uniId,
             'program_id' => $this->programId(),
@@ -61,6 +72,7 @@ class AcademicResetFlowTest extends TestCase
             'name' => 'ResetTestClass',
             'section' => null,
             'academic_year' => '2026',
+            'academic_year_id' => $ayId,
             'is_active' => true,
         ])->id;
 
@@ -72,6 +84,7 @@ class AcademicResetFlowTest extends TestCase
         $this->actingAs($coord);
         $response = $this->post(route('coordinator.academic-reset.preview'), [
             'department_id' => $this->departmentId(),
+            'academic_year_id' => $ayId,
             'reset_type' => 'complete',
         ]);
         $response->assertRedirect();
@@ -103,6 +116,7 @@ class AcademicResetFlowTest extends TestCase
 
         $this->actingAs($coord)->post(route('coordinator.academic-reset.preview'), [
             'department_id' => $this->departmentId(),
+            'academic_year_id' => $this->activeAcademicYearId((int) $coord->university_id),
             'reset_type' => 'peace',
         ])->assertRedirect();
 
@@ -126,6 +140,7 @@ class AcademicResetFlowTest extends TestCase
 
         $this->actingAs($coord)->post(route('coordinator.academic-reset.preview'), [
             'department_id' => $this->departmentId(),
+            'academic_year_id' => $this->activeAcademicYearId((int) $coord->university_id),
             'reset_type' => 'peace',
         ])->assertRedirect();
 
@@ -145,6 +160,7 @@ class AcademicResetFlowTest extends TestCase
 
         $this->actingAs($coord)->post(route('coordinator.academic-reset.preview'), [
             'department_id' => $this->departmentId(),
+            'academic_year_id' => $this->activeAcademicYearId((int) $coord->university_id),
             'reset_type' => 'continual',
             'program_ids' => [$this->programId()],
             'level_ids' => [$this->level100Id()],
@@ -175,6 +191,7 @@ class AcademicResetFlowTest extends TestCase
 
         AcademicResetSnapshot::query()->create([
             'department_id' => $this->departmentId(),
+            'academic_year_id' => $this->activeAcademicYearId($uniId),
             'initiated_by' => $this->coordinator()->id,
             'reset_type' => 'complete',
             'payload' => [

@@ -12,6 +12,7 @@ class ClassCourse extends Model
     protected $fillable = [
         'class_id',
         'course_id',
+        'academic_year_id',
         'assigned_by',
     ];
 
@@ -28,5 +29,10 @@ class ClassCourse extends Model
     public function assignedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_by');
+    }
+
+    public function academicYear(): BelongsTo
+    {
+        return $this->belongsTo(AcademicYear::class);
     }
 }

@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Examiner;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicYear;
 use App\Models\Course;
 use App\Models\ExaminerCourseAssignment;
 use App\Models\ExamSection;
 use App\Models\Question;
 use App\Models\Quiz;
+use App\Models\Term;
 use App\Services\ExamAiPromptBuilder;
 use App\Services\ExamAiQuestionGenerator;
 use App\Services\ExamLifecycleService;
@@ -48,14 +50,32 @@ class ExamBuilderController extends Controller
     {
         $this->authorize('viewAny', Quiz::class);
 
+        $user = $request->user();
+        $yearFilter = (int) $request->integer('academic_year_id');
+        if ($yearFilter <= 0) {
+            $yearFilter = (int) (AcademicYear::activeForUniversity((int) $user->university_id)?->id ?? 0);
+        }
+
         $exams = Quiz::query()
             ->whereIn('course_id', $this->manageableCourseIds($request))
-            ->with('course')
+            ->with(['course', 'academicYear'])
+            ->when($yearFilter > 0, function ($q) use ($yearFilter) {
+                $q->where(function ($q2) use ($yearFilter) {
+                    $q2->whereNull('academic_year_id')
+                        ->orWhere('academic_year_id', $yearFilter);
+                });
+            })
             ->orderByDesc('updated_at')
-            ->paginate(15);
+            ->paginate(15)
+            ->withQueryString();
 
         return view('examiner.exams.index', [
             'exams' => $exams,
+            'academicYears' => AcademicYear::query()
+                ->where('university_id', $user->university_id)
+                ->orderByDesc('start_date')
+                ->get(['id', 'name', 'is_active']),
+            'selectedAcademicYearId' => $yearFilter > 0 ? $yearFilter : null,
         ]);
     }
 
@@ -93,8 +113,13 @@ class ExamBuilderController extends Controller
 
         $user = $request->user();
 
+        $activeYear = AcademicYear::activeForUniversity((int) $user->university_id);
+        $activeTerm = $activeYear !== null ? Term::activeForAcademicYear($activeYear->id) : null;
+
         $quiz = Quiz::create([
             'university_id' => $user->university_id,
+            'academic_year_id' => $activeYear?->id,
+            'term_id' => $activeTerm?->id,
             'course_id' => (int) $validated['course_id'],
             'created_by' => $user->id,
             'title' => $validated['title'],

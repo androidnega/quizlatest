@@ -9,6 +9,7 @@ class AcademicResetSnapshot extends Model
 {
     protected $fillable = [
         'department_id',
+        'academic_year_id',
         'initiated_by',
         'reset_type',
         'payload',
@@ -33,6 +34,11 @@ class AcademicResetSnapshot extends Model
     public function initiator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'initiated_by');
+    }
+
+    public function academicYear(): BelongsTo
+    {
+        return $this->belongsTo(AcademicYear::class);
     }
 
     public function isApplied(): bool

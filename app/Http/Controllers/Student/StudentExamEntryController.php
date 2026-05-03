@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicYear;
+use App\Models\Classroom;
 use App\Models\ExamSession;
 use App\Models\Quiz;
 use App\Models\User;
@@ -58,6 +60,19 @@ class StudentExamEntryController extends Controller
     private function assertEligibleForExamPage($user, Quiz $quiz): void
     {
         abort_unless((int) $quiz->university_id === (int) $user->university_id, 403);
+
+        $activeAyId = AcademicYear::activeForUniversity((int) $user->university_id)?->id;
+        if ($quiz->academic_year_id !== null && $activeAyId !== null && (int) $quiz->academic_year_id !== (int) $activeAyId) {
+            abort(403, 'This exam is not offered in the current academic period.');
+        }
+
+        if ($user->class_id !== null && $quiz->academic_year_id !== null) {
+            $classAy = Classroom::query()->whereKey($user->class_id)->value('academic_year_id');
+            if ($classAy !== null && (int) $classAy !== (int) $quiz->academic_year_id) {
+                abort(403, 'Your class is not enrolled for this exam period.');
+            }
+        }
+
         abort_unless($quiz->status === 'published', 403, 'This exam is not available.');
         abort_unless($quiz->isAvailableForStudentToStart(now()), 403, 'This exam is outside its scheduled window.');
 

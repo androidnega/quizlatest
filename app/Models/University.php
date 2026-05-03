@@ -58,4 +58,9 @@ class University extends Model
     {
         return $this->hasMany(User::class);
     }
+
+    public function academicYears(): HasMany
+    {
+        return $this->hasMany(AcademicYear::class);
+    }
 }

@@ -74,6 +74,7 @@ class ClassCourseAssignmentController extends Controller
                 DB::table('class_course')->insert([
                     'class_id' => $classroom->id,
                     'course_id' => $courseId,
+                    'academic_year_id' => $classroom->academic_year_id,
                     'assigned_by' => auth()->id(),
                     'created_at' => now(),
                     'updated_at' => now(),

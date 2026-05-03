@@ -6,18 +6,37 @@
         <p class="text-sm text-qs-muted">{{ __('You have no department assignments.') }}</p>
     @else
         <form method="GET" action="{{ route('coordinator.academic-reset.index') }}" class="mb-8 rounded-xl border border-qs-soft bg-qs-card p-4">
-            <label for="department_id" class="block text-xs font-medium text-qs-muted">{{ __('Department') }}</label>
-            <select name="department_id" id="department_id" class="qs-input mt-2 min-h-[44px] w-full min-w-0 py-2.5 sm:max-w-md"
-                onchange="this.form.submit()">
-                @foreach ($departments as $d)
-                    <option value="{{ $d->id }}" @selected((int) $departmentId === (int) $d->id)>{{ $d->name }}</option>
-                @endforeach
-            </select>
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label for="department_id" class="block text-xs font-medium text-qs-muted">{{ __('Department') }}</label>
+                    <select name="department_id" id="department_id" class="qs-input mt-2 min-h-[44px] w-full min-w-0 py-2.5"
+                        onchange="this.form.submit()">
+                        @foreach ($departments as $d)
+                            <option value="{{ $d->id }}" @selected((int) $departmentId === (int) $d->id)>{{ $d->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                @if ($academicYears->isNotEmpty())
+                    <div>
+                        <label for="academic_year_id" class="block text-xs font-medium text-qs-muted">{{ __('Academic year (scope)') }}</label>
+                        <select name="academic_year_id" id="academic_year_id" class="qs-input mt-2 min-h-[44px] w-full min-w-0 py-2.5"
+                            onchange="this.form.submit()">
+                            @foreach ($academicYears as $ay)
+                                <option value="{{ $ay->id }}" @selected((int) ($scopedAcademicYearId ?? 0) === (int) $ay->id)>
+                                    {{ $ay->name }}{{ $ay->is_active ? ' · '.__('Active') : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                @endif
+            </div>
         </form>
 
         @php($ownsDept = $departments->contains(fn ($d) => (int) $d->id === (int) $departmentId))
 
-        @if (!$ownsDept || !$departmentId)
+        @if ($academicYears->isEmpty())
+            <p class="text-sm text-qs-muted">{{ __('No academic years are configured for your university. Ask an administrator to add one before running a reset.') }}</p>
+        @elseif (!$ownsDept || !$departmentId)
             <p class="text-sm text-qs-muted">{{ __('Select a valid department.') }}</p>
         @else
             <div id="academic-reset-type" class="scroll-mt-24 rounded-xl border border-qs-soft bg-qs-bg p-5">
@@ -25,6 +44,7 @@
                 <form method="POST" action="{{ route('coordinator.academic-reset.preview') }}" class="mt-4 space-y-5">
                     @csrf
                     <input type="hidden" name="department_id" value="{{ (int) $departmentId }}">
+                    <input type="hidden" name="academic_year_id" value="{{ (int) $scopedAcademicYearId }}">
 
                     <div class="space-y-2">
                         @foreach ($resetTypes as $value => $label)
@@ -40,7 +60,7 @@
 
                     <div id="academic-reset-filters" class="scroll-mt-24">
                         <h3 class="text-sm font-semibold text-qs-text">{{ __('2. Filters (partial & continual)') }}</h3>
-                        <p class="mt-1 text-xs text-qs-muted">{{ __('For complete or peace reset, filters are ignored. Partial reset requires at least one filter below.') }}</p>
+                        <p class="mt-1 text-xs text-qs-muted">{{ __('All reset types use the academic year selected above. For complete or peace reset, program/level/class filters are ignored. Partial reset requires at least one filter below.') }}</p>
 
                         <div class="mt-3 grid gap-4 md:grid-cols-3">
                             <div>

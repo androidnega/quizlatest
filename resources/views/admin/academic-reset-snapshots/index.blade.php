@@ -8,6 +8,7 @@
                 <tr>
                     <th class="text-left">ID</th>
                     <th class="text-left">{{ __('Department') }}</th>
+                    <th class="text-left">{{ __('Academic year') }}</th>
                     <th class="text-left">{{ __('Type') }}</th>
                     <th class="text-left">{{ __('Initiator') }}</th>
                     <th class="text-left">{{ __('Classes') }}</th>
@@ -21,6 +22,7 @@
                     <tr>
                         <td class="font-mono text-xs text-qs-text">{{ $row->id }}</td>
                         <td class="text-sm text-qs-text">{{ $row->department?->name }}</td>
+                        <td class="text-sm text-qs-muted">{{ $row->academicYear?->name ?? ($row->summary['academic_year_name'] ?? '—') }}</td>
                         <td class="text-sm text-qs-muted">{{ $row->reset_type }}</td>
                         <td class="text-sm text-qs-muted">{{ $row->initiator?->email }}</td>
                         <td class="text-sm text-qs-text">{{ $row->summary['class_count'] ?? '—' }}</td>
@@ -30,7 +32,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="8" class="px-4 py-10 text-center text-sm text-qs-muted">{{ __('No snapshots yet.') }}</td>
+                        <td colspan="9" class="px-4 py-10 text-center text-sm text-qs-muted">{{ __('No snapshots yet.') }}</td>
                     </tr>
                 @endforelse
             </tbody>

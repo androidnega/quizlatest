@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AcademicResetSnapshot;
+use App\Models\AcademicYear;
 use App\Models\ActivityLog;
 use App\Models\Classroom;
 use App\Models\Department;
@@ -37,9 +38,13 @@ final class AcademicResetService
      *     narrative: list<string>,
      * }
      */
-    public function computeFrozenSets(User $coordinator, int $departmentId, string $resetType, array $filters): array
+    public function computeFrozenSets(User $coordinator, int $departmentId, string $resetType, array $filters, int $academicYearId): array
     {
         $this->assertOwnsDepartment($coordinator, $departmentId);
+
+        $year = AcademicYear::query()->find($academicYearId);
+        abort_if($year === null, 422, 'Invalid academic year.');
+        abort_unless((int) $year->university_id === (int) $coordinator->university_id, 422, 'Academic year does not belong to your institution.');
 
         $programIdsInDept = Program::query()
             ->where('department_id', $departmentId)
@@ -49,10 +54,10 @@ final class AcademicResetService
             ->all();
 
         return match ($resetType) {
-            self::TYPE_COMPLETE => $this->freezeComplete($programIdsInDept),
-            self::TYPE_PARTIAL => $this->freezePartial($programIdsInDept, $filters),
-            self::TYPE_PEACE => $this->freezePeace($programIdsInDept),
-            self::TYPE_CONTINUAL => $this->freezeContinualStudents($programIdsInDept, $filters),
+            self::TYPE_COMPLETE => $this->freezeComplete($programIdsInDept, $academicYearId),
+            self::TYPE_PARTIAL => $this->freezePartial($programIdsInDept, $filters, $academicYearId),
+            self::TYPE_PEACE => $this->freezePeace($programIdsInDept, $academicYearId),
+            self::TYPE_CONTINUAL => $this->freezeContinualStudents($programIdsInDept, $filters, $academicYearId),
             default => throw new \InvalidArgumentException('Invalid reset type.'),
         };
     }
@@ -130,10 +135,11 @@ final class AcademicResetService
      * @param  list<int>  $programIdsInDept
      * @return array{frozen_class_ids: list<int>, frozen_student_ids: list<int>, frozen_program_ids: list<int>, frozen_level_ids: list<int>, narrative: list<string>}
      */
-    private function freezeComplete(array $programIdsInDept): array
+    private function freezeComplete(array $programIdsInDept, int $academicYearId): array
     {
         $classIds = Classroom::query()
             ->whereIn('program_id', $programIdsInDept)
+            ->where('academic_year_id', $academicYearId)
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->values()
@@ -153,7 +159,7 @@ final class AcademicResetService
             'frozen_program_ids' => $programIdsInDept,
             'frozen_level_ids' => [],
             'narrative' => [
-                'Deactivate all classes in this department\'s programs.',
+                'Deactivate all classes in this department\'s programs for the selected academic year.',
                 'Clear class assignment for all students in those programs (students are not deleted).',
                 'Exams, results, sessions, and logs are not modified.',
             ],
@@ -164,7 +170,7 @@ final class AcademicResetService
      * @param  list<int>  $programIdsInDept
      * @param  array{program_ids?: list<int>, level_ids?: list<int>, class_ids?: list<int>}  $filters
      */
-    private function freezePartial(array $programIdsInDept, array $filters): array
+    private function freezePartial(array $programIdsInDept, array $filters, int $academicYearId): array
     {
         $classIdsFilter = array_values(array_unique(array_map('intval', $filters['class_ids'] ?? [])));
         $rawProgramFilter = array_values(array_unique(array_map('intval', $filters['program_ids'] ?? [])));
@@ -187,6 +193,7 @@ final class AcademicResetService
             $validClassIds = Classroom::query()
                 ->whereIn('id', $classIdsFilter)
                 ->whereIn('program_id', $programIdsInDept)
+                ->where('academic_year_id', $academicYearId)
                 ->pluck('id')
                 ->map(fn ($id) => (int) $id)
                 ->sort()
@@ -201,7 +208,9 @@ final class AcademicResetService
             );
         }
 
-        $query = Classroom::query()->whereIn('program_id', $programIdsInDept);
+        $query = Classroom::query()
+            ->whereIn('program_id', $programIdsInDept)
+            ->where('academic_year_id', $academicYearId);
 
         if ($classIdsFilter !== []) {
             $query->whereIn('id', $classIdsFilter);
@@ -246,33 +255,24 @@ final class AcademicResetService
     /**
      * @param  list<int>  $programIdsInDept
      */
-    private function freezePeace(array $programIdsInDept): array
+    private function freezePeace(array $programIdsInDept, int $academicYearId): array
     {
-        $currentYear = (int) Carbon::now()->year;
-
-        $candidates = Classroom::query()
+        $classIds = Classroom::query()
             ->whereIn('program_id', $programIdsInDept)
-            ->whereNotNull('academic_year')
-            ->get(['id', 'academic_year']);
-
-        $classIds = [];
-        foreach ($candidates as $row) {
-            $ay = (string) $row->academic_year;
-            if (preg_match('/(\d{4})/', $ay, $m)) {
-                $startYear = (int) $m[1];
-                if ($startYear < $currentYear) {
-                    $classIds[] = (int) $row->id;
-                }
-            }
-        }
+            ->where('academic_year_id', $academicYearId)
+            ->whereHas('academicYearStruct', fn ($q) => $q->whereDate('end_date', '<', Carbon::now()->startOfDay()))
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
 
         return [
-            'frozen_class_ids' => array_values(array_unique($classIds)),
+            'frozen_class_ids' => $classIds,
             'frozen_student_ids' => [],
             'frozen_program_ids' => [],
             'frozen_level_ids' => [],
             'narrative' => [
-                'Soft cleanup: deactivate classes whose academic year starts before the current calendar year.',
+                'Soft cleanup: deactivate classes in this academic year whose structured end date is already past.',
                 'Student class assignments are preserved.',
                 'No exam data is removed.',
             ],
@@ -283,13 +283,17 @@ final class AcademicResetService
      * @param  list<int>  $programIdsInDept
      * @param  array{program_ids?: list<int>, level_ids?: list<int>, class_ids?: list<int>}  $filters
      */
-    private function freezeContinualStudents(array $programIdsInDept, array $filters): array
+    private function freezeContinualStudents(array $programIdsInDept, array $filters, int $academicYearId): array
     {
         $classIdsFilter = array_map('intval', $filters['class_ids'] ?? []);
         $programFilter = array_values(array_intersect(array_map('intval', $filters['program_ids'] ?? []), $programIdsInDept));
         $levelFilter = array_map('intval', $filters['level_ids'] ?? []);
 
-        $q = User::query()->where('role', 'student')->whereIn('program_id', $programIdsInDept);
+        $q = User::query()->where('role', 'student')->whereIn('program_id', $programIdsInDept)
+            ->where(function ($q2) use ($academicYearId) {
+                $q2->whereNull('class_id')
+                    ->orWhereHas('classroom', fn ($c) => $c->where('academic_year_id', $academicYearId));
+            });
 
         if ($classIdsFilter !== []) {
             $q->whereIn('class_id', $classIdsFilter);
@@ -304,7 +308,9 @@ final class AcademicResetService
 
         $studentIds = $q->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
 
-        $classScope = Classroom::query()->whereIn('program_id', $programIdsInDept);
+        $classScope = Classroom::query()
+            ->whereIn('program_id', $programIdsInDept)
+            ->where('academic_year_id', $academicYearId);
         if ($classIdsFilter !== []) {
             $classScope->whereIn('id', $classIdsFilter);
         } else {

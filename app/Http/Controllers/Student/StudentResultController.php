@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicYear;
 use App\Models\ExamSession;
 use App\Models\Result;
 use App\Support\StudentExamResultBreakdown;
@@ -17,10 +18,21 @@ class StudentResultController extends Controller
     {
         $user = auth()->user();
 
+        $yearFilter = (int) request()->integer('academic_year_id');
+        $activeYearId = AcademicYear::activeForUniversity((int) $user->university_id)?->id;
+
         $sessions = ExamSession::query()
             ->where('student_id', $user->id)
             ->where('status', 'submitted')
-            ->with(['exam:id,title,total_marks'])
+            ->with(['exam:id,title,total_marks,academic_year_id'])
+            ->when($yearFilter > 0, function ($q) use ($yearFilter) {
+                $q->whereHas('exam', function ($eq) use ($yearFilter) {
+                    $eq->where(function ($q2) use ($yearFilter) {
+                        $q2->whereNull('academic_year_id')
+                            ->orWhere('academic_year_id', $yearFilter);
+                    });
+                });
+            })
             ->orderByDesc('end_time')
             ->orderByDesc('id')
             ->get();
@@ -38,6 +50,12 @@ class StudentResultController extends Controller
 
         return view('student.results.index', [
             'sessions' => $sessions,
+            'academicYears' => AcademicYear::query()
+                ->where('university_id', $user->university_id)
+                ->orderByDesc('start_date')
+                ->get(['id', 'name', 'is_active']),
+            'selectedAcademicYearId' => $yearFilter > 0 ? $yearFilter : null,
+            'activeAcademicYearId' => $activeYearId,
         ]);
     }
 

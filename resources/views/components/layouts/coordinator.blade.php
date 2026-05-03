@@ -110,6 +110,9 @@
                         @isset($subtitle)
                             <p class="truncate text-xs text-qs-muted">{{ $subtitle }}</p>
                         @endisset
+                        @isset($staffAcademicPeriodBadge)
+                            <p class="truncate text-[11px] font-medium text-qs-text">{{ __('Active period') }}: {{ $staffAcademicPeriodBadge }}</p>
+                        @endisset
                     </div>
                     <form method="POST" action="{{ route('logout') }}" class="shrink-0">
                         @csrf
@@ -123,6 +126,9 @@
                             <h2 class="text-2xl font-semibold text-qs-text">{{ $title ?? __('Coordinator Dashboard') }}</h2>
                             @isset($subtitle)
                                 <p class="text-sm text-qs-muted">{{ $subtitle }}</p>
+                            @endisset
+                            @isset($staffAcademicPeriodBadge)
+                                <p class="mt-1 text-xs font-medium text-qs-text">{{ __('Active period') }}: {{ $staffAcademicPeriodBadge }}</p>
                             @endisset
                         </div>
 

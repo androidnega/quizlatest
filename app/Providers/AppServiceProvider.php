@@ -2,12 +2,14 @@
 
 namespace App\Providers;
 
+use App\Models\AcademicYear;
 use App\Models\Classroom;
 use App\Models\Course;
 use App\Models\ExamSession;
 use App\Models\Level;
 use App\Models\Program;
 use App\Models\Quiz;
+use App\Models\Term;
 use App\Models\University;
 use App\Models\User;
 use App\Policies\ClassroomPolicy;
@@ -19,6 +21,7 @@ use App\Policies\ProgramPolicy;
 use App\Policies\UniversityPolicy;
 use App\Policies\UserPolicy;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -58,5 +61,16 @@ class AppServiceProvider extends ServiceProvider
             'manageSystemSettings',
             fn (User $user): bool => $userPolicy->manageSystemSettings($user),
         );
+
+        View::composer('components.layouts.coordinator', function ($view): void {
+            $user = auth()->user();
+            if ($user === null || $user->university_id === null) {
+                return;
+            }
+            $year = AcademicYear::activeForUniversity((int) $user->university_id);
+            $term = $year !== null ? Term::activeForAcademicYear($year->id) : null;
+            $badge = $year !== null ? trim($year->name.($term !== null ? ' · '.$term->name : '')) : null;
+            $view->with('staffAcademicPeriodBadge', $badge);
+        });
     }
 }

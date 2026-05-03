@@ -13,6 +13,10 @@
                     <dd class="mt-0.5 font-medium text-qs-text">{{ $s['department_name'] ?? $snapshot->department?->name }}</dd>
                 </div>
                 <div class="rounded-lg border border-qs-soft bg-qs-bg px-3 py-2">
+                    <dt class="text-qs-muted">{{ __('Academic year') }}</dt>
+                    <dd class="mt-0.5 font-medium text-qs-text">{{ $s['academic_year_name'] ?? $snapshot->academicYear?->name ?? '—' }}</dd>
+                </div>
+                <div class="rounded-lg border border-qs-soft bg-qs-bg px-3 py-2">
                     <dt class="text-qs-muted">{{ __('Reset type') }}</dt>
                     <dd class="mt-0.5 font-medium text-qs-text">{{ $snapshot->reset_type }}</dd>
                 </div>

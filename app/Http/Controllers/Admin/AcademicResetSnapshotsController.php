@@ -14,7 +14,7 @@ class AcademicResetSnapshotsController extends Controller
         abort_unless($request->user()?->role === 'admin', 403);
 
         $snapshots = AcademicResetSnapshot::query()
-            ->with(['department', 'initiator'])
+            ->with(['department', 'initiator', 'academicYear'])
             ->orderByDesc('created_at')
             ->paginate(25);
 

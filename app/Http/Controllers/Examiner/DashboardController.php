@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Examiner;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicYear;
 use App\Models\Course;
 use App\Models\ExaminerCourseAssignment;
 use App\Models\ExamSession;
@@ -29,25 +30,60 @@ class DashboardController extends Controller
             ->orderBy('title')
             ->get(['id', 'title', 'code']);
 
+        $yearFilter = (int) $request->integer('academic_year_id');
+        if ($yearFilter <= 0) {
+            $yearFilter = (int) (AcademicYear::activeForUniversity((int) $user->university_id)?->id ?? 0);
+        }
+
         $examQuery = Quiz::query()->whereIn('course_id', $manageableCourseIds);
+        if ($yearFilter > 0) {
+            $examQuery->where(function ($q) use ($yearFilter) {
+                $q->whereNull('academic_year_id')
+                    ->orWhere('academic_year_id', $yearFilter);
+            });
+        }
 
         $draftExamCount = (clone $examQuery)->where('status', 'draft')->count();
         $publishedExamCount = (clone $examQuery)->where('status', 'published')->count();
 
         $heldResultsCount = Result::query()
             ->where('status', 'held')
-            ->whereHas('quiz', fn ($q) => $q->whereIn('course_id', $manageableCourseIds))
+            ->whereHas('quiz', function ($q) use ($manageableCourseIds, $yearFilter) {
+                $q->whereIn('course_id', $manageableCourseIds);
+                if ($yearFilter > 0) {
+                    $q->where(function ($q2) use ($yearFilter) {
+                        $q2->whereNull('academic_year_id')
+                            ->orWhere('academic_year_id', $yearFilter);
+                    });
+                }
+            })
             ->count();
 
         $pendingManualGradingCount = ExamSessionAnswer::query()
             ->where('evaluation_status', 'pending_manual')
             ->whereHas('question', fn ($q) => $q->where('type', 'essay'))
-            ->whereHas('examSession.exam', fn ($q) => $q->whereIn('course_id', $manageableCourseIds))
+            ->whereHas('examSession.exam', function ($q) use ($manageableCourseIds, $yearFilter) {
+                $q->whereIn('course_id', $manageableCourseIds);
+                if ($yearFilter > 0) {
+                    $q->where(function ($q2) use ($yearFilter) {
+                        $q2->whereNull('academic_year_id')
+                            ->orWhere('academic_year_id', $yearFilter);
+                    });
+                }
+            })
             ->count();
 
         $flaggedSessions = ExamSession::query()
             ->where('status', 'flagged')
-            ->whereHas('exam', fn ($q) => $q->whereIn('course_id', $manageableCourseIds))
+            ->whereHas('exam', function ($q) use ($manageableCourseIds, $yearFilter) {
+                $q->whereIn('course_id', $manageableCourseIds);
+                if ($yearFilter > 0) {
+                    $q->where(function ($q2) use ($yearFilter) {
+                        $q2->whereNull('academic_year_id')
+                            ->orWhere('academic_year_id', $yearFilter);
+                    });
+                }
+            })
             ->with([
                 'exam:id,title,course_id',
                 'exam.course:id,code,title',
@@ -59,6 +95,11 @@ class DashboardController extends Controller
 
         return view('examiner.dashboard', [
             'assignedCourses' => $assignedCourses,
+            'academicYears' => AcademicYear::query()
+                ->where('university_id', $user->university_id)
+                ->orderByDesc('start_date')
+                ->get(['id', 'name', 'is_active']),
+            'selectedAcademicYearId' => $yearFilter > 0 ? $yearFilter : null,
             'draftExamCount' => $draftExamCount,
             'publishedExamCount' => $publishedExamCount,
             'heldResultsCount' => $heldResultsCount,

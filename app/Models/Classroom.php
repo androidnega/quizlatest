@@ -18,6 +18,7 @@ class Classroom extends Model
         'name',
         'section',
         'academic_year',
+        'academic_year_id',
         'is_active',
     ];
 
@@ -48,5 +49,10 @@ class Classroom extends Model
     public function classCourses(): HasMany
     {
         return $this->hasMany(ClassCourse::class, 'class_id');
+    }
+
+    public function academicYearStruct(): BelongsTo
+    {
+        return $this->belongsTo(AcademicYear::class, 'academic_year_id');
     }
 }

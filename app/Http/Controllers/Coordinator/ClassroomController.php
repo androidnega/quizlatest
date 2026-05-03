@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Coordinator;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicYear;
 use App\Models\Classroom;
 use App\Models\Level;
 use App\Models\Program;
@@ -64,13 +65,16 @@ class ClassroomController extends Controller
             ],
         ]);
 
+        $activeYear = AcademicYear::activeForUniversity((int) auth()->user()->university_id);
+
         Classroom::create([
             'university_id' => auth()->user()->university_id,
             'program_id' => $programId,
             'level_id' => $levelId,
             'name' => $validated['name'],
             'section' => null,
-            'academic_year' => null,
+            'academic_year' => $activeYear?->name,
+            'academic_year_id' => $activeYear?->id,
             'is_active' => $request->boolean('is_active', true),
         ]);
 

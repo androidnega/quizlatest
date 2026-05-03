@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AcademicResetSnapshotsController;
+use App\Http\Controllers\Admin\AcademicYearController;
 use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\CoordinatorController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
@@ -119,6 +120,14 @@ Route::prefix('admin')
         Route::post('/settings/unlock', [AdminSettingsController::class, 'unlock'])->name('settings.unlock');
 
         Route::get('/academic-reset-snapshots', [AcademicResetSnapshotsController::class, 'index'])->name('academic-reset-snapshots.index');
+
+        Route::get('/academic-years', [AcademicYearController::class, 'index'])->name('academic-years.index');
+        Route::get('/academic-years/create', [AcademicYearController::class, 'create'])->name('academic-years.create');
+        Route::post('/academic-years', [AcademicYearController::class, 'store'])->name('academic-years.store');
+        Route::get('/academic-years/{academic_year}/edit', [AcademicYearController::class, 'edit'])->name('academic-years.edit');
+        Route::put('/academic-years/{academic_year}', [AcademicYearController::class, 'update'])->name('academic-years.update');
+        Route::post('/academic-years/{academic_year}/terms', [AcademicYearController::class, 'storeTerm'])->name('academic-years.terms.store');
+        Route::put('/academic-years/{academic_year}/terms/{term}', [AcademicYearController::class, 'updateTerm'])->name('academic-years.terms.update');
     });
 
 Route::prefix('coordinator')

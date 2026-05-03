@@ -22,6 +22,8 @@ class ResultFinalizationService
         $total = $this->sumPoints($examSession);
         $status = $this->resolveStatus($examSession);
 
+        $examSession->loadMissing('exam');
+
         Result::query()->updateOrCreate(
             [
                 'user_id' => $examSession->student_id,
@@ -34,6 +36,8 @@ class ResultFinalizationService
                 'exam_status' => $examSession->exam_status,
                 'review_note' => $reviewNote,
                 'submitted_at' => now(),
+                'academic_year_id' => $examSession->exam?->academic_year_id,
+                'term_id' => $examSession->exam?->term_id,
             ],
         );
     }
@@ -43,7 +47,7 @@ class ResultFinalizationService
      */
     public function refreshResultFromSessionState(ExamSession $examSession, ?User $gradedBy = null): void
     {
-        $examSession->load(['answers']);
+        $examSession->load(['answers', 'exam']);
 
         $total = $this->sumPoints($examSession);
         $status = $this->resolveStatus($examSession);
@@ -57,6 +61,8 @@ class ResultFinalizationService
             'score' => round($total, 2),
             'status' => $status,
             'exam_status' => $examSession->exam_status,
+            'academic_year_id' => $examSession->exam?->academic_year_id,
+            'term_id' => $examSession->exam?->term_id,
         ];
 
         if ($status === 'graded' && $gradedBy !== null) {

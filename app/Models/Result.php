@@ -10,6 +10,8 @@ class Result extends Model
     protected $fillable = [
         'user_id',
         'quiz_id',
+        'academic_year_id',
+        'term_id',
         'score',
         'time_taken',
         'status',
@@ -36,6 +38,16 @@ class Result extends Model
     public function quiz(): BelongsTo
     {
         return $this->belongsTo(Quiz::class);
+    }
+
+    public function academicYear(): BelongsTo
+    {
+        return $this->belongsTo(AcademicYear::class);
+    }
+
+    public function term(): BelongsTo
+    {
+        return $this->belongsTo(Term::class);
     }
 
     public function grader(): BelongsTo

@@ -11,6 +11,8 @@ class Quiz extends Model
 {
     protected $fillable = [
         'university_id',
+        'academic_year_id',
+        'term_id',
         'course_id',
         'created_by',
         'title',
@@ -40,6 +42,16 @@ class Quiz extends Model
     public function university(): BelongsTo
     {
         return $this->belongsTo(University::class);
+    }
+
+    public function academicYear(): BelongsTo
+    {
+        return $this->belongsTo(AcademicYear::class);
+    }
+
+    public function term(): BelongsTo
+    {
+        return $this->belongsTo(Term::class);
     }
 
     public function course(): BelongsTo

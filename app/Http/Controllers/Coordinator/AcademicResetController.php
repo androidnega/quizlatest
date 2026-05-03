@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Coordinator;
 
 use App\Http\Controllers\Controller;
 use App\Models\AcademicResetSnapshot;
+use App\Models\AcademicYear;
 use App\Models\Classroom;
 use App\Models\Department;
 use App\Models\Level;
@@ -32,6 +33,19 @@ class AcademicResetController extends Controller
 
         $departmentId = (int) $request->integer('department_id') ?: $departments->first()?->id;
 
+        $academicYears = AcademicYear::query()
+            ->where('university_id', $user->university_id)
+            ->orderByDesc('start_date')
+            ->get(['id', 'name', 'is_active']);
+
+        $ayScope = (int) $request->integer('academic_year_id');
+        if ($ayScope <= 0) {
+            $ayScope = (int) (AcademicYear::activeForUniversity((int) $user->university_id)?->id ?? 0);
+        }
+        if ($ayScope <= 0 && $academicYears->isNotEmpty()) {
+            $ayScope = (int) $academicYears->first()->id;
+        }
+
         $programs = collect();
         $levels = collect();
         $classes = collect();
@@ -49,6 +63,12 @@ class AcademicResetController extends Controller
 
             $classes = Classroom::query()
                 ->whereIn('program_id', $programs->pluck('id'))
+                ->when($ayScope > 0, function ($q) use ($ayScope) {
+                    $q->where(function ($q2) use ($ayScope) {
+                        $q2->whereNull('academic_year_id')
+                            ->orWhere('academic_year_id', $ayScope);
+                    });
+                })
                 ->with(['program', 'level'])
                 ->orderBy('name')
                 ->get();
@@ -57,14 +77,16 @@ class AcademicResetController extends Controller
         return view('coordinator.academic-reset.index', [
             'departments' => $departments,
             'departmentId' => $departmentId,
+            'academicYears' => $academicYears,
+            'scopedAcademicYearId' => $ayScope > 0 ? $ayScope : null,
             'programs' => $programs,
             'levels' => $levels,
             'classes' => $classes,
             'resetTypes' => [
-                AcademicResetService::TYPE_COMPLETE => 'Complete reset — deactivate all classes in department programs; clear student class assignments.',
-                AcademicResetService::TYPE_PARTIAL => 'Partial reset — chosen programs / levels / classes only.',
-                AcademicResetService::TYPE_PEACE => 'Peace reset — deactivate classes with academic year before current calendar year only.',
-                AcademicResetService::TYPE_CONTINUAL => 'Continual reset — promote students to next level; final level becomes inactive.',
+                AcademicResetService::TYPE_COMPLETE => 'Complete reset — deactivate all classes in department programs for the selected academic year; clear student class assignments.',
+                AcademicResetService::TYPE_PARTIAL => 'Partial reset — chosen programs / levels / classes only (within the selected academic year).',
+                AcademicResetService::TYPE_PEACE => 'Peace reset — deactivate classes in the selected academic year whose end date is already past.',
+                AcademicResetService::TYPE_CONTINUAL => 'Continual reset — promote students to next level; final level becomes inactive (scoped to the selected academic year).',
             ],
         ]);
     }
@@ -76,6 +98,7 @@ class AcademicResetController extends Controller
 
         $validated = $request->validate([
             'department_id' => ['required', 'integer', 'exists:departments,id'],
+            'academic_year_id' => ['required', 'integer', 'exists:academic_years,id'],
             'reset_type' => ['required', 'string', 'in:complete,partial,peace,continual'],
             'program_ids' => ['nullable', 'array'],
             'program_ids.*' => ['integer'],
@@ -90,6 +113,9 @@ class AcademicResetController extends Controller
         $this->authorizeDepartment($user, $departmentId);
 
         $department = AcademicResetService::validateDepartmentExists($departmentId);
+
+        $academicYear = AcademicYear::query()->findOrFail((int) $validated['academic_year_id']);
+        abort_unless((int) $academicYear->university_id === (int) $user->university_id, 422, 'Invalid academic year.');
 
         $filters = [
             'program_ids' => array_map('intval', $validated['program_ids'] ?? []),
@@ -121,6 +147,10 @@ class AcademicResetController extends Controller
         if (($filters['class_ids'] ?? []) !== []) {
             $allowedClassIds = Classroom::query()
                 ->whereIn('program_id', $validProgramIds)
+                ->where(function ($q) use ($academicYear) {
+                    $q->whereNull('academic_year_id')
+                        ->orWhere('academic_year_id', $academicYear->id);
+                })
                 ->pluck('id')
                 ->map(fn ($id) => (int) $id)
                 ->all();
@@ -134,9 +164,11 @@ class AcademicResetController extends Controller
             $departmentId,
             $validated['reset_type'],
             $filters,
+            (int) $academicYear->id,
         );
 
         $payload = [
+            'academic_year_id' => (int) $academicYear->id,
             'reset_type' => $validated['reset_type'],
             'filters' => [
                 'program_ids' => $filters['program_ids'],
@@ -155,16 +187,22 @@ class AcademicResetController extends Controller
         $summary = [
             'department_id' => $departmentId,
             'department_name' => $department->name,
+            'academic_year_id' => (int) $academicYear->id,
+            'academic_year_name' => $academicYear->name,
             'class_count' => count($frozen['frozen_class_ids']),
             'student_count' => count($frozen['frozen_student_ids']),
             'program_count' => count(array_unique($frozen['frozen_program_ids'])),
             'level_count' => count(array_unique($frozen['frozen_level_ids'])),
-            'narrative' => $frozen['narrative'],
+            'narrative' => array_merge(
+                [sprintf('Academic year: %s.', $academicYear->name)],
+                $frozen['narrative'],
+            ),
             'previewed_at' => now()->toISOString(),
         ];
 
         $snapshot = AcademicResetSnapshot::query()->create([
             'department_id' => $departmentId,
+            'academic_year_id' => (int) $academicYear->id,
             'initiated_by' => $user->id,
             'reset_type' => $validated['reset_type'],
             'payload' => $payload,
@@ -190,7 +228,7 @@ class AcademicResetController extends Controller
         }
 
         return view('coordinator.academic-reset.review', [
-            'snapshot' => $snapshot->load(['department', 'initiator']),
+            'snapshot' => $snapshot->load(['department', 'initiator', 'academicYear']),
         ]);
     }
 

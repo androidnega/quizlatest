@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicYear;
 use App\Models\University;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -38,12 +39,14 @@ class UniversityController extends Controller
             'settings' => ['nullable', 'json'],
         ]);
 
-        University::create([
+        $university = University::create([
             'name' => $validated['name'],
             'code' => $validated['code'] ?? null,
             'is_active' => $request->boolean('is_active'),
             'settings' => isset($validated['settings']) ? json_decode($validated['settings'], true, 512, JSON_THROW_ON_ERROR) : null,
         ]);
+
+        AcademicYear::bootstrapDefaultForUniversity((int) $university->id);
 
         return redirect()->route('admin.universities.index')->with('status', 'University created successfully.');
     }

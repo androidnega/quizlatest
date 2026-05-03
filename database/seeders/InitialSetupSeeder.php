@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\AcademicYear;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -249,5 +250,7 @@ class InitialSetupSeeder extends Seeder
                 'updated_at' => $now,
             ]);
         }
+
+        AcademicYear::bootstrapDefaultForUniversity($universityId);
     }
 }
