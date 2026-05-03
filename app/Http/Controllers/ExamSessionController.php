@@ -25,6 +25,7 @@ use App\Support\ProctoringCapabilityResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class ExamSessionController extends Controller
@@ -250,11 +251,19 @@ class ExamSessionController extends Controller
             'metadata.exam_id' => ['required', 'integer'],
         ]);
 
-        abort_unless($validated['metadata']['session_id'] === $examSession->session_id, 422, 'session_id mismatch.');
-        abort_unless((int) $validated['metadata']['student_id'] === (int) $examSession->student_id, 422, 'student_id mismatch.');
-        abort_unless((int) $validated['metadata']['exam_id'] === (int) $examSession->exam_id, 422, 'exam_id mismatch.');
+        /** @var array<string, mixed> $metadata */
+        $metadata = $request->input('metadata', []);
+        abort_unless(is_array($metadata), 422, 'Invalid metadata.');
 
-        if (! $this->examPolicy->isProctoringEnabled()) {
+        abort_unless($metadata['session_id'] === $examSession->session_id, 422, 'session_id mismatch.');
+        abort_unless((int) $metadata['student_id'] === (int) $examSession->student_id, 422, 'student_id mismatch.');
+        abort_unless((int) $metadata['exam_id'] === (int) $examSession->exam_id, 422, 'exam_id mismatch.');
+
+        if (($validated['event_type'] ?? '') === 'essay_clipboard_attempt') {
+            $this->validateEssayClipboardAttemptMetadata($metadata);
+        }
+
+        if (! $this->allowsProctoringEventIngest((string) $validated['event_type'])) {
             return response()->json([
                 'status' => 'ignored',
                 'reason' => 'proctoring_disabled',
@@ -266,7 +275,7 @@ class ExamSessionController extends Controller
         $decision = $this->orchestrator->ingestEvent(
             examSession: $examSession,
             eventType: $validated['event_type'],
-            metadata: $validated['metadata'],
+            metadata: $metadata,
             severity: $validated['severity'] ?? null,
             flagged: (bool) ($validated['flagged'] ?? false),
         );
@@ -298,7 +307,7 @@ class ExamSessionController extends Controller
 
         $payload = $this->decodeProctoringBatchPayload($request);
 
-        $validated = validator($payload, [
+        validator($payload, [
             'events' => ['required', 'array', 'min:1', 'max:25'],
             'events.*.event_type' => ['required', 'string', 'max:100'],
             'events.*.severity' => ['nullable', 'integer', 'min:1', 'max:5'],
@@ -309,7 +318,15 @@ class ExamSessionController extends Controller
             'events.*.metadata.exam_id' => ['required', 'integer'],
         ])->validate();
 
-        if (! $this->examPolicy->isProctoringEnabled()) {
+        /** @var list<array<string, mixed>> $events */
+        $events = $payload['events'];
+
+        $eventsToProcess = array_values(array_filter(
+            $events,
+            fn (array $e): bool => $this->allowsProctoringEventIngest((string) ($e['event_type'] ?? '')),
+        ));
+
+        if ($eventsToProcess === []) {
             return response()->json([
                 'status' => 'ignored',
                 'reason' => 'proctoring_disabled',
@@ -317,12 +334,16 @@ class ExamSessionController extends Controller
             ]);
         }
 
-        $this->examRedis->enforceProctoringEventBudget($examSession->session_id, count($validated['events']));
+        $this->examRedis->enforceProctoringEventBudget($examSession->session_id, count($eventsToProcess));
 
-        foreach ($validated['events'] as $eventPayload) {
+        foreach ($eventsToProcess as $eventPayload) {
             abort_unless($eventPayload['metadata']['session_id'] === $examSession->session_id, 422, 'session_id mismatch.');
             abort_unless((int) $eventPayload['metadata']['student_id'] === (int) $examSession->student_id, 422, 'student_id mismatch.');
             abort_unless((int) $eventPayload['metadata']['exam_id'] === (int) $examSession->exam_id, 422, 'exam_id mismatch.');
+
+            if (($eventPayload['event_type'] ?? '') === 'essay_clipboard_attempt') {
+                $this->validateEssayClipboardAttemptMetadata($eventPayload['metadata']);
+            }
 
             $decision = $this->orchestrator->ingestEvent(
                 examSession: $examSession->fresh(),
@@ -348,10 +369,30 @@ class ExamSessionController extends Controller
 
         return response()->json([
             'status' => 'logged',
-            'processed' => count($validated['events']),
+            'processed' => count($eventsToProcess),
             'violation_score' => $examSession->violation_score,
             'risk_state' => $examSession->risk_state,
         ]);
+    }
+
+    /**
+     * Essay clipboard audits are accepted even when institution proctoring is off (log-only scoring via violation_weights).
+     */
+    private function allowsProctoringEventIngest(string $eventType): bool
+    {
+        return $this->examPolicy->isProctoringEnabled()
+            || $eventType === 'essay_clipboard_attempt';
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
+    private function validateEssayClipboardAttemptMetadata(array $metadata): void
+    {
+        validator($metadata, [
+            'question_id' => ['required', 'integer'],
+            'action_type' => ['required', 'string', Rule::in(['paste', 'copy', 'cut', 'drop', 'contextmenu'])],
+        ])->validate();
     }
 
     public function submit(Request $request, ExamSession $examSession): JsonResponse

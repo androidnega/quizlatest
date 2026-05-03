@@ -10,7 +10,6 @@
         </testsuite>
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
-            <exclude>tests/Feature/ExamEssayClipboardProctoringTest.php</exclude>
         </testsuite>
     </testsuites>
     <source>
