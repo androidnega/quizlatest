@@ -2,7 +2,15 @@
     <x-slot name="title">Exam builder</x-slot>
     <x-slot name="subtitle">{{ $exam->title }}</x-slot>
 
-    <div class="mb-6 flex flex-wrap gap-3 text-sm text-qs-muted">
+    <nav class="sticky top-0 z-10 mb-6 flex gap-2 overflow-x-auto rounded-xl border border-qs-soft bg-qs-bg px-3 py-2 shadow-sm sm:static sm:z-auto sm:flex-wrap sm:overflow-visible sm:shadow-none md:bg-transparent md:border-0 md:px-0 md:py-0" aria-label="Exam builder sections">
+        <a href="#builder-status" class="inline-flex shrink-0 items-center rounded-lg border border-qs-soft bg-qs-card px-3 py-2 text-xs font-semibold text-qs-text hover:bg-qs-soft min-h-[44px]">{{ __('Status') }}</a>
+        <a href="#builder-schedule" class="inline-flex shrink-0 items-center rounded-lg border border-qs-soft bg-qs-card px-3 py-2 text-xs font-semibold text-qs-text hover:bg-qs-soft min-h-[44px]">{{ __('Schedule') }}</a>
+        <a href="#builder-delivery" class="inline-flex shrink-0 items-center rounded-lg border border-qs-soft bg-qs-card px-3 py-2 text-xs font-semibold text-qs-text hover:bg-qs-soft min-h-[44px]">{{ __('Delivery') }}</a>
+        <a href="#builder-import-ai" class="inline-flex shrink-0 items-center rounded-lg border border-qs-soft bg-qs-card px-3 py-2 text-xs font-semibold text-qs-text hover:bg-qs-soft min-h-[44px]">{{ __('Import / AI') }}</a>
+        <a href="#builder-sections" class="inline-flex shrink-0 items-center rounded-lg border border-qs-soft bg-qs-card px-3 py-2 text-xs font-semibold text-qs-text hover:bg-qs-soft min-h-[44px]">{{ __('Questions') }}</a>
+    </nav>
+
+    <div id="builder-meta" class="scroll-mt-28 mb-6 flex flex-wrap gap-3 text-sm text-qs-muted">
         <span>Course: <strong class="text-qs-text">{{ $exam->course?->code }}</strong></span>
         <span>Duration: <strong class="text-qs-text">{{ $exam->duration_minutes }} min</strong></span>
         <span>Total marks: <strong class="text-qs-text">{{ $exam->total_marks }}</strong></span>
@@ -22,7 +30,7 @@
         </div>
     @enderror
 
-    <div class="mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
+    <div id="builder-status" class="scroll-mt-28 mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
         <h3 class="text-sm font-semibold text-qs-text mb-2">Exam status</h3>
         <p class="text-xs text-qs-muted mb-3">
             Status: <strong class="text-qs-text">{{ $exam->status }}</strong>
@@ -34,24 +42,24 @@
             @if ($exam->status === 'draft')
                 <form method="post" action="{{ route('examiner.exams.publish', $exam) }}" class="inline">
                     @csrf
-                    <button type="submit" class="qs-btn-primary text-sm">Publish</button>
+                    <button type="submit" class="qs-btn-primary min-h-[44px] text-sm">Publish</button>
                 </form>
             @endif
             @if ($exam->status === 'published')
                 <form method="post" action="{{ route('examiner.exams.unpublish', $exam) }}" class="inline">
                     @csrf
-                    <button type="submit" class="qs-btn-secondary text-sm">Unpublish</button>
+                    <button type="submit" class="qs-btn-secondary min-h-[44px] text-sm">Unpublish</button>
                 </form>
             @endif
             @if (in_array($exam->status, ['draft', 'published'], true))
                 <form method="post" action="{{ route('examiner.exams.archive', $exam) }}" class="inline" onsubmit="return confirm('Archive this exam? It becomes read-only.');">
                     @csrf
-                    <button type="submit" class="qs-btn-secondary text-sm">Archive</button>
+                    <button type="submit" class="qs-btn-secondary min-h-[44px] text-sm">Archive</button>
                 </form>
             @endif
             <form method="post" action="{{ route('examiner.exams.clone', $exam) }}" class="inline">
                 @csrf
-                <button type="submit" class="qs-btn-secondary text-sm">Clone to new draft</button>
+                <button type="submit" class="qs-btn-secondary min-h-[44px] text-sm">Clone to new draft</button>
             </form>
         </div>
         @if ($exam->status === 'published')
@@ -62,28 +70,28 @@
     </div>
 
     @if ($canEditSchedule)
-        <div class="mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
+        <div id="builder-schedule" class="scroll-mt-28 mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
             <h3 class="text-sm font-semibold text-qs-text mb-2">Exam window (optional)</h3>
             <p class="text-xs text-qs-muted mb-3">Students can start only between these times ({{ config('app.timezone') }}). Leave blank for no restriction.</p>
             @error('end_time')
                 <div class="mb-2 text-xs text-qs-danger">{{ $message }}</div>
             @enderror
-            <form method="post" action="{{ route('examiner.exams.schedule.update', $exam) }}" class="flex flex-wrap gap-3 items-end">
+            <form method="post" action="{{ route('examiner.exams.schedule.update', $exam) }}" class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
                 @csrf
                 @method('PATCH')
-                <div>
+                <div class="w-full sm:w-auto sm:min-w-[12rem]">
                     <label class="block text-xs text-qs-muted mb-1">Start time</label>
-                    <input type="datetime-local" name="start_time" value="{{ old('start_time', $exam->start_time?->timezone(config('app.timezone'))->format('Y-m-d\TH:i')) }}" class="rounded-lg border border-qs-soft px-3 py-2 text-sm" />
+                    <input type="datetime-local" name="start_time" value="{{ old('start_time', $exam->start_time?->timezone(config('app.timezone'))->format('Y-m-d\TH:i')) }}" class="w-full min-h-[44px] rounded-lg border border-qs-soft px-3 py-2 text-sm" />
                 </div>
-                <div>
+                <div class="w-full sm:w-auto sm:min-w-[12rem]">
                     <label class="block text-xs text-qs-muted mb-1">End time</label>
-                    <input type="datetime-local" name="end_time" value="{{ old('end_time', $exam->end_time?->timezone(config('app.timezone'))->format('Y-m-d\TH:i')) }}" class="rounded-lg border border-qs-soft px-3 py-2 text-sm" />
+                    <input type="datetime-local" name="end_time" value="{{ old('end_time', $exam->end_time?->timezone(config('app.timezone'))->format('Y-m-d\TH:i')) }}" class="w-full min-h-[44px] rounded-lg border border-qs-soft px-3 py-2 text-sm" />
                 </div>
-                <button type="submit" class="qs-btn-secondary text-sm">Save window</button>
+                <button type="submit" class="qs-btn-secondary min-h-[44px] w-full text-sm sm:w-auto">Save window</button>
             </form>
         </div>
     @elseif ($exam->start_time || $exam->end_time)
-        <div class="mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm text-xs text-qs-muted">
+        <div id="builder-schedule" class="scroll-mt-28 mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm text-xs text-qs-muted">
             <span class="font-semibold text-qs-text">Exam window:</span>
             {{ $exam->start_time?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? '—' }}
             —
@@ -93,7 +101,7 @@
     @endif
 
     @if ($canEditDelivery)
-        <div class="mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
+        <div id="builder-delivery" class="scroll-mt-28 mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
             <h3 class="text-sm font-semibold text-qs-text mb-2">Randomized delivery</h3>
             <p class="text-xs text-qs-muted mb-3">Students only receive a subset of <strong class="text-qs-text">approved</strong> questions. Approve questions below, then set how many each student sees.</p>
             @error('questions_per_student')
@@ -104,25 +112,25 @@
                 @method('PATCH')
                 <div>
                     <label class="block text-xs text-qs-muted mb-1">Questions each student answers</label>
-                    <input type="number" name="questions_per_student" value="{{ old('questions_per_student', $exam->questions_per_student ?? 1) }}" min="1" max="500" required class="w-40 rounded-lg border border-qs-soft px-3 py-2 text-sm" />
+                    <input type="number" name="questions_per_student" value="{{ old('questions_per_student', $exam->questions_per_student ?? 1) }}" min="1" max="500" required class="w-full max-w-xs rounded-lg border border-qs-soft px-3 py-2 text-sm min-h-[44px]" />
                 </div>
                 <div class="flex flex-wrap gap-4 text-sm text-qs-text">
-                    <label class="inline-flex items-center gap-2">
-                        <input type="checkbox" name="randomize_questions" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40" @checked(old('randomize_questions', $exam->randomize_questions)) />
+                    <label class="inline-flex min-h-[44px] cursor-pointer items-center gap-2 py-1">
+                        <input type="checkbox" name="randomize_questions" value="1" class="size-4 shrink-0 rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40" @checked(old('randomize_questions', $exam->randomize_questions)) />
                         Randomize which questions (and order)
                     </label>
-                    <label class="inline-flex items-center gap-2">
-                        <input type="checkbox" name="randomize_options" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40" @checked(old('randomize_options', $exam->randomize_options)) />
+                    <label class="inline-flex min-h-[44px] cursor-pointer items-center gap-2 py-1">
+                        <input type="checkbox" name="randomize_options" value="1" class="size-4 shrink-0 rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40" @checked(old('randomize_options', $exam->randomize_options)) />
                         Randomize MCQ option order
                     </label>
                 </div>
-                <button type="submit" class="qs-btn-secondary text-sm">Save delivery settings</button>
+                <button type="submit" class="qs-btn-secondary min-h-[44px] text-sm">Save delivery settings</button>
             </form>
         </div>
     @endif
 
     @if (! $canEditDelivery && $exam->questions_per_student !== null)
-        <div class="mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm text-xs text-qs-muted">
+        <div id="builder-delivery" class="scroll-mt-28 mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm text-xs text-qs-muted">
             <span class="font-semibold text-qs-text">Delivery:</span>
             {{ $exam->questions_per_student }} question(s) per student
             @if ($exam->randomize_questions) · randomized selection @endif
@@ -133,7 +141,7 @@
         </div>
     @endif
 
-    <div class="mb-8 space-y-6">
+    <div id="builder-import-ai" class="scroll-mt-28 mb-8 space-y-6">
         @if ($canEditContent)
         <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
             <h3 class="text-sm font-semibold text-qs-text mb-2">Import questions (JSON)</h3>
@@ -144,7 +152,7 @@
             <form method="post" action="{{ route('examiner.exams.questions.import.preview', $exam) }}" class="space-y-3">
                 @csrf
                 <textarea name="import_json" rows="8" class="w-full rounded-lg border border-qs-soft px-3 py-2 text-sm font-mono text-qs-text" placeholder='{"sections":[{"title":"Section A","questions":[...]}]}'>{{ old('import_json') }}</textarea>
-                <button type="submit" class="qs-btn-secondary text-sm">Preview import</button>
+                <button type="submit" class="qs-btn-secondary min-h-[44px] text-sm">Preview import</button>
             </form>
         </div>
 
@@ -181,7 +189,7 @@
                     <input type="text" name="ai_difficulty" value="{{ old('ai_difficulty', 'undergraduate') }}" class="w-full rounded-lg border border-qs-soft px-3 py-2 text-sm" />
                 </div>
                 <div class="sm:col-span-2">
-                    <button type="submit" class="qs-btn-secondary text-sm">Generate prompt template</button>
+                    <button type="submit" class="qs-btn-secondary min-h-[44px] text-sm">Generate prompt template</button>
                 </div>
             </form>
             @if (session('generated_ai_prompt'))
@@ -232,7 +240,7 @@
                             <input type="text" name="ai_difficulty" value="{{ old('ai_difficulty', 'undergraduate') }}" class="w-full rounded-lg border border-qs-soft px-3 py-2 text-sm" />
                         </div>
                     </div>
-                    <button type="submit" class="qs-btn-primary text-sm">Generate &amp; preview</button>
+                    <button type="submit" class="qs-btn-primary min-h-[44px] text-sm">Generate &amp; preview</button>
                 </form>
             </div>
         @endif
@@ -249,11 +257,11 @@
                     <div class="flex flex-wrap gap-2">
                         <form method="post" action="{{ route('examiner.exams.questions.import.commit', $exam) }}" class="inline">
                             @csrf
-                            <button type="submit" class="qs-btn-primary text-sm">Save imported questions</button>
+                            <button type="submit" class="qs-btn-primary min-h-[44px] text-sm">Save imported questions</button>
                         </form>
                         <form method="post" action="{{ route('examiner.exams.questions.import.cancel', $exam) }}" class="inline">
                             @csrf
-                            <button type="submit" class="qs-btn-secondary text-sm">Cancel</button>
+                            <button type="submit" class="qs-btn-secondary min-h-[44px] text-sm">Cancel</button>
                         </form>
                     </div>
                 </div>
@@ -273,16 +281,17 @@
         @endif
     </div>
 
+    <div id="builder-sections" class="scroll-mt-28 space-y-8">
     @if ($canEditContent)
-    <div class="mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
+    <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
         <h3 class="text-sm font-semibold text-qs-text mb-3">Add section</h3>
-        <form method="post" action="{{ route('examiner.exams.sections.store', $exam) }}" class="flex flex-wrap gap-2 items-end">
+        <form method="post" action="{{ route('examiner.exams.sections.store', $exam) }}" class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             @csrf
-            <div class="flex-1 min-w-[200px]">
+            <div class="min-w-0 flex-1 sm:min-w-[200px]">
                 <label class="block text-xs text-qs-muted mb-1">Section title</label>
-                <input type="text" name="title" required class="w-full rounded-lg border border-qs-soft px-3 py-2 text-sm" placeholder="e.g. Section A" />
+                <input type="text" name="title" required class="w-full min-h-[44px] rounded-lg border border-qs-soft px-3 py-2 text-sm" placeholder="e.g. Section A" />
             </div>
-            <button type="submit" class="qs-btn-primary">Add section</button>
+            <button type="submit" class="qs-btn-primary min-h-[44px] w-full sm:w-auto">Add section</button>
         </form>
     </div>
     @endif
@@ -308,7 +317,7 @@
                             @csrf
                             @method('PATCH')
                             <label class="text-qs-muted">Pool status</label>
-                            <select name="pool_status" class="rounded-lg border border-qs-soft px-2 py-1 text-sm text-qs-text" onchange="this.form.submit()">
+                            <select name="pool_status" class="min-h-[44px] rounded-lg border border-qs-soft px-3 py-2 text-sm text-qs-text" onchange="this.form.submit()">
                                 @foreach (['draft', 'approved', 'archived'] as $ps)
                                     <option value="{{ $ps }}" @selected($q->pool_status === $ps)>{{ $ps }}</option>
                                 @endforeach
@@ -333,7 +342,7 @@
                     @csrf
                     <div>
                         <label class="block text-xs text-qs-muted mb-1">Type</label>
-                        <select name="type" required class="qs-qtype w-full rounded-lg border border-qs-soft px-3 py-2 text-sm">
+                        <select name="type" required class="qs-qtype w-full min-h-[44px] rounded-lg border border-qs-soft px-3 py-2 text-sm">
                             @foreach ($questionTypes as $qt)
                                 <option value="{{ $qt }}">{{ $qt }}</option>
                             @endforeach
@@ -345,7 +354,7 @@
                     </div>
                     <div>
                         <label class="block text-xs text-qs-muted mb-1">Marks</label>
-                        <input type="number" name="marks" value="1" step="0.01" min="0" required class="w-32 rounded-lg border border-qs-soft px-3 py-2 text-sm" />
+                        <input type="number" name="marks" value="1" step="0.01" min="0" required class="w-full max-w-xs min-h-[44px] rounded-lg border border-qs-soft px-3 py-2 text-sm sm:w-32" />
                     </div>
 
                     <div class="qs-block qs-mcq space-y-2 border border-dashed border-qs-soft rounded-lg p-3">
@@ -378,14 +387,15 @@
                         Essay questions are graded manually after submission.
                     </div>
 
-                    <button type="submit" class="rounded-lg bg-qs-accent px-4 py-2 text-sm font-semibold text-qs-text hover:opacity-95">Save question</button>
+                    <button type="submit" class="qs-btn-primary min-h-[44px]">Save question</button>
                 </form>
             </div>
             @endif
         </div>
     @empty
-        <p class="text-sm text-qs-muted">Add at least one section, then add questions per section.</p>
+        <p class="rounded-xl border border-dashed border-qs-soft bg-qs-card px-4 py-8 text-center text-sm text-qs-muted">Add at least one section, then add questions per section.</p>
     @endforelse
+    </div>
 
     <div class="mt-8">
         <a href="{{ route('examiner.exams.index') }}" class="text-sm font-medium text-qs-text hover:underline">← Back to exams</a>

@@ -2,48 +2,48 @@
     <x-slot name="title">Courses</x-slot>
     <x-slot name="subtitle">Manage courses within your assigned departments</x-slot>
 
-    <div class="mb-6 flex items-center justify-between">
-        <div class="flex items-center gap-2">
-            <a href="{{ route('coordinator.courses.assign.edit') }}" class="rounded-lg bg-qs-card px-4 py-2 text-sm font-semibold text-qs-muted hover:bg-qs-soft">
-                Assign to Classes
+    <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <a href="{{ route('coordinator.courses.assign.edit') }}" class="qs-btn-secondary inline-flex min-h-[44px] items-center justify-center px-4 text-sm font-semibold">
+                {{ __('Assign to classes') }}
             </a>
         </div>
-        <a href="{{ route('coordinator.courses.create') }}" class="qs-btn-primary text-sm">
-            Add Course
+        <a href="{{ route('coordinator.courses.create') }}" class="qs-btn-primary inline-flex min-h-[44px] items-center justify-center px-4 text-sm font-semibold">
+            {{ __('Add course') }}
         </a>
     </div>
 
-    <div class="bg-qs-bg rounded-xl shadow-sm p-5">
-        <div class="overflow-x-auto">
-            <table class="min-w-full">
-                <thead class="bg-qs-card">
+    <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
+        <div class="qs-table-wrap -mx-1 border-0 bg-transparent sm:mx-0">
+            <table class="qs-table">
+                <thead>
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-muted">Name</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-muted">Code</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-muted">Status</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold uppercase text-qs-muted">Actions</th>
+                        <th class="text-left">{{ __('Name') }}</th>
+                        <th class="text-left">{{ __('Code') }}</th>
+                        <th class="text-left">{{ __('Status') }}</th>
+                        <th class="text-right">{{ __('Actions') }}</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse ($courses as $course)
-                        <tr class="hover:bg-qs-card">
-                            <td class="px-4 py-3 text-sm text-qs-text">{{ $course->title }}</td>
-                            <td class="px-4 py-3 text-sm text-qs-muted">{{ $course->code }}</td>
-                            <td class="px-4 py-3 text-sm">
-                                <span class="inline-flex rounded-full px-2 py-1 text-xs {{ $course->is_active ? 'bg-qs-accent/20 text-qs-text border border-qs-accent/30' : 'bg-qs-card text-qs-muted' }}">
-                                    {{ $course->is_active ? 'Active' : 'Inactive' }}
+                        <tr>
+                            <td class="font-medium">{{ $course->title }}</td>
+                            <td class="text-qs-muted">{{ $course->code }}</td>
+                            <td>
+                                <span class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium {{ $course->is_active ? 'border-qs-accent/30 bg-qs-accent/20 text-qs-text' : 'bg-qs-card text-qs-muted' }}">
+                                    {{ $course->is_active ? __('Active') : __('Inactive') }}
                                 </span>
                             </td>
-                            <td class="px-4 py-3 text-sm">
-                                <div class="flex justify-end gap-2">
-                                    <a href="{{ route('coordinator.courses.edit', $course) }}" class="rounded-lg bg-qs-card px-3 py-1.5 text-xs font-semibold text-qs-muted hover:bg-qs-soft">
-                                        Edit
+                            <td>
+                                <div class="flex flex-wrap justify-end gap-2">
+                                    <a href="{{ route('coordinator.courses.edit', $course) }}" class="qs-btn-secondary inline-flex min-h-[44px] items-center justify-center px-3 py-2 text-xs font-semibold">
+                                        {{ __('Edit') }}
                                     </a>
-                                    <form method="POST" action="{{ route('coordinator.courses.toggle-status', $course) }}">
+                                    <form method="POST" action="{{ route('coordinator.courses.toggle-status', $course) }}" class="inline">
                                         @csrf
                                         @method('PATCH')
-                                        <button type="submit" class="{{ $course->is_active ? 'qs-btn-danger-sm' : 'qs-btn-primary px-3 py-1.5 text-xs' }}">
-                                            {{ $course->is_active ? 'Deactivate' : 'Activate' }}
+                                        <button type="submit" class="{{ $course->is_active ? 'qs-btn-danger-sm' : 'qs-btn-primary' }} min-h-[44px] px-3 py-2 text-xs font-semibold">
+                                            {{ $course->is_active ? __('Deactivate') : __('Activate') }}
                                         </button>
                                     </form>
                                 </div>
@@ -51,7 +51,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="px-4 py-8 text-center text-sm text-qs-muted">No courses found in your departments.</td>
+                            <td colspan="4" class="py-10 text-center text-sm text-qs-muted">{{ __('No courses found in your departments.') }}</td>
                         </tr>
                     @endforelse
                 </tbody>

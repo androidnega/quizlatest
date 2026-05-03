@@ -2,40 +2,40 @@
     <x-slot name="title">Levels</x-slot>
     <x-slot name="subtitle">Activate or deactivate predefined academic levels</x-slot>
 
-    <div class="bg-qs-bg rounded-xl shadow-sm p-5">
-        <div class="overflow-x-auto">
-            <table class="min-w-full">
-                <thead class="bg-qs-card">
+    <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
+        <div class="qs-table-wrap -mx-1 border-0 bg-transparent sm:mx-0">
+            <table class="qs-table">
+                <thead>
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-muted">Level</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-muted">Code</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-qs-muted">Status</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold uppercase text-qs-muted">Actions</th>
+                        <th class="text-left">{{ __('Level') }}</th>
+                        <th class="text-left">{{ __('Code') }}</th>
+                        <th class="text-left">{{ __('Status') }}</th>
+                        <th class="text-right">{{ __('Actions') }}</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse ($levels as $level)
-                        <tr class="hover:bg-qs-card">
-                            <td class="px-4 py-3 text-sm text-qs-text">{{ $level->name }}</td>
-                            <td class="px-4 py-3 text-sm text-qs-muted">{{ $level->code }}</td>
-                            <td class="px-4 py-3 text-sm">
-                                <span class="inline-flex rounded-full px-2 py-1 text-xs {{ $level->is_active ? 'bg-qs-accent/20 text-qs-text border border-qs-accent/30' : 'bg-qs-card text-qs-muted' }}">
-                                    {{ $level->is_active ? 'Active' : 'Inactive' }}
+                        <tr>
+                            <td class="font-medium">{{ $level->name }}</td>
+                            <td class="text-qs-muted">{{ $level->code }}</td>
+                            <td>
+                                <span class="inline-flex rounded-full border px-2 py-0.5 text-xs font-medium {{ $level->is_active ? 'border-qs-accent/30 bg-qs-accent/20 text-qs-text' : 'bg-qs-card text-qs-muted' }}">
+                                    {{ $level->is_active ? __('Active') : __('Inactive') }}
                                 </span>
                             </td>
-                            <td class="px-4 py-3 text-right">
-                                <form method="POST" action="{{ route('coordinator.levels.toggle-status', $level) }}">
+                            <td class="text-right">
+                                <form method="POST" action="{{ route('coordinator.levels.toggle-status', $level) }}" class="inline-flex justify-end">
                                     @csrf
                                     @method('PATCH')
-                                    <button type="submit" class="{{ $level->is_active ? 'qs-btn-danger-sm' : 'qs-btn-primary px-3 py-1.5 text-xs' }}">
-                                        {{ $level->is_active ? 'Deactivate' : 'Activate' }}
+                                    <button type="submit" class="{{ $level->is_active ? 'qs-btn-danger-sm' : 'qs-btn-primary' }} min-h-[44px] px-3 py-2 text-xs font-semibold">
+                                        {{ $level->is_active ? __('Deactivate') : __('Activate') }}
                                     </button>
                                 </form>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="px-4 py-8 text-center text-sm text-qs-muted">No levels found for your institution.</td>
+                            <td colspan="4" class="py-10 text-center text-sm text-qs-muted">{{ __('No levels found for your institution.') }}</td>
                         </tr>
                     @endforelse
                 </tbody>

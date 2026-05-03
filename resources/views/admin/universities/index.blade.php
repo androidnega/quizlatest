@@ -2,42 +2,42 @@
     <x-slot name="title">University Management</x-slot>
     <x-slot name="subtitle">Create and maintain institutions on the platform</x-slot>
 
-    <div class="mb-6 flex items-center justify-end">
-        <a href="{{ route('admin.universities.create') }}" class="inline-flex items-center px-4 py-2 text-sm font-semibold text-qs-text bg-qs-accent border border-qs-accent rounded-md hover:opacity-95">
+    <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <a href="{{ route('admin.universities.create') }}" class="qs-btn-primary inline-flex min-h-[44px] items-center justify-center px-4 text-sm font-semibold">
             Add University
         </a>
     </div>
 
-    <div class="qs-surface rounded-lg overflow-hidden">
-        <table class="min-w-full divide-y divide-qs-soft">
-            <thead class="bg-qs-bg">
+    <div class="qs-table-wrap rounded-lg border border-qs-soft">
+        <table class="qs-table">
+            <thead>
                 <tr>
-                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider qs-heading">Name</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider qs-heading">Code</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider qs-heading">Status</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider qs-heading">Created</th>
-                    <th class="px-4 py-3"></th>
+                    <th class="text-left">Name</th>
+                    <th class="text-left">Code</th>
+                    <th class="text-left">Status</th>
+                    <th class="text-left">Created</th>
+                    <th class="text-right">Actions</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-qs-soft bg-qs-bg">
+            <tbody>
                 @forelse ($universities as $university)
                     <tr>
-                        <td class="px-4 py-3 text-sm text-qs-text">{{ $university->name }}</td>
-                        <td class="px-4 py-3 text-sm text-qs-muted">{{ $university->code ?? 'N/A' }}</td>
-                        <td class="px-4 py-3 text-sm">
-                            <span class="inline-flex px-2 py-1 rounded-full text-xs {{ $university->is_active ? 'bg-qs-accent text-qs-text' : 'bg-qs-card text-qs-muted' }}">
+                        <td class="text-sm text-qs-text">{{ $university->name }}</td>
+                        <td class="text-sm text-qs-muted">{{ $university->code ?? 'N/A' }}</td>
+                        <td class="text-sm">
+                            <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium {{ $university->is_active ? 'border border-qs-accent/30 bg-qs-accent/20 text-qs-text' : 'bg-qs-card text-qs-muted' }}">
                                 {{ $university->is_active ? 'Active' : 'Inactive' }}
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-sm text-qs-muted">{{ $university->created_at?->format('Y-m-d') }}</td>
-                        <td class="px-4 py-3 text-right">
-                            <a href="{{ route('admin.universities.edit', $university) }}" class="text-sm qs-link font-medium">Edit</a>
+                        <td class="text-sm text-qs-muted">{{ $university->created_at?->format('Y-m-d') }}</td>
+                        <td class="text-right">
+                            <a href="{{ route('admin.universities.edit', $university) }}" class="qs-btn-secondary inline-flex min-h-[44px] items-center justify-center px-4 py-2 text-sm font-semibold">{{ __('Edit') }}</a>
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" class="px-4 py-8 text-center text-sm text-qs-muted">
-                            No universities found. Create your first university to begin.
+                        <td colspan="5" class="px-4 py-10 text-center text-sm text-qs-muted">
+                            {{ __('No universities found. Create your first university to begin.') }}
                         </td>
                     </tr>
                 @endforelse
