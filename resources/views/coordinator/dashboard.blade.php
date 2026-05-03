@@ -39,6 +39,7 @@
                 <a href="{{ route('coordinator.courses.index') }}" class="qs-btn-secondary text-sm">{{ __('Courses') }}</a>
                 <a href="{{ route('examiner.dashboard') }}" class="qs-btn-secondary text-sm">{{ __('Examiner home') }}</a>
                 <a href="{{ route('coordinator.grading.pending') }}" class="qs-btn-secondary text-sm">{{ __('Essay grading') }}</a>
+                <a href="{{ route('coordinator.academic-reset.index') }}" class="qs-btn-secondary text-sm">{{ __('Academic reset') }}</a>
             </div>
         </div>
         <div class="rounded-xl border border-qs-soft bg-qs-card p-6 shadow-sm">

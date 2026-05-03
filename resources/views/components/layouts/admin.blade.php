@@ -31,6 +31,9 @@
                     <a href="{{ route('admin.settings.index') }}" class="{{ request()->routeIs('admin.settings.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2 text-sm font-medium">
                         Settings
                     </a>
+                    <a href="{{ route('admin.academic-reset-snapshots.index') }}" class="{{ request()->routeIs('admin.academic-reset-snapshots.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2 text-sm font-medium">
+                        Academic resets
+                    </a>
                 </nav>
             </aside>
 

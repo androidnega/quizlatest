@@ -59,6 +59,7 @@
             <a href="{{ route('admin.universities.index') }}" class="qs-btn-primary inline-flex">{{ __('Universities') }}</a>
             <a href="{{ route('admin.coordinators.index') }}" class="qs-btn-secondary inline-flex">{{ __('Coordinators') }}</a>
             <a href="{{ route('admin.settings.index') }}" class="qs-btn-secondary inline-flex">{{ __('System settings') }}</a>
+            <a href="{{ route('admin.academic-reset-snapshots.index') }}" class="qs-btn-secondary inline-flex">{{ __('Academic reset snapshots') }}</a>
         </div>
     </div>
 </x-layouts.admin>

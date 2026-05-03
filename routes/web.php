@@ -1,10 +1,12 @@
 <?php
 
+use App\Http\Controllers\Admin\AcademicResetSnapshotsController;
 use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\CoordinatorController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\ProctoringGovernanceController;
 use App\Http\Controllers\Admin\UniversityController;
+use App\Http\Controllers\Coordinator\AcademicResetController;
 use App\Http\Controllers\Coordinator\ClassCourseAssignmentController;
 use App\Http\Controllers\Coordinator\ClassroomController;
 use App\Http\Controllers\Coordinator\CourseController;
@@ -115,6 +117,8 @@ Route::prefix('admin')
         Route::put('/settings', [AdminSettingsController::class, 'update'])->name('settings.update');
         Route::post('/settings/lock', [AdminSettingsController::class, 'lock'])->name('settings.lock');
         Route::post('/settings/unlock', [AdminSettingsController::class, 'unlock'])->name('settings.unlock');
+
+        Route::get('/academic-reset-snapshots', [AcademicResetSnapshotsController::class, 'index'])->name('academic-reset-snapshots.index');
     });
 
 Route::prefix('coordinator')
@@ -122,6 +126,11 @@ Route::prefix('coordinator')
     ->middleware(['auth', 'verified', 'coordinator'])
     ->group(function () {
         Route::get('/dashboard', [CoordinatorDashboardController::class, 'index'])->name('dashboard');
+
+        Route::get('/academic-reset', [AcademicResetController::class, 'index'])->name('academic-reset.index');
+        Route::post('/academic-reset/preview', [AcademicResetController::class, 'preview'])->name('academic-reset.preview');
+        Route::get('/academic-reset/{snapshot}/review', [AcademicResetController::class, 'review'])->name('academic-reset.review');
+        Route::post('/academic-reset/{snapshot}/apply', [AcademicResetController::class, 'apply'])->name('academic-reset.apply');
 
         Route::get('/students', [StudentController::class, 'index'])->name('students.index');
         Route::get('/students/upload', [StudentController::class, 'uploadForm'])->name('students.upload');

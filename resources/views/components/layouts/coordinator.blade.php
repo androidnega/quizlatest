@@ -37,6 +37,9 @@
                     <a href="{{ route('coordinator.classes.index') }}" class="{{ request()->routeIs('coordinator.classes.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
                         Classes
                     </a>
+                    <a href="{{ route('coordinator.academic-reset.index') }}" class="{{ request()->routeIs('coordinator.academic-reset.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
+                        Academic reset
+                    </a>
                     <a href="{{ route('coordinator.courses.index') }}" class="{{ request()->routeIs('coordinator.courses.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
                         Courses
                     </a>
