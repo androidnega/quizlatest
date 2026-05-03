@@ -3,8 +3,11 @@
 namespace App\Support;
 
 use App\Models\ExamSession;
+use App\Models\ExamSessionQuestion;
 use App\Models\Question;
 use App\Models\Quiz;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Student-safe exam structure + timing + saved answers for GET .../state (authoritative with resolver base).
@@ -16,18 +19,13 @@ final class ExamRuntimeStateExtension
      */
     public static function forSession(ExamSession $examSession): array
     {
-        $examSession->loadMissing(['exam', 'answers']);
+        $examSession->loadMissing(['exam', 'answers', 'sessionQuestions.question']);
 
         /** @var Quiz|null $exam */
         $exam = $examSession->exam;
         if ($exam === null) {
             return self::emptyRuntime();
         }
-
-        $exam->load([
-            'sections' => fn ($q) => $q->orderBy('section_order'),
-            'sections.questions' => fn ($q) => $q->orderBy('question_order'),
-        ]);
 
         $now = now();
         $durationMinutes = (int) ($exam->duration_minutes ?? 0);
@@ -44,13 +42,120 @@ final class ExamRuntimeStateExtension
             $timeRemainingSeconds = max(0, $endAt->getTimestamp() - $now->getTimestamp());
         }
 
+        if ($examSession->sessionQuestions->isEmpty()) {
+            return self::legacyFullExamPayload($examSession, $exam, $now, $examEndAtIso, $timeRemainingSeconds, $durationMinutes);
+        }
+
+        /** @var Collection<int, ExamSessionQuestion> $ordered */
+        $ordered = $examSession->sessionQuestions->sortBy('display_order')->values();
+
+        $assignedMarks = 0.0;
+        $sectionsPayload = [];
+
+        if ($exam->randomize_questions) {
+            // Single flat block in display_order so cross-section randomization is visible and stable per session.
+            $questionsPayload = [];
+            foreach ($ordered as $sq) {
+                $q = $sq->question;
+                if ($q === null) {
+                    continue;
+                }
+                $assignedMarks += (float) $q->marks;
+                $questionsPayload[] = self::serializeQuestionForStudent($q, $sq->mcqDisplayToOriginal());
+            }
+
+            $sectionsPayload[] = [
+                'id' => null,
+                'title' => 'Questions',
+                'section_order' => 1,
+                'questions' => $questionsPayload,
+            ];
+        } else {
+            $exam->loadMissing([
+                'sections' => fn ($q) => $q->orderBy('section_order'),
+            ]);
+
+            $sectionsById = $exam->sections->keyBy('id');
+
+            $grouped = [];
+            foreach ($ordered as $sq) {
+                $q = $sq->question;
+                if ($q === null) {
+                    continue;
+                }
+                $assignedMarks += (float) $q->marks;
+                $sectionKey = $q->section_id !== null ? (string) $q->section_id : '_orphan';
+                $grouped[$sectionKey] ??= [];
+                $grouped[$sectionKey][] = ['sq' => $sq, 'q' => $q];
+            }
+
+            foreach ($grouped as $sectionKey => $items) {
+                $sectionModel = is_numeric($sectionKey) ? $sectionsById->get((int) $sectionKey) : null;
+                $title = $sectionModel?->title ?? 'Questions';
+                $sectionOrder = $sectionModel !== null ? (int) $sectionModel->section_order : 999_999;
+
+                $questionsPayload = [];
+                foreach ($items as $item) {
+                    /** @var Question $question */
+                    $question = $item['q'];
+                    /** @var ExamSessionQuestion $link */
+                    $link = $item['sq'];
+                    $questionsPayload[] = self::serializeQuestionForStudent($question, $link->mcqDisplayToOriginal());
+                }
+
+                $sectionsPayload[] = [
+                    'id' => $sectionModel?->id,
+                    'title' => $title,
+                    'section_order' => $sectionOrder,
+                    'questions' => $questionsPayload,
+                ];
+            }
+
+            usort($sectionsPayload, fn ($a, $b) => $a['section_order'] <=> $b['section_order']);
+        }
+
+        $savedAnswers = self::buildSavedAnswersMap($examSession);
+
+        return [
+            'server_time' => $now->toAtomString(),
+            'exam_end_at' => $examEndAtIso,
+            'time_remaining_seconds' => $timeRemainingSeconds,
+            'duration_minutes' => $durationMinutes,
+            'exam' => [
+                'id' => (int) $exam->id,
+                'title' => (string) $exam->title,
+                'description' => $exam->description,
+                'duration_minutes' => $durationMinutes,
+                'total_marks' => round($assignedMarks, 2),
+            ],
+            'sections' => $sectionsPayload,
+            'saved_answers' => $savedAnswers,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function legacyFullExamPayload(
+        ExamSession $examSession,
+        Quiz $exam,
+        Carbon $now,
+        ?string $examEndAtIso,
+        int $timeRemainingSeconds,
+        int $durationMinutes,
+    ): array {
+        $exam->load([
+            'sections' => fn ($q) => $q->orderBy('section_order'),
+            'sections.questions' => fn ($q) => $q->orderBy('question_order'),
+        ]);
+
         $sectionsPayload = [];
         foreach ($exam->sections as $section) {
             $sectionsPayload[] = [
                 'id' => $section->id,
                 'title' => $section->title,
                 'section_order' => (int) $section->section_order,
-                'questions' => $section->questions->map(fn (Question $q) => self::serializeQuestionForStudent($q))->values()->all(),
+                'questions' => $section->questions->map(fn (Question $q) => self::serializeQuestionForStudent($q, null))->values()->all(),
             ];
         }
 
@@ -64,16 +169,7 @@ final class ExamRuntimeStateExtension
                 'id' => null,
                 'title' => 'Questions',
                 'section_order' => 999_999,
-                'questions' => $orphans->map(fn (Question $q) => self::serializeQuestionForStudent($q))->values()->all(),
-            ];
-        }
-
-        $savedAnswers = [];
-        foreach ($examSession->answers as $answer) {
-            $savedAnswers[(string) $answer->question_id] = [
-                'answer_payload' => $answer->answer_payload,
-                'saved_at' => $answer->saved_at?->toAtomString(),
-                'client_revision' => (int) ($answer->client_revision ?? 0),
+                'questions' => $orphans->map(fn (Question $q) => self::serializeQuestionForStudent($q, null))->values()->all(),
             ];
         }
 
@@ -90,8 +186,25 @@ final class ExamRuntimeStateExtension
                 'total_marks' => $exam->total_marks !== null ? (float) $exam->total_marks : null,
             ],
             'sections' => $sectionsPayload,
-            'saved_answers' => $savedAnswers,
+            'saved_answers' => self::buildSavedAnswersMap($examSession),
         ];
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private static function buildSavedAnswersMap(ExamSession $examSession): array
+    {
+        $savedAnswers = [];
+        foreach ($examSession->answers as $answer) {
+            $savedAnswers[(string) $answer->question_id] = [
+                'answer_payload' => $answer->answer_payload,
+                'saved_at' => $answer->saved_at?->toAtomString(),
+                'client_revision' => (int) ($answer->client_revision ?? 0),
+            ];
+        }
+
+        return $savedAnswers;
     }
 
     /**
@@ -111,9 +224,10 @@ final class ExamRuntimeStateExtension
     }
 
     /**
+     * @param  list<int>|null  $mcqDisplayToOriginal
      * @return array<string, mixed>
      */
-    private static function serializeQuestionForStudent(Question $question): array
+    private static function serializeQuestionForStudent(Question $question, ?array $mcqDisplayToOriginal): array
     {
         $base = [
             'id' => (int) $question->id,
@@ -126,7 +240,16 @@ final class ExamRuntimeStateExtension
         ];
 
         if ($question->type === 'mcq') {
-            $base['options'] = is_array($question->options) ? $question->options : [];
+            $opts = is_array($question->options) ? $question->options : [];
+            if ($mcqDisplayToOriginal !== null && $mcqDisplayToOriginal !== []) {
+                $shuffled = [];
+                foreach ($mcqDisplayToOriginal as $origIdx) {
+                    $shuffled[] = $opts[$origIdx] ?? '';
+                }
+                $base['options'] = $shuffled;
+            } else {
+                $base['options'] = $opts;
+            }
         }
 
         return $base;

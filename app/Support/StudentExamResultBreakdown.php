@@ -22,6 +22,7 @@ final class StudentExamResultBreakdown
         }
 
         $session->load([
+            'sessionQuestions',
             'answers' => fn ($q) => $q->select([
                 'id',
                 'exam_session_id',
@@ -32,10 +33,26 @@ final class StudentExamResultBreakdown
             'answers.question' => fn ($q) => $q->select($questionSelect),
         ]);
 
+        $orderMap = $session->sessionQuestions->keyBy('question_id')->map(fn ($sq) => (int) $sq->display_order);
+
+        $assignedQuestionIds = $session->sessionQuestions->pluck('question_id')->map(fn ($id) => (int) $id)->all();
+
         /** @var list<ExamSessionAnswer> $sorted */
         $sorted = $session->answers
-            ->filter(fn (ExamSessionAnswer $a) => $a->question !== null)
-            ->sortBy(fn (ExamSessionAnswer $a) => $a->question->question_order ?? 999_999)
+            ->filter(function (ExamSessionAnswer $a) use ($assignedQuestionIds) {
+                if ($assignedQuestionIds !== [] && ! in_array((int) $a->question_id, $assignedQuestionIds, true)) {
+                    return false;
+                }
+
+                return $a->question !== null;
+            })
+            ->sortBy(function (ExamSessionAnswer $a) use ($orderMap) {
+                if ($orderMap->isNotEmpty()) {
+                    return $orderMap->get($a->question_id) ?? 999_999;
+                }
+
+                return $a->question->question_order ?? 999_999;
+            })
             ->values()
             ->all();
 

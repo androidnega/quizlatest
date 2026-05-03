@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ExamSession;
 use App\Models\ExamSessionAnswer;
+use App\Models\ExamSessionQuestion;
 use App\Models\Question;
 use Illuminate\Support\Collection;
 
@@ -24,11 +25,21 @@ class AnswerEvaluationService
         /** @var Collection<int, Question> $byId */
         $byId = $questions->keyBy('id');
 
+        $assignedQuestionIds = ExamSessionQuestion::query()
+            ->where('exam_session_id', $examSession->id)
+            ->pluck('question_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
         $results = [];
         $total = 0.0;
 
         foreach ($examSession->answers as $answer) {
             /** @var ExamSessionAnswer $answer */
+            if ($assignedQuestionIds !== [] && ! in_array((int) $answer->question_id, $assignedQuestionIds, true)) {
+                continue;
+            }
+
             $question = $byId->get($answer->question_id);
             if (! $question) {
                 $this->persistAnswer($answer, 0.0, 'error', ['message' => 'Question not found for exam.']);
