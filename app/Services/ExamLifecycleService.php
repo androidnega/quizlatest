@@ -24,29 +24,47 @@ final class ExamLifecycleService
     {
         $errors = [];
 
-        $exam->loadCount(['sections', 'questions']);
+        $exam->loadCount(['sections']);
 
         if ($exam->sections_count < 1) {
             $errors[] = 'Add at least one section before publishing.';
         }
 
-        if ($exam->questions_count < 1) {
-            $errors[] = 'Add at least one question before publishing.';
-        }
-
-        if ((float) $exam->total_marks <= 0) {
-            $errors[] = 'Total marks must be greater than zero.';
-        }
-
-        $badMarks = Question::query()
+        $approvedCount = Question::query()
             ->where('quiz_id', $exam->id)
+            ->where('pool_status', 'approved')
+            ->count();
+
+        if ($approvedCount < 1) {
+            $errors[] = 'At least one approved question is required in the pool.';
+        }
+
+        $perStudent = $exam->questions_per_student;
+        if ($perStudent === null || (int) $perStudent < 1) {
+            $errors[] = 'Set how many questions each student answers (questions per student).';
+        } elseif ((int) $perStudent > $approvedCount) {
+            $errors[] = 'Questions per student cannot exceed the number of approved questions.';
+        }
+
+        $badApprovedMarks = Question::query()
+            ->where('quiz_id', $exam->id)
+            ->where('pool_status', 'approved')
             ->where(function ($q): void {
                 $q->whereNull('marks')->orWhere('marks', '<=', 0);
             })
             ->exists();
 
-        if ($badMarks) {
-            $errors[] = 'Every question must have marks greater than zero.';
+        if ($badApprovedMarks) {
+            $errors[] = 'Every approved question must have marks greater than zero.';
+        }
+
+        $approvedMarksSum = (float) Question::query()
+            ->where('quiz_id', $exam->id)
+            ->where('pool_status', 'approved')
+            ->sum('marks');
+
+        if ($approvedMarksSum <= 0) {
+            $errors[] = 'Approved questions must have a positive total mark value.';
         }
 
         return $errors;
@@ -132,6 +150,9 @@ final class ExamLifecycleService
                 'published_at' => null,
                 'duration_minutes' => $source->duration_minutes,
                 'total_marks' => 0,
+                'questions_per_student' => $source->questions_per_student,
+                'randomize_questions' => (bool) ($source->randomize_questions ?? false),
+                'randomize_options' => (bool) ($source->randomize_options ?? false),
                 'proctoring_settings' => $source->proctoring_settings,
                 'start_time' => null,
                 'end_time' => null,
@@ -157,6 +178,7 @@ final class ExamLifecycleService
                         'answer_schema' => $q->answer_schema,
                         'marks' => $q->marks,
                         'question_order' => $q->question_order,
+                        'pool_status' => $q->pool_status ?? 'draft',
                     ]);
                     $totalMarks += (float) $q->marks;
                 }

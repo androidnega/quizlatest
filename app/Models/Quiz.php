@@ -20,6 +20,9 @@ class Quiz extends Model
         'published_at',
         'duration_minutes',
         'total_marks',
+        'questions_per_student',
+        'randomize_questions',
+        'randomize_options',
         'proctoring_settings',
         'start_time',
         'end_time',
@@ -30,6 +33,8 @@ class Quiz extends Model
         'published_at' => 'datetime',
         'start_time' => 'datetime',
         'end_time' => 'datetime',
+        'randomize_questions' => 'boolean',
+        'randomize_options' => 'boolean',
     ];
 
     public function university(): BelongsTo

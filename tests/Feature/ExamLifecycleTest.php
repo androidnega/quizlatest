@@ -105,9 +105,35 @@ class ExamLifecycleTest extends TestCase
             'answer_schema' => null,
             'marks' => 5,
             'question_order' => 1,
+            'pool_status' => 'approved',
         ]);
 
         $exam->update(['total_marks' => 5]);
+    }
+
+    private function setDeliveryForCoordinator(User $coord, Quiz $exam, int $questionsPerStudent = 1): void
+    {
+        $this->actingAs($coord);
+        $this->patch(route('examiner.exams.delivery.update', $exam), [
+            'questions_per_student' => $questionsPerStudent,
+        ])->assertRedirect();
+    }
+
+    public function test_publish_rejects_when_questions_per_student_exceeds_approved_pool(): void
+    {
+        $ctx = $this->seedExaminerAndStudentContext();
+        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId'], 0);
+        $this->addSectionAndMcq($exam);
+
+        $this->actingAs($ctx['coord']);
+        $this->patch(route('examiner.exams.delivery.update', $exam->fresh()), [
+            'questions_per_student' => 5,
+            'randomize_questions' => false,
+            'randomize_options' => false,
+        ])->assertRedirect();
+
+        $this->post(route('examiner.exams.publish', $exam->fresh()))
+            ->assertSessionHasErrors('lifecycle');
     }
 
     public function test_publish_requires_sections_questions_and_positive_marks(): void
@@ -120,6 +146,8 @@ class ExamLifecycleTest extends TestCase
             ->assertSessionHasErrors('lifecycle');
 
         $this->addSectionAndMcq($exam->fresh());
+
+        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
 
         $this->post(route('examiner.exams.publish', $exam->fresh()))
             ->assertSessionDoesntHaveErrors()
@@ -138,6 +166,8 @@ class ExamLifecycleTest extends TestCase
 
         $this->actingAs($ctx['student']);
         $this->get(route('student.exam.prepare', $exam))->assertForbidden();
+
+        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
 
         $this->actingAs($ctx['coord']);
         $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
@@ -159,6 +189,8 @@ class ExamLifecycleTest extends TestCase
         $this->post(route('examiner.exams.unpublish', $exam->fresh()))->assertRedirect();
         $exam->refresh();
         $exam->update(['start_time' => null, 'end_time' => null]);
+        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
+        $this->actingAs($ctx['coord']);
         $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
 
         $this->actingAs($ctx['coord']);
@@ -178,6 +210,8 @@ class ExamLifecycleTest extends TestCase
         $this->addSectionAndMcq($exam);
 
         $section = $exam->fresh()->sections()->firstOrFail();
+
+        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
 
         $this->actingAs($ctx['coord']);
         $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();

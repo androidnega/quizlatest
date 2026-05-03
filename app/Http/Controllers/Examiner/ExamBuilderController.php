@@ -19,6 +19,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ExamBuilderController extends Controller
 {
@@ -36,6 +37,11 @@ class ExamBuilderController extends Controller
     private function assertExamDraftForSchedule(Quiz $exam): void
     {
         abort_unless($exam->status === 'draft', 403, 'Only draft exams can change the start/end window.');
+    }
+
+    private function assertExamNotArchived(Quiz $exam): void
+    {
+        abort_if($exam->status === 'archived', 403, 'Archived exams are read-only.');
     }
 
     public function index(Request $request): View
@@ -115,6 +121,9 @@ class ExamBuilderController extends Controller
 
         $importPreview = session('exam_question_import_'.$exam->id);
 
+        $poolQuestionTotal = Question::query()->where('quiz_id', $exam->id)->count();
+        $poolApprovedCount = Question::query()->where('quiz_id', $exam->id)->where('pool_status', 'approved')->count();
+
         return view('examiner.exams.builder', [
             'exam' => $exam,
             'questionTypes' => ['mcq', 'true_false', 'fill_blank', 'essay'],
@@ -122,7 +131,61 @@ class ExamBuilderController extends Controller
             'importPreview' => is_array($importPreview) ? $importPreview : null,
             'canEditContent' => $exam->status === 'draft',
             'canEditSchedule' => $exam->status === 'draft',
+            'canEditDelivery' => $exam->status === 'draft',
+            'canEditPool' => $exam->status !== 'archived',
+            'poolQuestionTotal' => $poolQuestionTotal,
+            'poolApprovedCount' => $poolApprovedCount,
         ]);
+    }
+
+    public function updateDeliverySettings(Request $request, Quiz $exam): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+        abort_unless($exam->status === 'draft', 403, 'Only draft exams can change delivery settings.');
+
+        $validated = $request->validate([
+            'questions_per_student' => ['required', 'integer', 'min:1', 'max:500'],
+            'randomize_questions' => ['sometimes', 'boolean'],
+            'randomize_options' => ['sometimes', 'boolean'],
+        ]);
+
+        $approved = Question::query()
+            ->where('quiz_id', $exam->id)
+            ->where('pool_status', 'approved')
+            ->count();
+
+        if ((int) $validated['questions_per_student'] > $approved) {
+            throw ValidationException::withMessages([
+                'questions_per_student' => ['Cannot exceed approved question count ('.$approved.').'],
+            ]);
+        }
+
+        $exam->update([
+            'questions_per_student' => (int) $validated['questions_per_student'],
+            'randomize_questions' => $request->boolean('randomize_questions'),
+            'randomize_options' => $request->boolean('randomize_options'),
+        ]);
+
+        $this->bumpExamConfigCache($exam->fresh());
+
+        return back()->with('status', 'Delivery settings updated.');
+    }
+
+    public function updateQuestionPoolStatus(Request $request, Quiz $exam, Question $question): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+        $this->assertExamNotArchived($exam);
+        abort_unless((int) $question->quiz_id === (int) $exam->id, 404);
+
+        $validated = $request->validate([
+            'pool_status' => ['required', 'string', 'in:draft,approved,archived'],
+        ]);
+
+        $question->update(['pool_status' => $validated['pool_status']]);
+
+        $this->bumpExamConfigCache($exam->fresh());
+
+        return back()->with('status', 'Question pool status updated.');
     }
 
     public function publish(Request $request, Quiz $exam, ExamLifecycleService $lifecycle): RedirectResponse
@@ -269,6 +332,7 @@ class ExamBuilderController extends Controller
                 'answer_schema' => null,
                 'marks' => $validated['marks'],
                 'question_order' => $nextQ,
+                'pool_status' => 'draft',
             ]);
 
             $total = (float) Question::query()->where('quiz_id', $exam->id)->sum('marks');
@@ -434,6 +498,7 @@ class ExamBuilderController extends Controller
                         'answer_schema' => $q['answer_schema'],
                         'marks' => $q['marks'],
                         'question_order' => $qOrder,
+                        'pool_status' => 'draft',
                     ]);
                 }
             }

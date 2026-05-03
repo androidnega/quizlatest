@@ -6,6 +6,10 @@
         <span>Course: <strong class="text-qs-text">{{ $exam->course?->code }}</strong></span>
         <span>Duration: <strong class="text-qs-text">{{ $exam->duration_minutes }} min</strong></span>
         <span>Total marks: <strong class="text-qs-text">{{ $exam->total_marks }}</strong></span>
+        <span>Pool: <strong class="text-qs-text">{{ $poolApprovedCount }}</strong> approved / <strong class="text-qs-text">{{ $poolQuestionTotal }}</strong> total</span>
+        @if ($exam->questions_per_student !== null)
+            <span>Per student: <strong class="text-qs-text">{{ $exam->questions_per_student }}</strong></span>
+        @endif
     </div>
 
     @error('lifecycle')
@@ -85,6 +89,47 @@
             —
             {{ $exam->end_time?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? '—' }}
             <span class="block mt-2">Unpublish to edit the window.</span>
+        </div>
+    @endif
+
+    @if ($canEditDelivery)
+        <div class="mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
+            <h3 class="text-sm font-semibold text-qs-text mb-2">Randomized delivery</h3>
+            <p class="text-xs text-qs-muted mb-3">Students only receive a subset of <strong class="text-qs-text">approved</strong> questions. Approve questions below, then set how many each student sees.</p>
+            @error('questions_per_student')
+                <div class="mb-2 text-xs text-qs-danger">{{ $message }}</div>
+            @enderror
+            <form method="post" action="{{ route('examiner.exams.delivery.update', $exam) }}" class="space-y-3 max-w-xl">
+                @csrf
+                @method('PATCH')
+                <div>
+                    <label class="block text-xs text-qs-muted mb-1">Questions each student answers</label>
+                    <input type="number" name="questions_per_student" value="{{ old('questions_per_student', $exam->questions_per_student ?? 1) }}" min="1" max="500" required class="w-40 rounded-lg border border-qs-soft px-3 py-2 text-sm" />
+                </div>
+                <div class="flex flex-wrap gap-4 text-sm text-qs-text">
+                    <label class="inline-flex items-center gap-2">
+                        <input type="checkbox" name="randomize_questions" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40" @checked(old('randomize_questions', $exam->randomize_questions)) />
+                        Randomize which questions (and order)
+                    </label>
+                    <label class="inline-flex items-center gap-2">
+                        <input type="checkbox" name="randomize_options" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40" @checked(old('randomize_options', $exam->randomize_options)) />
+                        Randomize MCQ option order
+                    </label>
+                </div>
+                <button type="submit" class="qs-btn-secondary text-sm">Save delivery settings</button>
+            </form>
+        </div>
+    @endif
+
+    @if (! $canEditDelivery && $exam->questions_per_student !== null)
+        <div class="mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm text-xs text-qs-muted">
+            <span class="font-semibold text-qs-text">Delivery:</span>
+            {{ $exam->questions_per_student }} question(s) per student
+            @if ($exam->randomize_questions) · randomized selection @endif
+            @if ($exam->randomize_options) · MCQ options shuffled per attempt @endif
+            @if ($exam->status !== 'draft')
+                <span class="block mt-2">Unpublish to edit delivery settings.</span>
+            @endif
         </div>
     @endif
 
@@ -251,10 +296,25 @@
 
             @foreach ($section->questions as $q)
                 <div class="mb-4 rounded-lg bg-qs-card p-4 text-sm">
-                    <div class="flex justify-between gap-2">
+                    <div class="flex flex-wrap justify-between gap-2 items-start">
                         <span class="font-medium text-qs-text">{{ $loop->iteration }}. {{ $q->type }}</span>
-                        <span class="text-qs-muted">{{ $q->marks }} pts</span>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-xs uppercase tracking-wide text-qs-muted">{{ $q->pool_status }}</span>
+                            <span class="text-qs-muted">{{ $q->marks }} pts</span>
+                        </div>
                     </div>
+                    @if ($canEditPool)
+                        <form method="post" action="{{ route('examiner.exams.questions.pool-status', [$exam, $q]) }}" class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                            @csrf
+                            @method('PATCH')
+                            <label class="text-qs-muted">Pool status</label>
+                            <select name="pool_status" class="rounded-lg border border-qs-soft px-2 py-1 text-sm text-qs-text" onchange="this.form.submit()">
+                                @foreach (['draft', 'approved', 'archived'] as $ps)
+                                    <option value="{{ $ps }}" @selected($q->pool_status === $ps)>{{ $ps }}</option>
+                                @endforeach
+                            </select>
+                        </form>
+                    @endif
                     <p class="mt-2 text-qs-text whitespace-pre-wrap">{{ $q->question_text }}</p>
                     @if ($q->isMCQ() && is_array($q->options))
                         <ul class="mt-2 list-disc list-inside text-qs-muted">

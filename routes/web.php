@@ -187,6 +187,8 @@ Route::prefix('examiner')
         Route::post('/exams/{exam}/archive', [ExamBuilderController::class, 'archive'])->name('exams.archive');
         Route::post('/exams/{exam}/clone', [ExamBuilderController::class, 'cloneExam'])->name('exams.clone');
         Route::patch('/exams/{exam}/schedule', [ExamBuilderController::class, 'updateSchedule'])->name('exams.schedule.update');
+        Route::patch('/exams/{exam}/delivery', [ExamBuilderController::class, 'updateDeliverySettings'])->name('exams.delivery.update');
+        Route::patch('/exams/{exam}/questions/{question}/pool-status', [ExamBuilderController::class, 'updateQuestionPoolStatus'])->name('exams.questions.pool-status');
         Route::post('/exams/{exam}/sections', [ExamBuilderController::class, 'storeSection'])->name('exams.sections.store');
         Route::post('/exams/{exam}/sections/{section}/questions', [ExamBuilderController::class, 'storeQuestion'])->name('exams.questions.store');
         Route::post('/exams/{exam}/questions/import/preview', [ExamBuilderController::class, 'previewQuestionImport'])->name('exams.questions.import.preview');

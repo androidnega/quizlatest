@@ -54,6 +54,11 @@ class ExamSession extends Model
         return $this->hasMany(ExamSessionAnswer::class);
     }
 
+    public function sessionQuestions(): HasMany
+    {
+        return $this->hasMany(ExamSessionQuestion::class)->orderBy('display_order');
+    }
+
     public function getRouteKeyName(): string
     {
         return 'session_id';

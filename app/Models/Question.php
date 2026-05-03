@@ -19,6 +19,7 @@ class Question extends Model
         'marks',
         'question_order',
         'metadata',
+        'pool_status',
     ];
 
     protected $casts = [

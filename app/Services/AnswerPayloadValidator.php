@@ -51,20 +51,64 @@ final class AnswerPayloadValidator
     }
 
     /**
+     * Validate MCQ indices against displayed option count (after shuffle).
+     *
      * @param  array<string, mixed>  $payload
      * @return array{type: string, selected: list<int>}
      */
-    private static function validateMcq(array $payload): array
+    public static function validateMcqDisplayIndices(array $payload, int $displayOptionCount): array
     {
-        $v = Validator::make($payload, [
-            'selected' => ['required'],
-        ]);
-
-        if ($v->fails()) {
-            throw new ValidationException($v);
+        if ($displayOptionCount < 1) {
+            throw ValidationException::withMessages([
+                'answer_payload.selected' => ['Invalid MCQ display option count.'],
+            ]);
         }
 
-        $raw = $payload['selected'];
+        $parsed = self::parseMcqSelectedIndices($payload);
+        foreach ($parsed as $i) {
+            if ($i < 0 || $i >= $displayOptionCount) {
+                throw ValidationException::withMessages([
+                    'answer_payload.selected' => ['Selected option is out of range for this question.'],
+                ]);
+            }
+        }
+
+        return [
+            'type' => 'mcq',
+            'selected' => $parsed,
+        ];
+    }
+
+    /**
+     * Map display indices to original option indices using per-session shuffle map.
+     *
+     * @param  list<int>  $displayToOriginal
+     * @return array{type: string, selected: list<int>}
+     */
+    public static function remapMcqPayloadToOriginalIndices(array $payload, array $displayToOriginal): array
+    {
+        $displayCount = count($displayToOriginal);
+        $validated = self::validateMcqDisplayIndices($payload, $displayCount);
+
+        $original = [];
+        foreach ($validated['selected'] as $d) {
+            $original[] = $displayToOriginal[$d];
+        }
+        sort($original);
+
+        return [
+            'type' => 'mcq',
+            'selected' => array_values(array_unique($original)),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return list<int>
+     */
+    private static function parseMcqSelectedIndices(array $payload): array
+    {
+        $raw = $payload['selected'] ?? null;
         $indices = [];
 
         if (is_int($raw) || (is_string($raw) && preg_match('/^-?\d+$/', $raw))) {
@@ -91,6 +135,25 @@ final class AnswerPayloadValidator
                 'answer_payload.selected' => ['Select at least one option.'],
             ]);
         }
+
+        return $indices;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{type: string, selected: list<int>}
+     */
+    private static function validateMcq(array $payload): array
+    {
+        $v = Validator::make($payload, [
+            'selected' => ['required'],
+        ]);
+
+        if ($v->fails()) {
+            throw new ValidationException($v);
+        }
+
+        $indices = self::parseMcqSelectedIndices($payload);
 
         foreach ($indices as $i) {
             if ($i < 0) {

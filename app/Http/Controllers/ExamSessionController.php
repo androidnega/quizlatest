@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ExamSession;
 use App\Models\ExamSessionAnswer;
+use App\Models\ExamSessionQuestion;
 use App\Models\ProctoringEvent;
 use App\Models\Question;
 use App\Models\Quiz;
@@ -143,8 +144,26 @@ class ExamSessionController extends Controller
             ->first();
         abort_unless($question !== null, 422, 'Question does not belong to this exam.');
 
+        $sessionQuestion = ExamSessionQuestion::query()
+            ->where('exam_session_id', $examSession->id)
+            ->where('question_id', $validated['question_id'])
+            ->first();
+
+        if (ExamSessionQuestion::query()->where('exam_session_id', $examSession->id)->exists()) {
+            abort_unless($sessionQuestion !== null, 422, 'Question is not assigned to this exam attempt.');
+        }
+
         try {
-            $normalized = AnswerPayloadValidator::validate($question, $validated['answer_payload']);
+            if ($question->type === 'mcq' && $sessionQuestion !== null) {
+                $map = $sessionQuestion->mcqDisplayToOriginal();
+                if ($map !== null && $map !== []) {
+                    $normalized = AnswerPayloadValidator::remapMcqPayloadToOriginalIndices($validated['answer_payload'], $map);
+                } else {
+                    $normalized = AnswerPayloadValidator::validate($question, $validated['answer_payload']);
+                }
+            } else {
+                $normalized = AnswerPayloadValidator::validate($question, $validated['answer_payload']);
+            }
         } catch (ValidationException $e) {
             return response()->json([
                 'message' => 'Invalid answer payload.',
