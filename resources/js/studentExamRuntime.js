@@ -12,6 +12,7 @@ import {
     clearSessionPending,
     listPendingForSession,
 } from './examAnswerOfflineQueue';
+import { attachEssayAntiClipboard, ESSAY_CLIPBOARD_WARNING_MESSAGE } from './essayAntiClipboard';
 
 const DEBOUNCE_MS = 1600;
 const POLL_MS = 12000;
@@ -134,7 +135,47 @@ async function main() {
         btnFullscreen: document.getElementById('btn-fullscreen'),
         fullscreenExitNotice: document.getElementById('fullscreen-exit-notice'),
         video: document.getElementById('proctoring-video'),
+        essayClipboardToast: document.getElementById('essay-clipboard-toast'),
     };
+
+    /** Always available so essay clipboard attempts log even if camera/proctoring init fails. */
+    const proctoringBatcher = new ProctoringEventBatcher({
+        examSessionKey: sessionId,
+        apiClient: axios,
+    });
+
+    let essayClipboardToastTimer = null;
+    function showEssayClipboardWarning() {
+        const toast = els.essayClipboardToast;
+        if (!toast) {
+            return;
+        }
+        toast.textContent = ESSAY_CLIPBOARD_WARNING_MESSAGE;
+        toast.classList.remove('hidden');
+        if (essayClipboardToastTimer) {
+            window.clearTimeout(essayClipboardToastTimer);
+        }
+        essayClipboardToastTimer = window.setTimeout(() => {
+            toast.classList.add('hidden');
+            essayClipboardToastTimer = null;
+        }, 3200);
+    }
+
+    function enqueueEssayClipboardAttempt(questionId, actionType) {
+        void proctoringBatcher
+            .enqueue({
+                event_type: 'essay_clipboard_attempt',
+                flagged: false,
+                metadata: {
+                    session_id: sessionId,
+                    student_id: studentId,
+                    exam_id: examId,
+                    question_id: questionId,
+                    action_type: actionType,
+                },
+            })
+            .catch(() => {});
+    }
 
     const examStateEngine = new ExamStateEngine();
     examStateEngine.configureApi(axios);
@@ -590,6 +631,10 @@ async function main() {
             ta.addEventListener('input', () => {
                 scheduleSave(q.id, () => ({ type: 'essay', text: ta.value }));
             });
+            attachEssayAntiClipboard(ta, {
+                showWarning: showEssayClipboardWarning,
+                onBlocked: (actionType) => enqueueEssayClipboardAttempt(q.id, actionType),
+            });
             wrap.appendChild(ta);
         }
 
@@ -862,11 +907,6 @@ async function main() {
             await els.video.play().catch(() => {});
         }
 
-        const batcher = new ProctoringEventBatcher({
-            examSessionKey: sessionId,
-            apiClient: axios,
-        });
-
         const runtime = new ProctoringRuntimeEngine({
             videoElement: els.video,
             sessionId,
@@ -874,7 +914,7 @@ async function main() {
             studentId,
             apiClient: axios,
             performanceProfile: perf,
-            eventBatcher: batcher,
+            eventBatcher: proctoringBatcher,
         });
         await runtime.init();
 

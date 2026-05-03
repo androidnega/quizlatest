@@ -1,38 +1,27 @@
-<x-guest-layout>
-    <x-auth-session-status class="mb-4" :status="session('status')" />
+<x-guest-layout
+    :page-title="__('Student sign-in')"
+    :eyebrow="__('Student access')"
+    :heading="__('Sign in to your exams')"
+    :description="__('Enter your index number. On the next step you\'ll enter a one-time code (logged to laravel.log during development).')"
+>
+    <x-auth-session-status class="mb-6" :status="session('status')" />
 
-    <form method="POST" action="{{ route('login') }}">
+    <form method="POST" action="{{ url('/login') }}" class="space-y-6">
         @csrf
 
         <div>
-            <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" class="block w-full" type="text" name="email" :value="old('email')" required autofocus autocomplete="username" />
-            <x-input-error :messages="$errors->get('email')" class="mt-2" />
+            <x-input-label for="index_number" :value="__('Index number')" />
+            <x-text-input id="index_number" name="index_number" type="text" :value="old('index_number')" required autofocus autocomplete="username" />
+            <x-input-error :messages="$errors->get('index_number')" class="mt-2" />
         </div>
 
-        <div class="mt-4">
-            <x-input-label for="password" :value="__('Password')" />
-            <x-text-input id="password" class="block w-full" type="password" name="password" required autocomplete="current-password" />
-            <x-input-error :messages="$errors->get('password')" class="mt-2" />
-        </div>
-
-        <div class="mt-4 block">
-            <label for="remember_me" class="inline-flex items-center">
-                <input id="remember_me" type="checkbox" class="rounded border-qs-soft text-qs-accent shadow-sm focus:ring-qs-accent/40" name="remember">
-                <span class="ms-2 text-sm text-qs-text">{{ __('Remember me') }}</span>
-            </label>
-        </div>
-
-        <div class="mt-4 flex items-center justify-end">
-            @if (Route::has('password.request'))
-                <a class="qs-link rounded-md text-sm" href="{{ route('password.request') }}">
-                    {{ __('Forgot your password?') }}
-                </a>
-            @endif
-
-            <x-primary-button class="ms-3">
-                {{ __('Log in') }}
-            </x-primary-button>
-        </div>
+        <button type="submit" class="qs-btn-primary w-full justify-center py-2.5 text-sm font-semibold">
+            {{ __('Continue') }}
+        </button>
     </form>
+
+    <p class="mt-8 border-t border-qs-soft pt-6 text-center text-sm text-qs-muted">
+        {{ __('Coordinator or admin?') }}
+        <a href="{{ route('staff.login') }}" class="qs-link font-medium text-qs-text">{{ __('Staff sign in') }}</a>
+    </p>
 </x-guest-layout>

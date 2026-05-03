@@ -15,6 +15,7 @@ class ProctoringOrchestratorService
 {
     public function __construct(
         private readonly ProctoringGlobalControlService $globalControl,
+        private readonly SystemExamPolicyService $examPolicy,
     ) {}
 
     /** @var array<int, bool> */
@@ -65,6 +66,8 @@ class ProctoringOrchestratorService
                 'multiple_faces' => 25,
                 'phone_detected' => 20,
                 'fullscreen_exit' => 10,
+                /** Log-only default; set a positive weight in quiz proctoring JSON for a small violation score per cooled-down event. */
+                'essay_clipboard_attempt' => 0,
             ],
             'cooldown_seconds' => 45,
         ];
@@ -132,6 +135,7 @@ class ProctoringOrchestratorService
             'multiple_faces' => 25,
             'phone_detected' => 20,
             'fullscreen_exit' => 10,
+            'essay_clipboard_attempt' => 0,
         ];
 
         $weights = array_intersect_key($weights, $defaults);
@@ -310,6 +314,7 @@ class ProctoringOrchestratorService
             'face_missing' => 'Your face was not visible to the camera.',
             'multiple_faces' => 'Multiple faces were detected near your workstation.',
             'phone_detected' => 'A phone-like object was detected in frame.',
+            'essay_clipboard_attempt' => 'Clipboard use is restricted during essay answers.',
             default => 'A proctoring concern was detected. Please adjust your setup.',
         };
     }
@@ -317,6 +322,10 @@ class ProctoringOrchestratorService
     private function resolveScoreDelta(array $settings, array $events, string $eventType, bool $inCooldown): int
     {
         if ($inCooldown) {
+            return 0;
+        }
+
+        if ($eventType === 'essay_clipboard_attempt' && ! $this->examPolicy->isProctoringEnabled()) {
             return 0;
         }
 

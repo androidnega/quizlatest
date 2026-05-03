@@ -50,5 +50,9 @@
     </footer>
 
     <video id="proctoring-video" class="fixed w-px h-px opacity-0 pointer-events-none" playsinline muted autoplay></video>
+
+    <div id="essay-clipboard-toast" role="status" aria-live="polite"
+        class="pointer-events-none fixed bottom-20 left-1/2 z-50 hidden max-w-sm -translate-x-1/2 rounded-lg border border-qs-soft bg-qs-card px-4 py-2 text-center text-sm text-qs-text shadow-lg">
+    </div>
 </div>
 @endsection

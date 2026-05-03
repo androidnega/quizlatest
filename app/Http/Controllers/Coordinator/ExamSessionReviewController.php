@@ -21,7 +21,7 @@ class ExamSessionReviewController extends Controller
     private const RISK_STATES = ['normal', 'warning', 'suspicious', 'critical', 'locked'];
 
     /** @var list<string> */
-    private const VIOLATION_EVENT_TYPES = ['tab_switch', 'phone_detected', 'face_missing', 'fullscreen_exit'];
+    private const VIOLATION_EVENT_TYPES = ['tab_switch', 'phone_detected', 'face_missing', 'fullscreen_exit', 'essay_clipboard_attempt'];
 
     public function index(Request $request, Quiz $exam): View
     {
