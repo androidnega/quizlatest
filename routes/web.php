@@ -18,13 +18,19 @@ use App\Http\Controllers\Coordinator\ManualGradingController;
 use App\Http\Controllers\Coordinator\ProgramController;
 use App\Http\Controllers\Coordinator\StudentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Examiner\CourseMaterialController as ExaminerCourseMaterialController;
 use App\Http\Controllers\Examiner\DashboardController as ExaminerDashboardController;
 use App\Http\Controllers\Examiner\ExamBuilderController;
+use App\Http\Controllers\Examiner\PracticeOverviewController;
 use App\Http\Controllers\ExamSessionController;
 use App\Http\Controllers\ProctoringUploadController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Student\StudentCourseMaterialController;
 use App\Http\Controllers\Student\StudentExamController;
 use App\Http\Controllers\Student\StudentExamEntryController;
+use App\Http\Controllers\Student\StudentPracticeHubController;
+use App\Http\Controllers\Student\StudentPracticeQuizController;
+use App\Http\Controllers\Student\StudentPracticeSummaryController;
 use App\Http\Controllers\Student\StudentResultController;
 use Illuminate\Support\Facades\Route;
 
@@ -52,6 +58,28 @@ Route::middleware('auth')->group(function () {
             Route::get('/', [StudentResultController::class, 'index'])->name('index');
             Route::get('/{examSession}/pdf', [StudentResultController::class, 'pdf'])->name('pdf');
             Route::get('/{examSession}', [StudentResultController::class, 'show'])->name('show');
+        });
+
+    Route::prefix('student/practice')
+        ->name('student.practice.')
+        ->middleware(['verified', 'student'])
+        ->group(function () {
+            Route::get('/', [StudentPracticeHubController::class, 'index'])->name('index');
+            Route::get('/materials', [StudentCourseMaterialController::class, 'index'])->name('materials.index');
+            Route::get('/materials/{material}/download', [StudentCourseMaterialController::class, 'download'])->name('materials.download');
+
+            Route::get('/summaries', [StudentPracticeSummaryController::class, 'index'])->name('summaries.index');
+            Route::post('/summaries', [StudentPracticeSummaryController::class, 'store'])->name('summaries.store');
+            Route::get('/summaries/{practiceSummary}', [StudentPracticeSummaryController::class, 'show'])->name('summaries.show');
+
+            Route::get('/quizzes', [StudentPracticeQuizController::class, 'index'])->name('quizzes.index');
+            Route::get('/quizzes/create', [StudentPracticeQuizController::class, 'create'])->name('quizzes.create');
+            Route::post('/quizzes', [StudentPracticeQuizController::class, 'store'])->name('quizzes.store');
+            Route::get('/quizzes/{practiceQuiz}', [StudentPracticeQuizController::class, 'show'])->name('quizzes.show');
+            Route::delete('/quizzes/{practiceQuiz}', [StudentPracticeQuizController::class, 'destroy'])->name('quizzes.destroy');
+            Route::get('/quizzes/{practiceQuiz}/take', [StudentPracticeQuizController::class, 'take'])->name('quizzes.take');
+            Route::post('/quizzes/{practiceQuiz}/submit', [StudentPracticeQuizController::class, 'submit'])->name('quizzes.submit');
+            Route::get('/quizzes/{practiceQuiz}/results/{attempt}', [StudentPracticeQuizController::class, 'result'])->name('quizzes.result');
         });
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -205,6 +233,11 @@ Route::prefix('examiner')
         Route::post('/exams/{exam}/questions/import/commit', [ExamBuilderController::class, 'commitQuestionImport'])->name('exams.questions.import.commit');
         Route::post('/exams/{exam}/questions/ai/prompt', [ExamBuilderController::class, 'buildAiPrompt'])->name('exams.questions.ai.prompt');
         Route::post('/exams/{exam}/questions/ai/generate', [ExamBuilderController::class, 'generateWithAi'])->name('exams.questions.ai.generate');
+
+        Route::get('/courses/{course}/materials', [ExaminerCourseMaterialController::class, 'index'])->name('courses.materials.index');
+        Route::post('/courses/{course}/materials', [ExaminerCourseMaterialController::class, 'store'])->name('courses.materials.store');
+        Route::delete('/courses/{course}/materials/{material}', [ExaminerCourseMaterialController::class, 'destroy'])->name('courses.materials.destroy');
+        Route::get('/practice-overview', [PracticeOverviewController::class, 'index'])->name('practice-overview.index');
     });
 
 require __DIR__.'/auth.php';

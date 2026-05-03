@@ -52,6 +52,30 @@ class AdminSettingsController extends Controller
             'lock_fullscreen_required' => $this->systemSettings->isLocked('fullscreen_required'),
             'lock_auto_submit_enabled' => $this->systemSettings->isLocked('auto_submit_enabled'),
             'lock_enable_ai' => $this->systemSettings->isLocked('enable_ai'),
+
+            'enable_student_practice_quizzes' => $this->systemSettings->getBool('enable_student_practice_quizzes', false),
+            'enable_course_material_uploads' => $this->systemSettings->getBool('enable_course_material_uploads', false),
+            'enable_ai_summary' => $this->systemSettings->getBool('enable_ai_summary', false),
+            'enable_ai_practice_quiz_generation' => $this->systemSettings->getBool('enable_ai_practice_quiz_generation', false),
+            'practice_quiz_daily_limit' => (string) $this->systemSettings->getInt('practice_quiz_daily_limit', 5),
+            'practice_quiz_monthly_limit' => (string) $this->systemSettings->getInt('practice_quiz_monthly_limit', 50),
+            'practice_ai_token_limit_per_student' => (string) $this->systemSettings->getInt('practice_ai_token_limit_per_student', 100_000),
+            'practice_ai_provider' => $this->systemSettings->get('practice_ai_provider') ?? 'deepseek',
+            'deepseek_api_key_masked' => $this->systemSettings->getMasked('deepseek_api_key'),
+            'deepseek_model' => $this->systemSettings->get('deepseek_model') ?? 'deepseek-chat',
+            'allow_examiner_practice_overview' => $this->systemSettings->getBool('allow_examiner_practice_overview', false),
+
+            'lock_enable_student_practice_quizzes' => $this->systemSettings->isLocked('enable_student_practice_quizzes'),
+            'lock_enable_course_material_uploads' => $this->systemSettings->isLocked('enable_course_material_uploads'),
+            'lock_enable_ai_summary' => $this->systemSettings->isLocked('enable_ai_summary'),
+            'lock_enable_ai_practice_quiz_generation' => $this->systemSettings->isLocked('enable_ai_practice_quiz_generation'),
+            'lock_practice_quiz_daily_limit' => $this->systemSettings->isLocked('practice_quiz_daily_limit'),
+            'lock_practice_quiz_monthly_limit' => $this->systemSettings->isLocked('practice_quiz_monthly_limit'),
+            'lock_practice_ai_token_limit_per_student' => $this->systemSettings->isLocked('practice_ai_token_limit_per_student'),
+            'lock_practice_ai_provider' => $this->systemSettings->isLocked('practice_ai_provider'),
+            'lock_deepseek_api_key' => $this->systemSettings->isLocked('deepseek_api_key'),
+            'lock_deepseek_model' => $this->systemSettings->isLocked('deepseek_model'),
+            'lock_allow_examiner_practice_overview' => $this->systemSettings->isLocked('allow_examiner_practice_overview'),
         ]);
     }
 
@@ -67,6 +91,12 @@ class AdminSettingsController extends Controller
             'default_proctoring_settings' => ['nullable', 'string', 'max:10000'],
             'otp_expiry' => ['nullable', 'integer', 'min:60', 'max:7200'],
             'otp_attempt_limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'practice_quiz_daily_limit' => ['nullable', 'integer', 'min:0', 'max:500'],
+            'practice_quiz_monthly_limit' => ['nullable', 'integer', 'min:0', 'max:5000'],
+            'practice_ai_token_limit_per_student' => ['nullable', 'integer', 'min:0', 'max:10000000'],
+            'practice_ai_provider' => ['nullable', 'string', 'max:64'],
+            'deepseek_api_key' => ['nullable', 'string', 'max:2000'],
+            'deepseek_model' => ['nullable', 'string', 'max:128'],
         ]);
 
         $user = $request->user();
@@ -101,6 +131,31 @@ class AdminSettingsController extends Controller
         }
         if (array_key_exists('otp_attempt_limit', $validated) && $validated['otp_attempt_limit'] !== null && ! $this->systemSettings->isLocked('otp_attempt_limit')) {
             $this->systemSettings->set('otp_attempt_limit', (string) (int) $validated['otp_attempt_limit'], $user);
+        }
+
+        $this->setBoolIfUnlocked('enable_student_practice_quizzes', $request->boolean('enable_student_practice_quizzes'), $user);
+        $this->setBoolIfUnlocked('enable_course_material_uploads', $request->boolean('enable_course_material_uploads'), $user);
+        $this->setBoolIfUnlocked('enable_ai_summary', $request->boolean('enable_ai_summary'), $user);
+        $this->setBoolIfUnlocked('enable_ai_practice_quiz_generation', $request->boolean('enable_ai_practice_quiz_generation'), $user);
+        $this->setBoolIfUnlocked('allow_examiner_practice_overview', $request->boolean('allow_examiner_practice_overview'), $user);
+
+        if (array_key_exists('practice_quiz_daily_limit', $validated) && $validated['practice_quiz_daily_limit'] !== null && ! $this->systemSettings->isLocked('practice_quiz_daily_limit')) {
+            $this->systemSettings->set('practice_quiz_daily_limit', (string) (int) $validated['practice_quiz_daily_limit'], $user);
+        }
+        if (array_key_exists('practice_quiz_monthly_limit', $validated) && $validated['practice_quiz_monthly_limit'] !== null && ! $this->systemSettings->isLocked('practice_quiz_monthly_limit')) {
+            $this->systemSettings->set('practice_quiz_monthly_limit', (string) (int) $validated['practice_quiz_monthly_limit'], $user);
+        }
+        if (array_key_exists('practice_ai_token_limit_per_student', $validated) && $validated['practice_ai_token_limit_per_student'] !== null && ! $this->systemSettings->isLocked('practice_ai_token_limit_per_student')) {
+            $this->systemSettings->set('practice_ai_token_limit_per_student', (string) (int) $validated['practice_ai_token_limit_per_student'], $user);
+        }
+        if (array_key_exists('practice_ai_provider', $validated) && $validated['practice_ai_provider'] !== null && ! $this->systemSettings->isLocked('practice_ai_provider')) {
+            $this->systemSettings->set('practice_ai_provider', trim((string) $validated['practice_ai_provider']), $user);
+        }
+        if (! empty($validated['deepseek_api_key']) && $validated['deepseek_api_key'] !== '********' && ! $this->systemSettings->isLocked('deepseek_api_key')) {
+            $this->systemSettings->set('deepseek_api_key', $validated['deepseek_api_key'], $user);
+        }
+        if (array_key_exists('deepseek_model', $validated) && $validated['deepseek_model'] !== null && ! $this->systemSettings->isLocked('deepseek_model')) {
+            $this->systemSettings->set('deepseek_model', trim((string) $validated['deepseek_model']), $user);
         }
 
         return redirect()->route('admin.settings.index')->with('status', 'Settings updated.');

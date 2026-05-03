@@ -33,6 +33,12 @@
                 <a href="{{ route('examiner.exams.index') }}" class="qs-btn-primary text-sm">{{ __('My exams') }}</a>
                 <a href="{{ route('examiner.exams.create') }}" class="qs-btn-secondary text-sm">{{ __('Create exam') }}</a>
                 <a href="{{ route('coordinator.dashboard') }}" class="qs-btn-secondary text-sm">{{ __('Coordinator home') }}</a>
+                @if (! empty($practiceOverviewEnabled))
+                    <a href="{{ route('examiner.practice-overview.index') }}" class="qs-btn-secondary text-sm">{{ __('Practice overview') }}</a>
+                @endif
+                @if (! empty($materialUploadsEnabled) && $firstManageableCourse)
+                    <a href="{{ route('examiner.courses.materials.index', $firstManageableCourse) }}" class="qs-btn-secondary text-sm">{{ __('Course materials') }}</a>
+                @endif
             </div>
         </div>
     </div>

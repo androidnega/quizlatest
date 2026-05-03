@@ -19,6 +19,17 @@
             'enable_ai' => 'Enable AI',
             'ai_api_key' => 'AI API key',
             'ai_model_name' => 'AI model name',
+            'enable_student_practice_quizzes' => 'Enable student practice module',
+            'enable_course_material_uploads' => 'Enable course material uploads',
+            'enable_ai_summary' => 'Enable AI study summaries (practice)',
+            'enable_ai_practice_quiz_generation' => 'Enable AI practice quiz generation',
+            'practice_quiz_daily_limit' => 'Practice AI quiz daily limit (per student)',
+            'practice_quiz_monthly_limit' => 'Practice AI quiz monthly limit (per student)',
+            'practice_ai_token_limit_per_student' => 'Practice AI tokens/month per student',
+            'practice_ai_provider' => 'Practice AI provider slug',
+            'deepseek_api_key' => 'DeepSeek API key',
+            'deepseek_model' => 'DeepSeek model',
+            'allow_examiner_practice_overview' => 'Allow examiner practice analytics',
         ];
     @endphp
 
@@ -119,6 +130,66 @@
                 <label class="mb-1 block text-sm text-qs-muted">Model name</label>
                 <input type="text" name="ai_model_name" value="{{ old('ai_model_name', $ai_model_name) }}"
                     class="qs-input max-w-xl" @disabled($ai_model_locked) />
+            </div>
+        </section>
+
+        <section class="qs-surface rounded-xl p-6 space-y-4">
+            <h3 class="text-base font-semibold text-qs-text">Practice &amp; course materials (unofficial)</h3>
+            <p class="text-xs text-qs-muted">Student practice is separate from official exams and proctoring. DeepSeek key is stored encrypted and never shown in full.</p>
+
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="enable_student_practice_quizzes" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
+                    @checked(old('enable_student_practice_quizzes', $enable_student_practice_quizzes)) @disabled($lock_enable_student_practice_quizzes) />
+                Enable student practice area (master switch)
+            </label>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="enable_course_material_uploads" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
+                    @checked(old('enable_course_material_uploads', $enable_course_material_uploads)) @disabled($lock_enable_course_material_uploads) />
+                Examiners can upload course materials
+            </label>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="enable_ai_summary" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
+                    @checked(old('enable_ai_summary', $enable_ai_summary)) @disabled($lock_enable_ai_summary) />
+                Students can request AI study summaries
+            </label>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="enable_ai_practice_quiz_generation" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
+                    @checked(old('enable_ai_practice_quiz_generation', $enable_ai_practice_quiz_generation)) @disabled($lock_enable_ai_practice_quiz_generation) />
+                Students can generate AI practice quizzes
+            </label>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="allow_examiner_practice_overview" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
+                    @checked(old('allow_examiner_practice_overview', $allow_examiner_practice_overview)) @disabled($lock_allow_examiner_practice_overview) />
+                Examiners can view practice analytics (aggregates only)
+            </label>
+
+            <div class="grid gap-4 sm:grid-cols-3">
+                <div>
+                    <label class="mb-1 block text-sm text-qs-muted">Daily AI quiz generations / student</label>
+                    <input type="number" name="practice_quiz_daily_limit" min="0" max="500" value="{{ old('practice_quiz_daily_limit', $practice_quiz_daily_limit) }}" class="qs-input max-w-xs" @disabled($lock_practice_quiz_daily_limit) />
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm text-qs-muted">Monthly AI quiz generations / student</label>
+                    <input type="number" name="practice_quiz_monthly_limit" min="0" max="5000" value="{{ old('practice_quiz_monthly_limit', $practice_quiz_monthly_limit) }}" class="qs-input max-w-xs" @disabled($lock_practice_quiz_monthly_limit) />
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm text-qs-muted">Practice AI tokens / student / month</label>
+                    <input type="number" name="practice_ai_token_limit_per_student" min="0" value="{{ old('practice_ai_token_limit_per_student', $practice_ai_token_limit_per_student) }}" class="qs-input max-w-xs" @disabled($lock_practice_ai_token_limit_per_student) />
+                </div>
+            </div>
+            <div>
+                <label class="mb-1 block text-sm text-qs-muted">Provider identifier</label>
+                <input type="text" name="practice_ai_provider" value="{{ old('practice_ai_provider', $practice_ai_provider) }}" class="qs-input max-w-md" @disabled($lock_practice_ai_provider) />
+            </div>
+            <div>
+                <label class="mb-1 block text-sm text-qs-muted">DeepSeek API key</label>
+                <input type="password" name="deepseek_api_key" autocomplete="off" class="qs-input max-w-xl"
+                    placeholder="{{ $deepseek_api_key_masked ? '•••••••• (enter new to replace)' : 'Not set' }}"
+                    @disabled($lock_deepseek_api_key) />
+            </div>
+            <div>
+                <label class="mb-1 block text-sm text-qs-muted">DeepSeek model</label>
+                <input type="text" name="deepseek_model" value="{{ old('deepseek_model', $deepseek_model) }}" class="qs-input max-w-xl" @disabled($lock_deepseek_model) />
             </div>
         </section>
 

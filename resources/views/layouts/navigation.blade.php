@@ -16,6 +16,11 @@
                         <x-nav-link :href="route('student.results.index')" :active="request()->routeIs('student.results.*')">
                             {{ __('Results') }}
                         </x-nav-link>
+                        @if (! empty($studentPracticeNavEnabled))
+                            <x-nav-link :href="route('student.practice.index')" :active="request()->routeIs('student.practice.*')">
+                                {{ __('Practice') }}
+                            </x-nav-link>
+                        @endif
                     @endif
                 </div>
             </div>
@@ -69,6 +74,11 @@
                 <x-responsive-nav-link :href="route('student.results.index')" :active="request()->routeIs('student.results.*')">
                     {{ __('Results') }}
                 </x-responsive-nav-link>
+                @if (! empty($studentPracticeNavEnabled))
+                    <x-responsive-nav-link :href="route('student.practice.index')" :active="request()->routeIs('student.practice.*')">
+                        {{ __('Practice') }}
+                    </x-responsive-nav-link>
+                @endif
             @endif
         </div>
 

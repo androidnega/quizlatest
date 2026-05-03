@@ -13,6 +13,24 @@
                 </div>
             @endif
 
+            @if ($practiceEnabled ?? false)
+                <div class="rounded-xl border border-qs-accent/30 bg-qs-accent/10 px-5 py-5 shadow-sm">
+                    <p class="text-sm font-semibold text-qs-text">{{ __('Practice (unofficial)') }}</p>
+                    <p class="mt-1 text-xs text-qs-muted">{{ __('Materials, AI summaries, and self-tests — separate from official exams.') }}</p>
+                    <div class="mt-4 flex flex-wrap gap-3">
+                        <a href="{{ route('student.practice.index') }}" class="qs-btn-primary text-sm">{{ __('Practice hub') }}</a>
+                        <span class="self-center text-xs text-qs-muted">{{ __('Saved quizzes') }}: {{ $practiceQuizCount }}</span>
+                    </div>
+                    @if (($recentPracticeScores ?? collect())->isNotEmpty())
+                        <ul class="mt-4 space-y-1 text-xs text-qs-muted">
+                            @foreach ($recentPracticeScores as $att)
+                                <li>{{ $att->practiceQuiz?->course?->code }} — {{ $att->percentage !== null ? number_format((float) $att->percentage, 1).'%' : '—' }}</li>
+                            @endforeach
+                        </ul>
+                    @endif
+                </div>
+            @endif
+
             <div class="grid gap-4 md:grid-cols-3">
                 <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
                     <p class="text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ __('Program') }}</p>

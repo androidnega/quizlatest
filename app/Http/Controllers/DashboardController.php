@@ -5,9 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\AcademicYear;
 use App\Models\Classroom;
 use App\Models\ExamSession;
+use App\Models\PracticeAttempt;
+use App\Models\PracticeQuiz;
 use App\Models\Quiz;
 use App\Models\Result;
 use App\Models\User;
+use App\Services\PracticeModuleSettings;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Carbon;
@@ -34,13 +37,13 @@ class DashboardController extends Controller
             ]);
         }
 
-        return view('student.dashboard', $this->buildStudentDashboardData($user));
+        return view('student.dashboard', $this->buildStudentDashboardData($user, app(PracticeModuleSettings::class)));
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function buildStudentDashboardData(User $user): array
+    private function buildStudentDashboardData(User $user, PracticeModuleSettings $practiceSettings): array
     {
         $now = Carbon::now();
 
@@ -151,6 +154,20 @@ class DashboardController extends Controller
 
         $faceReady = is_array($user->face_embedding) && count($user->face_embedding) >= 3;
 
+        $practiceEnabled = $practiceSettings->studentPracticeEnabled();
+        $practiceQuizCount = 0;
+        $recentPracticeScores = collect();
+        if ($practiceEnabled) {
+            $practiceQuizCount = PracticeQuiz::query()->where('student_id', $user->id)->count();
+            $recentPracticeScores = PracticeAttempt::query()
+                ->where('student_id', $user->id)
+                ->whereNotNull('submitted_at')
+                ->with(['practiceQuiz.course:id,code,title'])
+                ->orderByDesc('submitted_at')
+                ->limit(3)
+                ->get();
+        }
+
         return [
             'user' => $user,
             'activeSession' => $activeSession,
@@ -161,6 +178,9 @@ class DashboardController extends Controller
             'pendingManualResults' => $pendingManual,
             'faceProfileReady' => $faceReady,
             'hasClass' => $user->class_id !== null,
+            'practiceEnabled' => $practiceEnabled,
+            'practiceQuizCount' => $practiceQuizCount,
+            'recentPracticeScores' => $recentPracticeScores,
         ];
     }
 }

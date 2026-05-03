@@ -20,6 +20,7 @@ use App\Policies\LevelPolicy;
 use App\Policies\ProgramPolicy;
 use App\Policies\UniversityPolicy;
 use App\Policies\UserPolicy;
+use App\Services\PracticeModuleSettings;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -61,6 +62,14 @@ class AppServiceProvider extends ServiceProvider
             'manageSystemSettings',
             fn (User $user): bool => $userPolicy->manageSystemSettings($user),
         );
+
+        View::composer('layouts.navigation', function ($view): void {
+            $user = auth()->user();
+            $view->with(
+                'studentPracticeNavEnabled',
+                $user !== null && $user->role === 'student' && app(PracticeModuleSettings::class)->studentPracticeEnabled(),
+            );
+        });
 
         View::composer('components.layouts.coordinator', function ($view): void {
             $user = auth()->user();

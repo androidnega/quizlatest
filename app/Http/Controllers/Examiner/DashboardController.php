@@ -10,6 +10,7 @@ use App\Models\ExamSession;
 use App\Models\ExamSessionAnswer;
 use App\Models\Quiz;
 use App\Models\Result;
+use App\Services\PracticeModuleSettings;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
@@ -93,6 +94,12 @@ class DashboardController extends Controller
             ->limit(6)
             ->get();
 
+        $practice = app(PracticeModuleSettings::class);
+        $firstManageableCourse = Course::query()
+            ->whereIn('id', $manageableCourseIds)
+            ->orderBy('code')
+            ->first(['id', 'code', 'title']);
+
         return view('examiner.dashboard', [
             'assignedCourses' => $assignedCourses,
             'academicYears' => AcademicYear::query()
@@ -106,6 +113,9 @@ class DashboardController extends Controller
             'pendingManualGradingCount' => $pendingManualGradingCount,
             'flaggedSessions' => $flaggedSessions,
             'manageableCourseCount' => count($manageableCourseIds),
+            'practiceOverviewEnabled' => $practice->examinerPracticeOverviewEnabled(),
+            'materialUploadsEnabled' => $practice->courseMaterialUploadsEnabled(),
+            'firstManageableCourse' => $firstManageableCourse,
         ]);
     }
 
