@@ -119,7 +119,7 @@ class ExamSessionController extends Controller
 
         $path = $dir.'/verification.jpg';
 
-        Storage::disk('public')->put($path, file_get_contents($validated['snapshot']->getRealPath()));
+        Storage::disk('local')->put($path, file_get_contents($validated['snapshot']->getRealPath()));
 
         $examSession->forceFill(['verification_image_path' => $path])->save();
 

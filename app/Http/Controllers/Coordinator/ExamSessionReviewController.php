@@ -8,12 +8,12 @@ use App\Models\ProctoringEvent;
 use App\Models\Quiz;
 use App\Models\Result;
 use App\Services\ResultFinalizationService;
+use App\Services\SensitiveStorageService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class ExamSessionReviewController extends Controller
@@ -165,7 +165,7 @@ class ExamSessionReviewController extends Controller
         ];
     }
 
-    public function show(Request $request, ExamSession $examSession): View
+    public function show(Request $request, ExamSession $examSession, SensitiveStorageService $sensitiveStorage): View
     {
         $this->authorize('view', $examSession);
 
@@ -190,7 +190,7 @@ class ExamSessionReviewController extends Controller
             ->where('metadata->session_id', $examSession->session_id)
             ->orderByDesc('created_at')
             ->limit(200)
-            ->get(['event_type', 'severity', 'flagged', 'action_taken', 'created_at', 'metadata'])
+            ->get(['id', 'event_type', 'severity', 'flagged', 'action_taken', 'created_at', 'metadata'])
             ->sortBy('created_at')
             ->values();
 
@@ -209,20 +209,20 @@ class ExamSessionReviewController extends Controller
             if (! is_string($path) || $path === '') {
                 continue;
             }
-            if (! Storage::disk('public')->exists($path)) {
+            if (! $sensitiveStorage->existsAnywhere($path)) {
                 continue;
             }
             $thumbnails[] = [
-                'url' => Storage::disk('public')->url($path),
+                'url' => route('coordinator.exam-sessions.evidence.event', [$examSession, $e]),
                 'event_type' => $e->event_type,
                 'at' => $e->created_at,
             ];
         }
 
         $verificationPath = $examSession->verification_image_path;
-        $verificationImageUrl = null;
-        if (is_string($verificationPath) && $verificationPath !== '' && Storage::disk('public')->exists($verificationPath)) {
-            $verificationImageUrl = Storage::disk('public')->url($verificationPath);
+        $verificationEvidenceUrl = null;
+        if (is_string($verificationPath) && $verificationPath !== '' && $sensitiveStorage->existsAnywhere($verificationPath)) {
+            $verificationEvidenceUrl = route('coordinator.exam-sessions.evidence.verification', $examSession);
         }
 
         return view('coordinator.exam_sessions.show', [
@@ -232,7 +232,7 @@ class ExamSessionReviewController extends Controller
             'thumbnails' => $thumbnails,
             'isHeld' => $workflowStatus === 'held',
             'canManageResults' => $canManageResults,
-            'verificationImageUrl' => $verificationImageUrl,
+            'verificationEvidenceUrl' => $verificationEvidenceUrl,
             'releaseUrl' => route('exam-sessions.review.release', $examSession),
             'confirmFailUrl' => route('exam-sessions.review.confirm-fail', $examSession),
             'overrideUrl' => route('exam-sessions.review.override', $examSession),

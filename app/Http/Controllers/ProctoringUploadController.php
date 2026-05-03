@@ -30,7 +30,7 @@ class ProctoringUploadController extends Controller
             ->first();
         abort_unless($session, 422, 'Invalid exam session context.');
 
-        $filename = now()->format('YmdHis').'_' . Str::random(10).'.jpg';
+        $filename = now()->format('YmdHis').'_'.Str::random(10).'.jpg';
         $filePath = "proctoring/user_{$userId}/session_{$sessionId}/{$filename}";
         $token = Str::uuid()->toString();
 
@@ -47,7 +47,6 @@ class ProctoringUploadController extends Controller
 
         return response()->json([
             'upload_token' => $token,
-            'file_path' => $filePath,
             'upload_url' => route('proctoring.uploads.file', absolute: false),
             'metadata_url' => route('proctoring.uploads.metadata', absolute: false),
         ]);
@@ -64,7 +63,7 @@ class ProctoringUploadController extends Controller
         abort_unless(is_array($payload), 422, 'Upload token expired.');
         abort_unless((int) $payload['user_id'] === (int) $request->user()->id, 403);
 
-        Storage::disk('public')->put($payload['file_path'], file_get_contents($validated['snapshot']->getRealPath()));
+        Storage::disk('local')->put($payload['file_path'], file_get_contents($validated['snapshot']->getRealPath()));
 
         $payload['uploaded'] = true;
         $payload['uploaded_at'] = now()->toISOString();
@@ -72,7 +71,6 @@ class ProctoringUploadController extends Controller
 
         return response()->json([
             'status' => 'uploaded',
-            'file_path' => $payload['file_path'],
         ]);
     }
 

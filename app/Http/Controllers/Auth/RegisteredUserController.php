@@ -50,7 +50,7 @@ class RegisteredUserController extends Controller
 
         $faceImagePath = null;
         if ($request->hasFile('face_image')) {
-            $faceImagePath = $request->file('face_image')->store('proctoring/face-templates', 'public');
+            $faceImagePath = $request->file('face_image')->store('proctoring/face-templates', 'local');
         }
 
         $user = User::create([

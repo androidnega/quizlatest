@@ -15,13 +15,13 @@
             @endif
         </div>
 
-        @if ($verificationImageUrl)
+        @if ($verificationEvidenceUrl)
             <div class="qs-card rounded-xl p-5 shadow-sm">
                 <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-muted">Verification image</h3>
                 <p class="mt-1 text-xs text-qs-muted">Captured at exam start after face verification.</p>
                 <div class="mt-3">
-                    <a href="{{ $verificationImageUrl }}" target="_blank" rel="noopener noreferrer">
-                        <img src="{{ $verificationImageUrl }}" alt="" loading="lazy" decoding="async" class="max-h-48 max-w-full rounded-lg border border-qs-soft object-contain" />
+                    <a href="{{ $verificationEvidenceUrl }}" target="_blank" rel="noopener noreferrer">
+                        <img src="{{ $verificationEvidenceUrl }}" alt="" loading="lazy" decoding="async" class="max-h-48 max-w-full rounded-lg border border-qs-soft object-contain" />
                     </a>
                 </div>
             </div>

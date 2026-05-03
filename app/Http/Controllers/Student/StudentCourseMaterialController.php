@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\CourseMaterial;
 use App\Services\PracticeModuleSettings;
+use App\Services\SensitiveStorageService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class StudentCourseMaterialController extends Controller
@@ -29,8 +29,11 @@ class StudentCourseMaterialController extends Controller
         ]);
     }
 
-    public function download(PracticeModuleSettings $practice, CourseMaterial $material): StreamedResponse|RedirectResponse
-    {
+    public function download(
+        PracticeModuleSettings $practice,
+        SensitiveStorageService $sensitiveStorage,
+        CourseMaterial $material,
+    ): StreamedResponse|RedirectResponse {
         $practice->assertStudentPracticeOrAbort();
 
         $user = auth()->user();
@@ -41,6 +44,9 @@ class StudentCourseMaterialController extends Controller
             ->first();
         abort_if($row === null, 404);
 
-        return Storage::disk('local')->download($row->file_path, basename($row->file_path));
+        abort_if($row->file_path === '', 404);
+        abort_unless($sensitiveStorage->existsAnywhere($row->file_path), 404);
+
+        return $sensitiveStorage->downloadResponse($row->file_path, basename($row->file_path));
     }
 }

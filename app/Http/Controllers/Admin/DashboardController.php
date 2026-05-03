@@ -23,6 +23,7 @@ class DashboardController extends Controller
     public function index(): View
     {
         $publicBytes = $this->estimatePublicDiskUsageBytes();
+        $privateBytes = $this->estimatePrivateDiskUsageBytes();
 
         return view('admin.dashboard', [
             'universityCount' => University::count(),
@@ -34,6 +35,7 @@ class DashboardController extends Controller
             'otpEnabled' => $this->examPolicy->isOtpEnabled(),
             'smsEnabled' => $this->examPolicy->isSmsEnabled(),
             'publicStorageBytes' => $publicBytes,
+            'privateStorageBytes' => $privateBytes,
         ]);
     }
 
@@ -41,6 +43,25 @@ class DashboardController extends Controller
     {
         try {
             $disk = Storage::disk('public');
+            $total = 0;
+            foreach ($disk->allFiles() as $path) {
+                try {
+                    $total += $disk->size($path);
+                } catch (\Throwable) {
+                    //
+                }
+            }
+
+            return $total;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function estimatePrivateDiskUsageBytes(): ?int
+    {
+        try {
+            $disk = Storage::disk('local');
             $total = 0;
             foreach ($disk->allFiles() as $path) {
                 try {

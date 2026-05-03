@@ -25,6 +25,8 @@ use App\Http\Controllers\Examiner\PracticeOverviewController;
 use App\Http\Controllers\ExamSessionController;
 use App\Http\Controllers\ProctoringUploadController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ProfileFaceImageController;
+use App\Http\Controllers\SecureExamEvidenceController;
 use App\Http\Controllers\Student\StudentCourseMaterialController;
 use App\Http\Controllers\Student\StudentExamController;
 use App\Http\Controllers\Student\StudentExamEntryController;
@@ -83,6 +85,7 @@ Route::middleware('auth')->group(function () {
         });
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::get('/profile/face-image', [ProfileFaceImageController::class, 'show'])->name('profile.face-image');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
@@ -149,6 +152,11 @@ Route::prefix('admin')
 
         Route::get('/academic-reset-snapshots', [AcademicResetSnapshotsController::class, 'index'])->name('academic-reset-snapshots.index');
 
+        Route::get('/exam-sessions/{examSession}/evidence/verification', [SecureExamEvidenceController::class, 'verification'])
+            ->name('exam-sessions.evidence.verification');
+        Route::get('/exam-sessions/{examSession}/evidence/events/{proctoringEvent}', [SecureExamEvidenceController::class, 'eventSnapshot'])
+            ->name('exam-sessions.evidence.event');
+
         Route::get('/academic-years', [AcademicYearController::class, 'index'])->name('academic-years.index');
         Route::get('/academic-years/create', [AcademicYearController::class, 'create'])->name('academic-years.create');
         Route::post('/academic-years', [AcademicYearController::class, 'store'])->name('academic-years.store');
@@ -207,6 +215,10 @@ Route::prefix('coordinator')
         Route::post('/grading/answers/{answer}', [ManualGradingController::class, 'grade'])->name('grading.grade');
 
         Route::get('/exams/{exam}/sessions', [ExamSessionReviewController::class, 'index'])->name('exams.sessions.index');
+        Route::get('/exam-sessions/{examSession}/evidence/verification', [SecureExamEvidenceController::class, 'verification'])
+            ->name('exam-sessions.evidence.verification');
+        Route::get('/exam-sessions/{examSession}/evidence/events/{proctoringEvent}', [SecureExamEvidenceController::class, 'eventSnapshot'])
+            ->name('exam-sessions.evidence.event');
         Route::get('/exam-sessions/{examSession}', [ExamSessionReviewController::class, 'show'])->name('exam-sessions.show');
     });
 
@@ -236,6 +248,7 @@ Route::prefix('examiner')
 
         Route::get('/courses/{course}/materials', [ExaminerCourseMaterialController::class, 'index'])->name('courses.materials.index');
         Route::post('/courses/{course}/materials', [ExaminerCourseMaterialController::class, 'store'])->name('courses.materials.store');
+        Route::get('/courses/{course}/materials/{material}/download', [ExaminerCourseMaterialController::class, 'download'])->name('courses.materials.download');
         Route::delete('/courses/{course}/materials/{material}', [ExaminerCourseMaterialController::class, 'destroy'])->name('courses.materials.destroy');
         Route::get('/practice-overview', [PracticeOverviewController::class, 'index'])->name('practice-overview.index');
     });

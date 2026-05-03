@@ -9,12 +9,13 @@ use App\Models\CourseMaterial;
 use App\Services\CourseMaterialTextExtractor;
 use App\Services\ExaminerCourseScopeService;
 use App\Services\PracticeModuleSettings;
+use App\Services\SensitiveStorageService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CourseMaterialController extends Controller
 {
@@ -115,10 +116,30 @@ class CourseMaterialController extends Controller
             ->with('status', __('Material uploaded and processed.'));
     }
 
+    public function download(
+        Request $request,
+        PracticeModuleSettings $practice,
+        ExaminerCourseScopeService $scope,
+        SensitiveStorageService $sensitiveStorage,
+        Course $course,
+        CourseMaterial $material,
+    ): StreamedResponse|RedirectResponse {
+        $practice->assertMaterialUploadsOrAbort();
+        abort_unless((int) $material->course_id === (int) $course->id, 404);
+        abort_unless($scope->canManageCourse($request->user(), (int) $course->id), 403);
+
+        $path = $material->file_path;
+        abort_if($path === '', 404);
+        abort_unless($sensitiveStorage->existsAnywhere($path), 404);
+
+        return $sensitiveStorage->downloadResponse($path, basename($path));
+    }
+
     public function destroy(
         Request $request,
         PracticeModuleSettings $practice,
         ExaminerCourseScopeService $scope,
+        SensitiveStorageService $sensitiveStorage,
         Course $course,
         CourseMaterial $material,
     ): RedirectResponse {
@@ -127,10 +148,10 @@ class CourseMaterialController extends Controller
         abort_unless($scope->canManageCourse($request->user(), (int) $course->id), 403);
 
         if ($material->file_path !== '') {
-            Storage::disk('local')->delete($material->file_path);
+            $sensitiveStorage->deleteFromAnywhere($material->file_path);
         }
         if ($material->extracted_text_path !== null && $material->extracted_text_path !== '') {
-            Storage::disk('local')->delete($material->extracted_text_path);
+            $sensitiveStorage->deleteFromAnywhere($material->extracted_text_path);
         }
 
         $material->delete();

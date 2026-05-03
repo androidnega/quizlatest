@@ -55,7 +55,8 @@
                             <td class="text-sm text-qs-text">{{ $m->title }}</td>
                             <td class="text-sm text-qs-muted">{{ strtoupper($m->file_type) }}</td>
                             <td class="text-sm text-qs-muted">{{ $m->status }}</td>
-                            <td class="text-right">
+                            <td class="text-right space-x-3">
+                                <a href="{{ route('examiner.courses.materials.download', [$course, $m]) }}" class="text-sm font-medium text-qs-text underline-offset-2 hover:underline">{{ __('Download') }}</a>
                                 <form method="POST" action="{{ route('examiner.courses.materials.destroy', [$course, $m]) }}" class="inline" onsubmit="return confirm(@json(__('Delete this material?')));">
                                     @csrf
                                     @method('DELETE')
