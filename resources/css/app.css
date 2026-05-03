@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 @layer base {
+    [x-cloak] {
+        display: none !important;
+    }
     :root {
         --qs-bg: #ffffff;
         --qs-card: #f4f7fb;

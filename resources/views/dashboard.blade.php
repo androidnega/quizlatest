@@ -1,16 +1,46 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl qs-heading leading-tight">
-            {{ __('Dashboard') }}
+            {{ __('Home') }}
         </h2>
     </x-slot>
 
-    <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="qs-surface overflow-hidden shadow-sm sm:rounded-lg">
-                <div class="p-6 text-qs-text">
-                    {{ __("You're logged in!") }}
-                </div>
+    <div class="overflow-x-hidden py-10">
+        <div class="mx-auto w-full max-w-lg px-4 sm:px-6 lg:px-8">
+            <div class="rounded-xl border border-qs-soft bg-qs-card p-6 shadow-sm">
+                <h3 class="text-lg font-semibold text-qs-text">{{ __('Welcome') }}</h3>
+                <p class="mt-2 text-sm text-qs-muted">{{ __('Choose where to continue in QUIZSNAP.') }}</p>
+
+                <ul class="mt-6 space-y-3">
+                    @if (auth()->user()->role === 'admin')
+                        <li>
+                            <a href="{{ route('admin.dashboard') }}" class="qs-btn-primary flex min-h-[44px] w-full items-center justify-center rounded-lg text-center text-sm font-semibold">
+                                {{ __('Admin dashboard') }}
+                            </a>
+                        </li>
+                    @endif
+                    @if (auth()->user()->role === 'coordinator')
+                        <li>
+                            <a href="{{ route('coordinator.dashboard') }}" class="qs-btn-primary flex min-h-[44px] w-full items-center justify-center rounded-lg text-center text-sm font-semibold">
+                                {{ __('Coordinator dashboard') }}
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ route('examiner.dashboard') }}" class="qs-btn-secondary flex min-h-[44px] w-full items-center justify-center rounded-lg border border-qs-soft text-center text-sm font-semibold">
+                                {{ __('Examiner dashboard') }}
+                            </a>
+                        </li>
+                    @endif
+                    <li>
+                        <a href="{{ route('profile.edit') }}" class="qs-btn-secondary flex min-h-[44px] w-full items-center justify-center rounded-lg border border-qs-soft text-center text-sm font-semibold">
+                            {{ __('Profile') }}
+                        </a>
+                    </li>
+                </ul>
+
+                @if (! in_array(auth()->user()->role, ['admin', 'coordinator'], true))
+                    <p class="mt-6 text-sm text-qs-muted">{{ __('If you expected another workspace, contact your administrator.') }}</p>
+                @endif
             </div>
         </div>
     </div>

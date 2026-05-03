@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="overflow-x-hidden">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,70 +11,132 @@
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans antialiased bg-qs-bg text-qs-text">
-        <div class="flex min-h-screen bg-qs-bg">
-            <aside class="hidden border-r border-qs-soft bg-qs-bg md:flex md:w-72 md:flex-col">
-                <div class="border-b border-qs-soft px-6 py-6">
-                    <h1 class="text-lg font-semibold text-qs-text">Coordinator Panel</h1>
-                    <p class="mt-1 text-xs text-qs-muted">{{ auth()->user()->name }}</p>
+    <body class="overflow-x-hidden font-sans antialiased bg-qs-bg text-qs-text">
+        @php
+            $navOn = fn (bool $on): string => $on ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card';
+            $coursesOnlyActive = request()->routeIs('coordinator.courses.*') && ! request()->routeIs('coordinator.courses.assign.*');
+            $examsAndSessionsActive = request()->routeIs('examiner.exams.*')
+                || request()->routeIs('coordinator.exams.sessions.*')
+                || request()->routeIs('coordinator.exam-sessions.*');
+        @endphp
+        <div
+            x-data="{ staffNavOpen: false }"
+            @keydown.escape.window="staffNavOpen = false"
+            class="flex min-h-screen w-full max-w-full flex-col bg-qs-bg md:flex-row"
+        >
+            <div
+                x-show="staffNavOpen"
+                x-transition.opacity
+                x-cloak
+                class="fixed inset-0 z-40 bg-qs-text/40 md:hidden"
+                @click="staffNavOpen = false"
+                aria-hidden="true"
+            ></div>
+
+            <aside
+                class="fixed inset-y-0 left-0 z-50 flex w-[min(22rem,calc(100vw-2rem))] max-w-full flex-col border-r border-qs-soft bg-qs-bg shadow-lg transition-transform duration-200 ease-out md:hidden"
+                :class="staffNavOpen ? 'translate-x-0' : '-translate-x-full'"
+                id="coordinator-mobile-nav"
+                aria-label="{{ __('Staff navigation') }}"
+            >
+                <div class="flex shrink-0 items-center justify-between gap-2 border-b border-qs-soft px-4 py-3">
+                    <span class="text-lg font-semibold text-qs-text">{{ __('Menu') }}</span>
+                    <button
+                        type="button"
+                        class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-qs-soft text-qs-text hover:bg-qs-card focus:outline-none focus:ring-2 focus:ring-qs-accent focus:ring-offset-2"
+                        @click="staffNavOpen = false"
+                        aria-label="{{ __('Close menu') }}"
+                    >
+                        <svg class="h-6 w-6 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
                 </div>
-                <nav class="flex-1 space-y-1 px-4 py-5">
-                    <a href="{{ route('coordinator.dashboard') }}" class="{{ request()->routeIs('coordinator.dashboard') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
-                        Dashboard
-                    </a>
-                    <a href="{{ route('examiner.dashboard') }}" class="{{ request()->routeIs('examiner.dashboard') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
-                        Examiner dashboard
-                    </a>
-                    <a href="{{ route('coordinator.students.index') }}" class="{{ request()->routeIs('coordinator.students.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
-                        Students
-                    </a>
-                    <a href="{{ route('coordinator.programs.index') }}" class="{{ request()->routeIs('coordinator.programs.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
-                        Programs
-                    </a>
-                    <a href="{{ route('coordinator.levels.index') }}" class="{{ request()->routeIs('coordinator.levels.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
-                        Levels
-                    </a>
-                    <a href="{{ route('coordinator.classes.index') }}" class="{{ request()->routeIs('coordinator.classes.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
-                        Classes
-                    </a>
-                    <a href="{{ route('coordinator.academic-reset.index') }}" class="{{ request()->routeIs('coordinator.academic-reset.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
-                        Academic reset
-                    </a>
-                    <a href="{{ route('coordinator.courses.index') }}" class="{{ request()->routeIs('coordinator.courses.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
-                        Courses
-                    </a>
-                    <a href="{{ route('examiner.exams.index') }}" class="{{ request()->routeIs('examiner.exams.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
-                        Exam builder
-                    </a>
-                    <a href="{{ route('coordinator.grading.pending') }}" class="{{ request()->routeIs('coordinator.grading.*') ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card' }} block rounded-lg px-3 py-2.5 text-sm font-medium transition">
-                        Essay grading
-                    </a>
+                <div class="border-b border-qs-soft px-4 py-4">
+                    <p class="text-lg font-semibold text-qs-text">{{ __('Coordinator & examiner') }}</p>
+                    <p class="mt-1 text-sm text-qs-muted">{{ auth()->user()->name }}</p>
+                </div>
+                <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+                    <a href="{{ route('coordinator.dashboard') }}" @click="staffNavOpen = false" class="{{ $navOn(request()->routeIs('coordinator.dashboard')) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Dashboard') }}</a>
+                    <a href="{{ route('examiner.dashboard') }}" @click="staffNavOpen = false" class="{{ $navOn(request()->routeIs('examiner.dashboard')) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Examiner dashboard') }}</a>
+                    <a href="{{ route('coordinator.students.index') }}" @click="staffNavOpen = false" class="{{ $navOn(request()->routeIs('coordinator.students.*')) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Students') }}</a>
+                    <a href="{{ route('coordinator.programs.index') }}" @click="staffNavOpen = false" class="{{ $navOn(request()->routeIs('coordinator.programs.*')) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Programs') }}</a>
+                    <a href="{{ route('coordinator.levels.index') }}" @click="staffNavOpen = false" class="{{ $navOn(request()->routeIs('coordinator.levels.*')) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Levels') }}</a>
+                    <a href="{{ route('coordinator.classes.index') }}" @click="staffNavOpen = false" class="{{ $navOn(request()->routeIs('coordinator.classes.*')) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Classes') }}</a>
+                    <a href="{{ route('coordinator.courses.index') }}" @click="staffNavOpen = false" class="{{ $navOn($coursesOnlyActive) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Courses') }}</a>
+                    <a href="{{ route('coordinator.courses.assign.edit') }}" @click="staffNavOpen = false" class="{{ $navOn(request()->routeIs('coordinator.courses.assign.*')) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Course assignment') }}</a>
+                    <a href="{{ route('examiner.exams.index') }}" @click="staffNavOpen = false" class="{{ $navOn($examsAndSessionsActive) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Exam builder & sessions') }}</a>
+                    <a href="{{ route('coordinator.grading.pending') }}" @click="staffNavOpen = false" class="{{ $navOn(request()->routeIs('coordinator.grading.*')) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Essay grading') }}</a>
+                    <a href="{{ route('coordinator.academic-reset.index') }}" @click="staffNavOpen = false" class="{{ $navOn(request()->routeIs('coordinator.academic-reset.*')) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Academic reset') }}</a>
                 </nav>
             </aside>
 
-            <div class="flex-1">
-                <header class="border-b border-qs-soft bg-qs-bg">
-                    <div class="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-6 lg:px-8">
-                        <div>
-                            <h2 class="text-2xl font-semibold text-qs-text">{{ $title ?? 'Coordinator Dashboard' }}</h2>
+            <aside class="hidden min-h-screen w-72 shrink-0 flex-col border-r border-qs-soft bg-qs-bg md:flex">
+                <div class="border-b border-qs-soft px-6 py-6">
+                    <h1 class="text-lg font-semibold text-qs-text">{{ __('Coordinator Panel') }}</h1>
+                    <p class="mt-1 text-sm text-qs-muted">{{ auth()->user()->name }}</p>
+                </div>
+                <nav class="flex-1 space-y-1 px-4 py-5">
+                    <a href="{{ route('coordinator.dashboard') }}" class="{{ $navOn(request()->routeIs('coordinator.dashboard')) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Dashboard') }}</a>
+                    <a href="{{ route('examiner.dashboard') }}" class="{{ $navOn(request()->routeIs('examiner.dashboard')) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Examiner dashboard') }}</a>
+                    <a href="{{ route('coordinator.students.index') }}" class="{{ $navOn(request()->routeIs('coordinator.students.*')) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Students') }}</a>
+                    <a href="{{ route('coordinator.programs.index') }}" class="{{ $navOn(request()->routeIs('coordinator.programs.*')) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Programs') }}</a>
+                    <a href="{{ route('coordinator.levels.index') }}" class="{{ $navOn(request()->routeIs('coordinator.levels.*')) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Levels') }}</a>
+                    <a href="{{ route('coordinator.classes.index') }}" class="{{ $navOn(request()->routeIs('coordinator.classes.*')) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Classes') }}</a>
+                    <a href="{{ route('coordinator.courses.index') }}" class="{{ $navOn($coursesOnlyActive) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Courses') }}</a>
+                    <a href="{{ route('coordinator.courses.assign.edit') }}" class="{{ $navOn(request()->routeIs('coordinator.courses.assign.*')) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Course assignment') }}</a>
+                    <a href="{{ route('examiner.exams.index') }}" class="{{ $navOn($examsAndSessionsActive) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Exam builder & sessions') }}</a>
+                    <a href="{{ route('coordinator.grading.pending') }}" class="{{ $navOn(request()->routeIs('coordinator.grading.*')) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Essay grading') }}</a>
+                    <a href="{{ route('coordinator.academic-reset.index') }}" class="{{ $navOn(request()->routeIs('coordinator.academic-reset.*')) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Academic reset') }}</a>
+                </nav>
+            </aside>
+
+            <div class="flex min-h-screen min-w-0 flex-1 flex-col">
+                <div class="sticky top-0 z-30 flex shrink-0 items-center gap-2 border-b border-qs-soft bg-qs-bg px-3 py-2 md:hidden">
+                    <button
+                        type="button"
+                        class="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg border border-qs-soft text-qs-text hover:bg-qs-card focus:outline-none focus:ring-2 focus:ring-qs-accent focus:ring-offset-2"
+                        @click="staffNavOpen = true"
+                        aria-label="{{ __('Open menu') }}"
+                        :aria-expanded="staffNavOpen ? 'true' : 'false'"
+                        aria-controls="coordinator-mobile-nav"
+                    >
+                        <svg class="h-6 w-6 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
+                    <div class="min-w-0 flex-1 py-1">
+                        <p class="truncate text-base font-semibold leading-tight text-qs-text">{{ $title ?? __('Coordinator') }}</p>
+                        @isset($subtitle)
+                            <p class="truncate text-xs text-qs-muted">{{ $subtitle }}</p>
+                        @endisset
+                    </div>
+                    <form method="POST" action="{{ route('logout') }}" class="shrink-0">
+                        @csrf
+                        <button type="submit" class="qs-btn-primary min-h-[44px] px-4 text-sm font-semibold">{{ __('Logout') }}</button>
+                    </form>
+                </div>
+
+                <header class="hidden border-b border-qs-soft bg-qs-bg md:block">
+                    <div class="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-6 lg:px-8">
+                        <div class="min-w-0">
+                            <h2 class="text-2xl font-semibold text-qs-text">{{ $title ?? __('Coordinator Dashboard') }}</h2>
                             @isset($subtitle)
                                 <p class="text-sm text-qs-muted">{{ $subtitle }}</p>
                             @endisset
                         </div>
 
-                        <div class="flex items-center gap-4">
-                            <a href="{{ route('dashboard') }}" class="text-sm text-qs-text underline-offset-2 hover:underline">Home</a>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <a href="{{ route('dashboard') }}" class="inline-flex min-h-[44px] items-center px-3 text-sm font-medium text-qs-text underline-offset-2 hover:underline">{{ __('Home') }}</a>
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf
-                                <button type="submit" class="qs-btn-primary text-xs font-semibold uppercase tracking-wider">
-                                    Logout
-                                </button>
+                                <button type="submit" class="qs-btn-primary min-h-[44px] px-4 text-sm font-semibold">{{ __('Logout') }}</button>
                             </form>
                         </div>
                     </div>
                 </header>
 
-                <main class="mx-auto max-w-7xl px-5 py-8 sm:px-6 lg:px-8">
+                <main class="mx-auto w-full min-w-0 max-w-7xl flex-1 px-5 py-8 sm:px-6 lg:px-8">
                     @if (session('status'))
                         <div class="mb-6 rounded-xl border border-qs-soft bg-qs-card px-4 py-3 text-sm text-qs-text shadow-sm">
                             {{ session('status') }}
