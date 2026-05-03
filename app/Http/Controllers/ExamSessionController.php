@@ -18,6 +18,7 @@ use App\Services\ExamRedisService;
 use App\Services\ProctoringGlobalControlService;
 use App\Services\ProctoringOrchestratorService;
 use App\Services\ResultFinalizationService;
+use App\Services\SensitiveStorageService;
 use App\Services\SystemExamPolicyService;
 use App\Support\ExamRuntimeStateExtension;
 use App\Support\ExamSessionStateResolver;
@@ -427,7 +428,7 @@ class ExamSessionController extends Controller
         return response()->json(['status' => 'submitted_held', 'reason' => 'force_submit']);
     }
 
-    public function reviewTimeline(Request $request, ExamSession $examSession): JsonResponse
+    public function reviewTimeline(Request $request, ExamSession $examSession, SensitiveStorageService $sensitiveStorage): JsonResponse
     {
         $quiz = Quiz::query()->find((int) $examSession->exam_id);
         abort_if($quiz === null, 403);
@@ -438,11 +439,13 @@ class ExamSessionController extends Controller
             ->where('quiz_id', $examSession->exam_id)
             ->where('metadata->session_id', $examSession->session_id)
             ->orderBy('created_at')
-            ->get(['event_type', 'severity', 'flagged', 'metadata', 'created_at']);
+            ->get(['id', 'event_type', 'severity', 'flagged', 'action_taken', 'metadata', 'created_at']);
 
-        $capturedImages = $events->filter(function ($event) {
-            return ! empty($event->metadata['payload']['file_path']);
-        })->values();
+        $safeEvents = $events->map(fn (ProctoringEvent $event) => $this->sanitizeReviewTimelineEvent(
+            $examSession,
+            $event,
+            $sensitiveStorage,
+        ))->values()->all();
 
         $result = Result::query()
             ->where('user_id', $examSession->student_id)
@@ -454,14 +457,61 @@ class ExamSessionController extends Controller
             'exam_status' => $examSession->exam_status,
             'risk_state' => $examSession->risk_state,
             'violation_score' => $examSession->violation_score,
-            'events' => $events,
-            'captured_images' => $capturedImages,
+            'events' => $safeEvents,
             'result' => $result ? [
                 'score' => $result->score,
                 'status' => $result->status,
                 'exam_status' => $result->exam_status,
             ] : null,
         ]);
+    }
+
+    /**
+     * @return array{
+     *     id:int,
+     *     event_type:string,
+     *     action:?string,
+     *     flagged:bool,
+     *     created_at:?string,
+     *     severity:int,
+     *     label:?string,
+     *     has_evidence:bool,
+     *     evidence_url?:string
+     * }
+     */
+    private function sanitizeReviewTimelineEvent(
+        ExamSession $examSession,
+        ProctoringEvent $event,
+        SensitiveStorageService $sensitiveStorage,
+    ): array {
+        $meta = is_array($event->metadata) ? $event->metadata : [];
+        $path = $meta['file_path'] ?? data_get($meta, 'payload.file_path');
+        $hasEvidence = is_string($path) && $path !== '' && $sensitiveStorage->existsAnywhere($path);
+
+        $action = $event->action_taken;
+        $actionStr = is_string($action) && $action !== '' ? $action : null;
+
+        $label = $actionStr;
+        if ($label === null && $event->flagged) {
+            $label = 'flagged';
+        }
+
+        $row = [
+            'id' => (int) $event->id,
+            'event_type' => (string) $event->event_type,
+            'action' => $actionStr,
+            'flagged' => (bool) $event->flagged,
+            'created_at' => $event->created_at?->toIso8601String(),
+            'severity' => (int) $event->severity,
+            'label' => $label,
+            'has_evidence' => $hasEvidence,
+        ];
+
+        if ($hasEvidence) {
+            $row['evidence_url'] = route('coordinator.exam-sessions.evidence.event', [$examSession, $event]);
+        }
+
+        return $row;
     }
 
     public function releaseHeldResult(Request $request, ExamSession $examSession): JsonResponse

@@ -253,6 +253,98 @@ class SecureSensitiveFileAccessTest extends TestCase
             ->assertOk();
     }
 
+    public function test_review_timeline_forbids_unauthorized_student(): void
+    {
+        $ctx = $this->seedScopedExamContext();
+        $student = User::query()->where('role', 'student')->firstOrFail();
+
+        $this->actingAs($student)
+            ->getJson(route('exam-sessions.review-timeline', $ctx['session']))
+            ->assertForbidden();
+    }
+
+    public function test_review_timeline_json_contains_no_raw_metadata_or_paths(): void
+    {
+        $ctx = $this->seedScopedExamContext();
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $secretPath = 'proctoring/user_'.$ctx['session']->student_id.'/SECRET_PATH_MARKER_abc/snap.jpg';
+        ProctoringEvent::query()->create([
+            'user_id' => $ctx['session']->student_id,
+            'quiz_id' => $ctx['session']->exam_id,
+            'event_type' => 'tab_switch',
+            'severity' => 1,
+            'flagged' => true,
+            'action_taken' => 'warn',
+            'metadata' => [
+                'file_path' => $secretPath,
+                'session_id' => $ctx['session']->session_id,
+                'payload' => ['file_path' => $secretPath, 'upload_token' => 'tok-secret'],
+                'face_embedding' => [0.1, 0.2, 0.3],
+            ],
+            'created_at' => now(),
+        ]);
+
+        $response = $this->actingAs($ctx['coord'])
+            ->getJson(route('exam-sessions.review-timeline', $ctx['session']));
+
+        $response->assertOk();
+        $this->assertStringNotContainsString('SECRET_PATH_MARKER_abc', $response->getContent());
+        $this->assertStringNotContainsString('tok-secret', $response->getContent());
+        $this->assertStringNotContainsString('face_embedding', $response->getContent());
+
+        $data = $response->json();
+        $this->assertIsArray($data);
+        $this->assertArrayNotHasKey('captured_images', $data);
+        $this->assertArrayHasKey('events', $data);
+        foreach ($data['events'] as $ev) {
+            $this->assertArrayNotHasKey('metadata', $ev);
+            $this->assertArrayNotHasKey('file_path', $ev);
+            $this->assertArrayHasKey('has_evidence', $ev);
+            $this->assertFalse($ev['has_evidence']);
+            $this->assertArrayNotHasKey('evidence_url', $ev);
+        }
+    }
+
+    public function test_review_timeline_includes_evidence_url_when_file_exists_on_public_disk(): void
+    {
+        $ctx = $this->seedScopedExamContext();
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $rel = 'proctoring/user_'.$ctx['session']->student_id.'/legacy_pub.jpg';
+        Storage::disk('public')->put($rel, '%PNG x');
+
+        $event = ProctoringEvent::query()->create([
+            'user_id' => $ctx['session']->student_id,
+            'quiz_id' => $ctx['session']->exam_id,
+            'event_type' => 'face_missing',
+            'severity' => 2,
+            'flagged' => false,
+            'action_taken' => null,
+            'metadata' => [
+                'file_path' => $rel,
+                'session_id' => $ctx['session']->session_id,
+            ],
+            'created_at' => now(),
+        ]);
+
+        $response = $this->actingAs($ctx['coord'])
+            ->getJson(route('exam-sessions.review-timeline', $ctx['session']));
+
+        $response->assertOk();
+        $this->assertStringNotContainsString($rel, $response->getContent());
+
+        $events = $response->json('events');
+        $this->assertIsArray($events);
+        $match = collect($events)->firstWhere('id', $event->id);
+        $this->assertNotNull($match);
+        $this->assertTrue($match['has_evidence']);
+        $this->assertArrayHasKey('evidence_url', $match);
+        $this->assertStringContainsString('/evidence/events/'.$event->id, $match['evidence_url']);
+    }
+
     /**
      * @return array{coord: User, exam: Quiz, session: ExamSession}
      */
