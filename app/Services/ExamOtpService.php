@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Quiz;
 use App\Models\User;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -89,6 +90,11 @@ class ExamOtpService
         abort_unless($student->role === 'student', 403);
 
         abort_unless($this->examPolicy->isOtpEnabled(), 422, 'Phone verification is disabled for this institution.');
+
+        $quiz = Quiz::query()->find($examId);
+        abort_if($quiz === null, 422, 'Exam not found.');
+        abort_unless($quiz->status === 'published', 403, 'This exam is not available.');
+        abort_unless($quiz->isAvailableForStudentToStart(now()), 422, 'This exam is outside its scheduled window.');
 
         $this->assertOtpBackendReady();
 

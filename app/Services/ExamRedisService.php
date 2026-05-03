@@ -182,11 +182,12 @@ final class ExamRedisService
                 'description' => $quiz->description,
                 'assessment_type' => $quiz->assessment_type,
                 'status' => $quiz->status,
+                'published_at' => $quiz->published_at?->toAtomString(),
                 'duration_minutes' => (int) ($quiz->duration_minutes ?? 0),
                 'total_marks' => $quiz->total_marks,
                 'proctoring_settings' => is_array($quiz->proctoring_settings) ? $quiz->proctoring_settings : [],
-                'available_from' => $quiz->available_from?->toAtomString(),
-                'available_to' => $quiz->available_to?->toAtomString(),
+                'start_time' => $quiz->start_time?->toAtomString(),
+                'end_time' => $quiz->end_time?->toAtomString(),
             ];
             Redis::setex($key, $ttl, json_encode($payload, JSON_THROW_ON_ERROR));
         } catch (\Throwable $e) {
@@ -194,6 +195,19 @@ final class ExamRedisService
         }
 
         return $quiz;
+    }
+
+    public function forgetExamConfig(int $examId): void
+    {
+        if (! $this->redisHealth->isAvailable() || ! $this->validId($examId)) {
+            return;
+        }
+
+        try {
+            Redis::del('exam_config:'.$examId);
+        } catch (\Throwable $e) {
+            Log::warning('exam_redis.exam_config_forget_failed', ['error' => $e->getMessage()]);
+        }
     }
 
     public function incrementActiveSessions(int $examId): void
@@ -275,11 +289,12 @@ final class ExamRedisService
             'description' => $row['description'] ?? null,
             'assessment_type' => $row['assessment_type'] ?? 'quiz',
             'status' => $row['status'] ?? 'draft',
+            'published_at' => $row['published_at'] ?? null,
             'duration_minutes' => (int) ($row['duration_minutes'] ?? 0),
             'total_marks' => $row['total_marks'] ?? 0,
             'proctoring_settings' => is_array($row['proctoring_settings'] ?? null) ? $row['proctoring_settings'] : [],
-            'available_from' => isset($row['available_from']) ? $row['available_from'] : null,
-            'available_to' => isset($row['available_to']) ? $row['available_to'] : null,
+            'start_time' => $row['start_time'] ?? $row['available_from'] ?? null,
+            'end_time' => $row['end_time'] ?? $row['available_to'] ?? null,
         ]);
         $quiz->exists = true;
         $quiz->syncOriginal();

@@ -10,8 +10,11 @@ use App\Models\Question;
 use App\Models\Quiz;
 use App\Services\ExamAiPromptBuilder;
 use App\Services\ExamAiQuestionGenerator;
+use App\Services\ExamLifecycleService;
 use App\Services\ExamQuestionImportValidator;
+use App\Services\ExamRedisService;
 use App\Services\SystemSettingsService;
+use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,6 +22,22 @@ use Illuminate\Support\Facades\DB;
 
 class ExamBuilderController extends Controller
 {
+    private function bumpExamConfigCache(Quiz $exam): void
+    {
+        app(ExamRedisService::class)->forgetExamConfig((int) $exam->id);
+    }
+
+    private function assertExamDraftForContentMutations(Quiz $exam): void
+    {
+        abort_if($exam->status === 'archived', 403, 'Archived exams are read-only. Clone this exam to create a new draft.');
+        abort_if($exam->status === 'published', 403, 'Published exams are locked. Unpublish or clone to edit content.');
+    }
+
+    private function assertExamDraftForSchedule(Quiz $exam): void
+    {
+        abort_unless($exam->status === 'draft', 403, 'Only draft exams can change the start/end window.');
+    }
+
     public function index(Request $request): View
     {
         $this->authorize('viewAny', Quiz::class);
@@ -101,12 +120,81 @@ class ExamBuilderController extends Controller
             'questionTypes' => ['mcq', 'true_false', 'fill_blank', 'essay'],
             'aiEnabled' => $systemSettings->getBool('enable_ai', true),
             'importPreview' => is_array($importPreview) ? $importPreview : null,
+            'canEditContent' => $exam->status === 'draft',
+            'canEditSchedule' => $exam->status === 'draft',
         ]);
+    }
+
+    public function publish(Request $request, Quiz $exam, ExamLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+
+        $lifecycle->publish($exam->fresh());
+
+        return back()->with('status', 'Exam published.');
+    }
+
+    public function unpublish(Request $request, Quiz $exam, ExamLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+
+        $lifecycle->unpublish($exam->fresh());
+
+        return back()->with('status', 'Exam moved back to draft.');
+    }
+
+    public function archive(Request $request, Quiz $exam, ExamLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+
+        $lifecycle->archive($exam->fresh());
+
+        return back()->with('status', 'Exam archived. It is now read-only.');
+    }
+
+    public function cloneExam(Request $request, Quiz $exam, ExamLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+
+        $user = $request->user();
+        $copy = $lifecycle->cloneToDraft($exam->fresh(), (int) $user->id, (int) $user->university_id);
+
+        return redirect()
+            ->route('examiner.exams.builder', $copy)
+            ->with('status', 'Exam duplicated as a new draft.');
+    }
+
+    public function updateSchedule(Request $request, Quiz $exam): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+        $this->assertExamDraftForSchedule($exam);
+
+        $validated = $request->validate([
+            'start_time' => ['nullable', 'date'],
+            'end_time' => ['nullable', 'date'],
+        ]);
+
+        $start = isset($validated['start_time']) ? Carbon::parse($validated['start_time']) : null;
+        $end = isset($validated['end_time']) ? Carbon::parse($validated['end_time']) : null;
+
+        if ($start !== null && $end !== null && $end->lt($start)) {
+            return back()->withErrors(['end_time' => 'End time must be on or after start time.'])->withInput();
+        }
+
+        $exam->update([
+            'start_time' => $start,
+            'end_time' => $end,
+        ]);
+
+        $this->bumpExamConfigCache($exam->fresh());
+
+        return back()->with('status', 'Exam window updated.');
     }
 
     public function storeSection(Request $request, Quiz $exam): RedirectResponse
     {
         $this->authorize('update', $exam);
+        $this->assertExamDraftForContentMutations($exam);
 
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -126,6 +214,7 @@ class ExamBuilderController extends Controller
     public function storeQuestion(Request $request, Quiz $exam, ExamSection $section): RedirectResponse
     {
         $this->authorize('update', $exam);
+        $this->assertExamDraftForContentMutations($exam);
         abort_unless((int) $section->exam_id === (int) $exam->id, 404);
 
         $validated = $request->validate([
@@ -186,12 +275,15 @@ class ExamBuilderController extends Controller
             $exam->update(['total_marks' => $total]);
         });
 
+        $this->bumpExamConfigCache($exam->fresh());
+
         return back()->with('status', 'Question saved.');
     }
 
     public function previewQuestionImport(Request $request, Quiz $exam, ExamQuestionImportValidator $validator): RedirectResponse
     {
         $this->authorize('update', $exam);
+        $this->assertExamDraftForContentMutations($exam);
 
         $validated = $request->validate([
             'import_json' => ['required', 'string', 'max:500000'],
@@ -215,6 +307,7 @@ class ExamBuilderController extends Controller
     public function cancelQuestionImport(Request $request, Quiz $exam): RedirectResponse
     {
         $this->authorize('update', $exam);
+        $this->assertExamDraftForContentMutations($exam);
         session()->forget('exam_question_import_'.$exam->id);
 
         return back()->with('status', 'Import preview cleared.');
@@ -223,6 +316,7 @@ class ExamBuilderController extends Controller
     public function commitQuestionImport(Request $request, Quiz $exam): RedirectResponse
     {
         $this->authorize('update', $exam);
+        $this->assertExamDraftForContentMutations($exam);
 
         $bundle = session('exam_question_import_'.$exam->id);
         if (! is_array($bundle) || ! isset($bundle['sections']) || ! is_array($bundle['sections'])) {
@@ -232,12 +326,15 @@ class ExamBuilderController extends Controller
         $this->persistImportedSections($exam, $bundle['sections']);
         session()->forget('exam_question_import_'.$exam->id);
 
+        $this->bumpExamConfigCache($exam->fresh());
+
         return back()->with('status', 'Imported questions saved.');
     }
 
     public function buildAiPrompt(Request $request, Quiz $exam, ExamAiPromptBuilder $promptBuilder): RedirectResponse
     {
         $this->authorize('update', $exam);
+        $this->assertExamDraftForContentMutations($exam);
 
         $validated = $request->validate([
             'ai_topic' => ['required', 'string', 'max:2000'],
@@ -262,6 +359,7 @@ class ExamBuilderController extends Controller
     public function generateWithAi(Request $request, Quiz $exam, ExamAiQuestionGenerator $generator, SystemSettingsService $systemSettings): RedirectResponse
     {
         $this->authorize('update', $exam);
+        $this->assertExamDraftForContentMutations($exam);
 
         if (! $systemSettings->getBool('enable_ai', true)) {
             return back()->withErrors(['ai' => 'AI generation is turned off in system settings.']);

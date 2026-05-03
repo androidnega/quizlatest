@@ -173,6 +173,11 @@ Route::prefix('examiner')
         Route::get('/exams/create', [ExamBuilderController::class, 'create'])->name('exams.create');
         Route::post('/exams', [ExamBuilderController::class, 'store'])->name('exams.store');
         Route::get('/exams/{exam}/builder', [ExamBuilderController::class, 'builder'])->name('exams.builder');
+        Route::post('/exams/{exam}/publish', [ExamBuilderController::class, 'publish'])->name('exams.publish');
+        Route::post('/exams/{exam}/unpublish', [ExamBuilderController::class, 'unpublish'])->name('exams.unpublish');
+        Route::post('/exams/{exam}/archive', [ExamBuilderController::class, 'archive'])->name('exams.archive');
+        Route::post('/exams/{exam}/clone', [ExamBuilderController::class, 'cloneExam'])->name('exams.clone');
+        Route::patch('/exams/{exam}/schedule', [ExamBuilderController::class, 'updateSchedule'])->name('exams.schedule.update');
         Route::post('/exams/{exam}/sections', [ExamBuilderController::class, 'storeSection'])->name('exams.sections.store');
         Route::post('/exams/{exam}/sections/{section}/questions', [ExamBuilderController::class, 'storeQuestion'])->name('exams.questions.store');
         Route::post('/exams/{exam}/questions/import/preview', [ExamBuilderController::class, 'previewQuestionImport'])->name('exams.questions.import.preview');

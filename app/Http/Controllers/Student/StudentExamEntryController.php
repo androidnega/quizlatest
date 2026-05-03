@@ -58,7 +58,8 @@ class StudentExamEntryController extends Controller
     private function assertEligibleForExamPage($user, Quiz $quiz): void
     {
         abort_unless((int) $quiz->university_id === (int) $user->university_id, 403);
-        abort_unless($quiz->status === 'published', 403);
+        abort_unless($quiz->status === 'published', 403, 'This exam is not available.');
+        abort_unless($quiz->isAvailableForStudentToStart(now()), 403, 'This exam is outside its scheduled window.');
 
         abort_if($user->class_id === null, 403, 'You must be assigned to a class before taking exams.');
 

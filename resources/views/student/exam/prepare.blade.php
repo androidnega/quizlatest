@@ -36,13 +36,13 @@
                             <dt class="text-qs-muted">{{ __('Duration') }}</dt>
                             <dd class="text-right font-medium text-qs-text">{{ $quiz->duration_minutes }} {{ __('minutes') }}</dd>
                         </div>
-                        @if ($quiz->available_from || $quiz->available_to)
+                        @if ($quiz->start_time || $quiz->end_time)
                             <div class="flex justify-between gap-4 border-b border-qs-soft pb-2">
                                 <dt class="text-qs-muted">{{ __('Window') }}</dt>
                                 <dd class="text-right text-qs-text">
-                                    {{ $quiz->available_from?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? '—' }}
+                                    {{ $quiz->start_time?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? '—' }}
                                     —
-                                    {{ $quiz->available_to?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? '—' }}
+                                    {{ $quiz->end_time?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? '—' }}
                                 </dd>
                             </div>
                         @endif

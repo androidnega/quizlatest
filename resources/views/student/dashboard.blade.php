@@ -108,8 +108,8 @@
                             <li class="rounded-xl border border-qs-soft bg-qs-card px-4 py-4">
                                 <p class="font-semibold text-qs-text">{{ $exam->title }}</p>
                                 <p class="text-sm text-qs-muted">{{ $exam->course?->code }}</p>
-                                @if ($exam->available_from)
-                                    <p class="mt-2 text-xs text-qs-muted">{{ __('Opens') }}: {{ $exam->available_from->timezone(config('app.timezone'))->format('Y-m-d H:i') }}</p>
+                                @if ($exam->start_time)
+                                    <p class="mt-2 text-xs text-qs-muted">{{ __('Opens') }}: {{ $exam->start_time->timezone(config('app.timezone'))->format('Y-m-d H:i') }}</p>
                                 @endif
                             </li>
                         @endforeach

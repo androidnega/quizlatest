@@ -47,8 +47,9 @@ class ExamQuestionImportTest extends TestCase
             'duration_minutes' => 30,
             'total_marks' => 0,
             'proctoring_settings' => json_encode(new \stdClass),
-            'available_from' => null,
-            'available_to' => null,
+            'published_at' => null,
+            'start_time' => null,
+            'end_time' => null,
             'created_at' => now(),
             'updated_at' => now(),
         ]);

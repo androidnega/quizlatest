@@ -8,7 +8,88 @@
         <span>Total marks: <strong class="text-qs-text">{{ $exam->total_marks }}</strong></span>
     </div>
 
+    @error('lifecycle')
+        <div class="mb-4 rounded-lg border border-qs-danger/35 bg-qs-danger-soft px-3 py-2 text-xs text-qs-danger">
+            <ul class="list-disc list-inside space-y-1">
+                @foreach ($errors->get('lifecycle') as $message)
+                    <li>{{ $message }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @enderror
+
+    <div class="mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
+        <h3 class="text-sm font-semibold text-qs-text mb-2">Exam status</h3>
+        <p class="text-xs text-qs-muted mb-3">
+            Status: <strong class="text-qs-text">{{ $exam->status }}</strong>
+            @if ($exam->published_at)
+                <span class="text-qs-muted"> · Published {{ $exam->published_at->timezone(config('app.timezone'))->format('Y-m-d H:i') }}</span>
+            @endif
+        </p>
+        <div class="flex flex-wrap gap-2">
+            @if ($exam->status === 'draft')
+                <form method="post" action="{{ route('examiner.exams.publish', $exam) }}" class="inline">
+                    @csrf
+                    <button type="submit" class="qs-btn-primary text-sm">Publish</button>
+                </form>
+            @endif
+            @if ($exam->status === 'published')
+                <form method="post" action="{{ route('examiner.exams.unpublish', $exam) }}" class="inline">
+                    @csrf
+                    <button type="submit" class="qs-btn-secondary text-sm">Unpublish</button>
+                </form>
+            @endif
+            @if (in_array($exam->status, ['draft', 'published'], true))
+                <form method="post" action="{{ route('examiner.exams.archive', $exam) }}" class="inline" onsubmit="return confirm('Archive this exam? It becomes read-only.');">
+                    @csrf
+                    <button type="submit" class="qs-btn-secondary text-sm">Archive</button>
+                </form>
+            @endif
+            <form method="post" action="{{ route('examiner.exams.clone', $exam) }}" class="inline">
+                @csrf
+                <button type="submit" class="qs-btn-secondary text-sm">Clone to new draft</button>
+            </form>
+        </div>
+        @if ($exam->status === 'published')
+            <p class="mt-3 text-xs text-qs-muted">Published exams are locked for editing. Unpublish or clone to change questions.</p>
+        @elseif ($exam->status === 'archived')
+            <p class="mt-3 text-xs text-qs-muted">Archived exams are read-only. Clone to create an editable copy.</p>
+        @endif
+    </div>
+
+    @if ($canEditSchedule)
+        <div class="mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
+            <h3 class="text-sm font-semibold text-qs-text mb-2">Exam window (optional)</h3>
+            <p class="text-xs text-qs-muted mb-3">Students can start only between these times ({{ config('app.timezone') }}). Leave blank for no restriction.</p>
+            @error('end_time')
+                <div class="mb-2 text-xs text-qs-danger">{{ $message }}</div>
+            @enderror
+            <form method="post" action="{{ route('examiner.exams.schedule.update', $exam) }}" class="flex flex-wrap gap-3 items-end">
+                @csrf
+                @method('PATCH')
+                <div>
+                    <label class="block text-xs text-qs-muted mb-1">Start time</label>
+                    <input type="datetime-local" name="start_time" value="{{ old('start_time', $exam->start_time?->timezone(config('app.timezone'))->format('Y-m-d\TH:i')) }}" class="rounded-lg border border-qs-soft px-3 py-2 text-sm" />
+                </div>
+                <div>
+                    <label class="block text-xs text-qs-muted mb-1">End time</label>
+                    <input type="datetime-local" name="end_time" value="{{ old('end_time', $exam->end_time?->timezone(config('app.timezone'))->format('Y-m-d\TH:i')) }}" class="rounded-lg border border-qs-soft px-3 py-2 text-sm" />
+                </div>
+                <button type="submit" class="qs-btn-secondary text-sm">Save window</button>
+            </form>
+        </div>
+    @elseif ($exam->start_time || $exam->end_time)
+        <div class="mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm text-xs text-qs-muted">
+            <span class="font-semibold text-qs-text">Exam window:</span>
+            {{ $exam->start_time?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? '—' }}
+            —
+            {{ $exam->end_time?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? '—' }}
+            <span class="block mt-2">Unpublish to edit the window.</span>
+        </div>
+    @endif
+
     <div class="mb-8 space-y-6">
+        @if ($canEditContent)
         <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
             <h3 class="text-sm font-semibold text-qs-text mb-2">Import questions (JSON)</h3>
             <p class="text-xs text-qs-muted mb-3">Paste JSON with a top-level <code class="text-qs-text">sections</code> array. Preview validates structure before anything is saved.</p>
@@ -111,7 +192,9 @@
             </div>
         @endif
 
-        @if ($importPreview)
+        @endif
+
+        @if ($importPreview && $canEditContent)
             <div class="rounded-xl border border-qs-accent/40 bg-qs-accent/10 p-5 shadow-sm">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -145,6 +228,7 @@
         @endif
     </div>
 
+    @if ($canEditContent)
     <div class="mb-8 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
         <h3 class="text-sm font-semibold text-qs-text mb-3">Add section</h3>
         <form method="post" action="{{ route('examiner.exams.sections.store', $exam) }}" class="flex flex-wrap gap-2 items-end">
@@ -156,6 +240,7 @@
             <button type="submit" class="qs-btn-primary">Add section</button>
         </form>
     </div>
+    @endif
 
     @forelse ($exam->sections as $section)
         <div class="mb-10 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm">
@@ -181,6 +266,7 @@
                 </div>
             @endforeach
 
+            @if ($canEditContent)
             <div class="mt-4 border-t border-qs-soft pt-4">
                 <h4 class="text-sm font-semibold text-qs-text mb-3">New question in this section</h4>
                 <form method="post" action="{{ route('examiner.exams.questions.store', [$exam, $section]) }}" class="space-y-3">
@@ -235,6 +321,7 @@
                     <button type="submit" class="rounded-lg bg-qs-accent px-4 py-2 text-sm font-semibold text-qs-text hover:opacity-95">Save question</button>
                 </form>
             </div>
+            @endif
         </div>
     @empty
         <p class="text-sm text-qs-muted">Add at least one section, then add questions per section.</p>

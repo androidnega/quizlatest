@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 class Quiz extends Model
 {
@@ -16,17 +17,19 @@ class Quiz extends Model
         'description',
         'assessment_type',
         'status',
+        'published_at',
         'duration_minutes',
         'total_marks',
         'proctoring_settings',
-        'available_from',
-        'available_to',
+        'start_time',
+        'end_time',
     ];
 
     protected $casts = [
         'proctoring_settings' => 'array',
-        'available_from' => 'datetime',
-        'available_to' => 'datetime',
+        'published_at' => 'datetime',
+        'start_time' => 'datetime',
+        'end_time' => 'datetime',
     ];
 
     public function university(): BelongsTo
@@ -78,5 +81,25 @@ class Quiz extends Model
             data_get($this->proctoring_settings, 'show_correct_answers_to_students', false),
             FILTER_VALIDATE_BOOLEAN,
         );
+    }
+
+    /**
+     * Students may open the prepare page and start a session only when published and inside the optional window.
+     */
+    public function isAvailableForStudentToStart(Carbon $at): bool
+    {
+        if ($this->status !== 'published') {
+            return false;
+        }
+
+        if ($this->start_time !== null && $at->lt($this->start_time)) {
+            return false;
+        }
+
+        if ($this->end_time !== null && $at->gt($this->end_time)) {
+            return false;
+        }
+
+        return true;
     }
 }

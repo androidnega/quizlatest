@@ -59,6 +59,9 @@ class ExamEntryPipelineService
 
             $exam = $this->examRedis->rememberQuiz($examId, fn () => Quiz::query()->findOrFail($examId));
 
+            abort_unless($exam->status === 'published', 422, 'This exam is not available.');
+            abort_unless($exam->isAvailableForStudentToStart(now()), 422, 'This exam is outside its scheduled window.');
+
             // 2. Exam access — class must be enrolled in exam course
             $classHasExamCourse = DB::table('class_course')
                 ->where('class_id', $student->class_id)

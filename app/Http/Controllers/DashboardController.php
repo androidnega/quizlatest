@@ -62,7 +62,7 @@ class DashboardController extends Controller
                 ->where('status', 'published')
                 ->where('university_id', $user->university_id)
                 ->with(['course:id,code,title'])
-                ->orderBy('available_from')
+                ->orderBy('start_time')
                 ->orderBy('title')
                 ->get();
         }
@@ -84,8 +84,8 @@ class DashboardController extends Controller
                 continue;
             }
 
-            $from = $exam->available_from;
-            $to = $exam->available_to;
+            $from = $exam->start_time;
+            $to = $exam->end_time;
 
             if ($from !== null && $now->lt($from)) {
                 $upcoming->push($exam);
