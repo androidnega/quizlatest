@@ -33,18 +33,6 @@
             0%, 100% { transform: rotate(-4deg); }
             50% { transform: rotate(6deg); }
         }
-        @keyframes oq-robot-bob {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-1.5px); }
-        }
-        @keyframes oq-robot-arm-l {
-            0%, 100% { transform: rotate(-6deg); }
-            50% { transform: rotate(4deg); }
-        }
-        @keyframes oq-robot-arm-r {
-            0%, 100% { transform: rotate(6deg); }
-            50% { transform: rotate(-4deg); }
-        }
         @keyframes oq-key-1 {
             0%, 100% { opacity: 0.55; }
             50% { opacity: 1; }
@@ -69,9 +57,6 @@
         .online-quiz-hero .oq-head { transform-origin: 132px 178px; animation: oq-head-bob 3.2s ease-in-out infinite; }
         .online-quiz-hero .oq-hand-l { transform-origin: 158px 228px; animation: oq-hand-type 0.45s ease-in-out infinite; }
         .online-quiz-hero .oq-hand-r { transform-origin: 198px 226px; animation: oq-hand-type 0.45s ease-in-out 0.12s infinite reverse; }
-        .online-quiz-hero .oq-robot-body { transform-origin: 326px 270px; animation: oq-robot-bob 2.4s ease-in-out infinite; }
-        .online-quiz-hero .oq-robot-arm-l { transform-origin: 318px 264px; animation: oq-robot-arm-l 0.5s ease-in-out infinite; }
-        .online-quiz-hero .oq-robot-arm-r { transform-origin: 334px 264px; animation: oq-robot-arm-r 0.5s ease-in-out infinite; }
         .online-quiz-hero .oq-key-a { animation: oq-key-1 0.55s ease-in-out infinite; }
         .online-quiz-hero .oq-key-b { animation: oq-key-2 0.55s ease-in-out 0.18s infinite; }
         .online-quiz-hero .oq-key-c { animation: oq-key-3 0.55s ease-in-out 0.36s infinite; }
@@ -85,7 +70,7 @@
         }
     </style>
 
-    <p class="sr-only">{{ __('Illustration of a student taking an online quiz at a computer with notes, keyboard, and a small robot assistant beside the keyboard.') }}</p>
+    <p class="sr-only">{{ __('Illustration of a student taking an online quiz at a computer with notes and keyboard.') }}</p>
 
     <div class="overflow-hidden rounded-2xl border border-qs-soft/70 bg-qs-card/40">
         <svg
@@ -172,22 +157,6 @@
             {{-- Student hands --}}
             <ellipse class="oq-anim oq-hand-l" cx="158" cy="228" rx="10" ry="8" fill="#faf7f2" stroke="#166534" stroke-width="1"/>
             <ellipse class="oq-anim oq-hand-r" cx="198" cy="226" rx="10" ry="8" fill="#faf7f2" stroke="#166534" stroke-width="1"/>
-
-            {{-- Small toy robot near keyboard --}}
-            <g class="oq-anim oq-robot-body" transform="translate(306, 250)">
-                <rect x="0" y="10" width="22" height="18" rx="4" fill="#ffffff" stroke="#166534" stroke-width="1.25"/>
-                <circle cx="11" cy="6" r="9" fill="#faf7f2" stroke="#166534" stroke-width="1.25"/>
-                <circle cx="8" cy="5" r="1.5" fill="#166534"/>
-                <circle cx="14" cy="5" r="1.5" fill="#166534"/>
-                <line x1="11" y1="8" x2="11" y2="10" stroke="#9f1239" stroke-width="1" stroke-linecap="round"/>
-                <g class="oq-anim oq-robot-arm-l">
-                    <path d="M0 18 L-6 26" stroke="#166534" stroke-width="2" stroke-linecap="round"/>
-                </g>
-                <g class="oq-anim oq-robot-arm-r">
-                    <path d="M22 18 L28 26" stroke="#166534" stroke-width="2" stroke-linecap="round"/>
-                </g>
-                <rect x="6" y="26" width="10" height="4" rx="1" fill="#dce8e0"/>
-            </g>
         </svg>
     </div>
 </div>

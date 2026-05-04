@@ -1,0 +1,71 @@
+QUIZSNAP — Development seeded roles, permissions, and staff accounts
+====================================================================
+WARNING: These passwords exist only in local/dev seed data. Change or
+remove before any production deployment. Do not reuse these passwords
+outside a disposable environment.
+
+Source of truth: database/seeders/InitialSetupSeeder.php,
+database/seeders/OwnerAdminSeeder.php, and app/Policies/* (runtime checks).
+
+----------------------------------------------------------------------
+ROLES (table: roles) — created by InitialSetupSeeder
+----------------------------------------------------------------------
+- Admin          slug: admin
+- Coordinator    slug: coordinator
+- Student        slug: student
+
+----------------------------------------------------------------------
+PERMISSIONS (table: permissions) — created by InitialSetupSeeder
+----------------------------------------------------------------------
+- Examiner   slug: examiner   (coordinator role may hold this via permission_role)
+- Student    slug: student     (linked to student role)
+
+permission_role links:
+- coordinator  -> examiner permission
+- student      -> student permission
+
+(Admins use users.role = "admin" in code; see policies for exact gates.)
+
+----------------------------------------------------------------------
+STAFF LOGIN (/admin_login) — password column + email column as username
+----------------------------------------------------------------------
+1) System Admin (InitialSetupSeeder)
+   Role: admin
+   Username (email field): admin
+   Password: admin123
+
+2) Owner admin (OwnerAdminSeeder; updateOrCreate)
+   Role: admin
+   Username (email field): manuel
+   Password: admin123
+
+3) Sample coordinator (InitialSetupSeeder)
+   Role: coordinator
+   Username: kofi.mensah@university.edu
+   Password: admin123
+
+----------------------------------------------------------------------
+STUDENT LOGIN (/login) — index number + password
+----------------------------------------------------------------------
+Seeded students (InitialSetupSeeder) — each uses the same dev password:
+
+   Password: student123
+
+   Index numbers use the calendar year when InitialSetupSeeder runs, e.g.:
+   - BCS/2026/001  (Akua Serwaa)
+   - BCS/2026/002  (Yaw Boateng)
+   - BCS/2026/003  (Efua Baidoo)
+   - BCS/2026/004  (Kwesi Annan)
+   - BCS/2026/005  (Abena Dapaah)
+   (Replace 2026 with the year shown in your database for that seed run.)
+
+   Emails (also in users.email): akua.serwaa@university.edu, yaw.boateng@university.edu,
+   efua.baidoo@university.edu, kwesi.annan@university.edu, abena.dapaah@university.edu
+
+----------------------------------------------------------------------
+APPLICATION ROLES (users.role string, used heavily in policies)
+----------------------------------------------------------------------
+admin | coordinator | examiner | student
+
+Examiner may be a dedicated users.role or coordinator with examiner permission;
+see ExamPolicy and related middleware.

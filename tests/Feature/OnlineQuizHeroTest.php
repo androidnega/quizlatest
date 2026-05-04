@@ -11,7 +11,7 @@ class OnlineQuizHeroTest extends TestCase
         $html = $this->get('/')->assertOk()->getContent();
 
         $this->assertStringContainsString('data-online-quiz-hero', $html);
-        $this->assertStringContainsString((string) __('Illustration of a student taking an online quiz at a computer with notes, keyboard, and a small robot assistant beside the keyboard.'), $html);
+        $this->assertStringContainsString((string) __('Illustration of a student taking an online quiz at a computer with notes and keyboard.'), $html);
         $this->assertStringNotContainsString((string) __('Click illustration to pause animation'), $html);
         $this->assertStringNotContainsString((string) __('Student Taking an Online Quiz'), $html);
     }
