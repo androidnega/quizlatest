@@ -9,13 +9,36 @@ use Illuminate\Validation\Rule;
 
 class ProfileUpdateRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if ($this->user()?->role === 'student' && $this->input('email') === '') {
+            $this->merge(['email' => null]);
+        }
+    }
+
     /**
-     * Get the validation rules that apply to the request.
-     *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
+        $user = $this->user();
+        abort_if($user === null, 403);
+
+        if ($user->role === 'student') {
+            return [
+                'name' => ['required', 'string', 'max:255'],
+                'email' => [
+                    'nullable',
+                    'string',
+                    'lowercase',
+                    'email',
+                    'max:255',
+                    Rule::unique(User::class)->ignore($user->id),
+                ],
+                'phone' => ['nullable', 'string', 'max:40'],
+            ];
+        }
+
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => [
@@ -24,7 +47,7 @@ class ProfileUpdateRequest extends FormRequest
                 'lowercase',
                 'email',
                 'max:255',
-                Rule::unique(User::class)->ignore($this->user()->id),
+                Rule::unique(User::class)->ignore($user->id),
             ],
         ];
     }

@@ -9,7 +9,11 @@
         <div class="mx-auto max-w-7xl space-y-6 sm:px-6 lg:px-8">
             <div class="qs-card sm:p-8">
                 <div class="max-w-xl">
-                    @include('profile.partials.update-profile-information-form')
+                    @if ($user->role === 'student')
+                        @include('profile.partials.update-profile-information-form-student')
+                    @else
+                        @include('profile.partials.update-profile-information-form')
+                    @endif
                 </div>
             </div>
 

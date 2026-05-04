@@ -28,7 +28,7 @@
                     <th class="text-left">{{ __('Class') }}</th>
                     <th class="text-left">{{ __('Program') }}</th>
                     <th class="text-left">{{ __('Level') }}</th>
-                    <th class="text-left">{{ __('Validation') }}</th>
+                    <th class="text-left">{{ __('Validation results') }}</th>
                 </tr>
             </thead>
             <tbody>
