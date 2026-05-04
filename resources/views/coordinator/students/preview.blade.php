@@ -23,8 +23,9 @@
                 <tr>
                     <th class="text-left">{{ __('Row') }}</th>
                     <th class="text-left">{{ __('Name') }}</th>
-                    <th class="text-left">{{ __('Email') }}</th>
+                    <th class="text-left">{{ __('Phone') }}</th>
                     <th class="text-left">{{ __('Index') }}</th>
+                    <th class="text-left">{{ __('Class') }}</th>
                     <th class="text-left">{{ __('Program') }}</th>
                     <th class="text-left">{{ __('Level') }}</th>
                     <th class="text-left">{{ __('Validation') }}</th>
@@ -35,8 +36,9 @@
                     <tr class="{{ empty($row['errors']) ? '' : 'bg-qs-danger-soft' }}">
                         <td>{{ $row['row_number'] }}</td>
                         <td>{{ $row['name'] }}</td>
-                        <td>{{ $row['email'] }}</td>
+                        <td>{{ $row['phone'] ?? '—' }}</td>
                         <td>{{ $row['index_number'] ?: __('Auto-generate') }}</td>
+                        <td>{{ $row['class_name'] !== '' ? $row['class_name'] : '—' }}</td>
                         <td>{{ $row['program'] ?: 'N/A' }}</td>
                         <td>{{ $row['level'] ?: 'N/A' }}</td>
                         <td>

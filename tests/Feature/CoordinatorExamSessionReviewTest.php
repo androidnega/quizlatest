@@ -110,7 +110,7 @@ class CoordinatorExamSessionReviewTest extends TestCase
     {
         $ctx = $this->seedScopedExamContext();
 
-        $this->get(route('coordinator.exams.sessions.index', $ctx['exam']))
+        $this->get(route('examiner.exams.sessions.index', $ctx['exam']))
             ->assertRedirect();
     }
 
@@ -119,7 +119,7 @@ class CoordinatorExamSessionReviewTest extends TestCase
         $ctx = $this->seedScopedExamContext();
 
         $this->actingAs($ctx['coord']);
-        $this->get(route('coordinator.exams.sessions.index', $ctx['exam']))
+        $this->get(route('examiner.exams.sessions.index', $ctx['exam']))
             ->assertOk()
             ->assertSeeText('Exam analytics')
             ->assertSeeText('Risk distribution')
@@ -131,7 +131,7 @@ class CoordinatorExamSessionReviewTest extends TestCase
         $ctx = $this->seedScopedExamContext();
 
         $this->actingAs($ctx['coord']);
-        $this->get(route('coordinator.exam-sessions.show', $ctx['session']))
+        $this->get(route('examiner.exam-sessions.show', $ctx['session']))
             ->assertOk()
             ->assertSeeText('Proctoring timeline');
     }
@@ -207,7 +207,7 @@ class CoordinatorExamSessionReviewTest extends TestCase
         ]);
 
         $this->actingAs($coord);
-        $this->get(route('coordinator.exams.sessions.index', $exam))
+        $this->get(route('examiner.exams.sessions.index', $exam))
             ->assertForbidden();
     }
 }

@@ -17,7 +17,7 @@ Broadcast::channel('exam-session.{sessionId}', function ($user, string $sessionI
         return ['id' => $user->id];
     }
 
-    if (in_array($user->role, ['admin', 'coordinator'], true)) {
+    if (in_array($user->role, ['admin', 'coordinator', 'examiner'], true)) {
         return ['id' => $user->id];
     }
 

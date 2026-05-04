@@ -1,4 +1,4 @@
-<x-layouts.coordinator>
+<x-layouts.examiner>
     <x-slot name="title">Examiner Dashboard</x-slot>
     <x-slot name="subtitle">Scoped to courses you manage or are assigned to examine</x-slot>
 
@@ -25,7 +25,7 @@
         <div class="rounded-xl border border-qs-soft bg-qs-bg p-6 shadow-sm">
             <h3 class="text-lg font-semibold text-qs-text">{{ __('Pending manual grading') }}</h3>
             <p class="mt-2 text-4xl font-semibold text-qs-text">{{ $pendingManualGradingCount }}</p>
-            <a href="{{ route('coordinator.grading.pending') }}" class="qs-btn-primary mt-4 inline-flex text-sm">{{ __('Open grading queue') }}</a>
+            <a href="{{ route('examiner.grading.pending') }}" class="qs-btn-primary mt-4 inline-flex text-sm">{{ __('Open grading queue') }}</a>
         </div>
         <div class="rounded-xl border border-qs-soft bg-qs-card p-6 shadow-sm">
             <h3 class="text-lg font-semibold text-qs-text">{{ __('Quick actions') }}</h3>
@@ -79,7 +79,7 @@
                                 <td class="text-sm text-qs-muted">{{ $session->exam?->course?->code ?? '—' }}</td>
                                 <td class="text-right">
                                     @if ($session->exam)
-                                        <a href="{{ route('coordinator.exams.sessions.index', $session->exam) }}" class="text-sm font-medium text-qs-text underline-offset-2 hover:underline">
+                                        <a href="{{ route('examiner.exams.sessions.index', $session->exam) }}" class="text-sm font-medium text-qs-text underline-offset-2 hover:underline">
                                             {{ __('Sessions') }}
                                         </a>
                                     @endif
@@ -91,4 +91,4 @@
             </div>
         @endif
     </div>
-</x-layouts.coordinator>
+</x-layouts.examiner>

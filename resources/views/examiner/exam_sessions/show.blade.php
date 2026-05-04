@@ -1,9 +1,9 @@
-<x-layouts.coordinator>
+<x-layouts.examiner>
     <x-slot name="title">Session review</x-slot>
     <x-slot name="subtitle">{{ $session->exam?->title }}</x-slot>
 
     <div class="mb-5 flex flex-wrap items-center gap-3">
-        <a href="{{ route('coordinator.exams.sessions.index', $session->exam) }}" class="text-sm font-medium text-qs-text underline-offset-2 hover:underline">← Sessions for this exam</a>
+        <a href="{{ route('examiner.exams.sessions.index', $session->exam) }}" class="text-sm font-medium text-qs-text underline-offset-2 hover:underline">← Sessions for this exam</a>
     </div>
 
     <div class="space-y-6">
@@ -180,4 +180,4 @@
             </script>
         @endpush
     @endif
-</x-layouts.coordinator>
+</x-layouts.examiner>

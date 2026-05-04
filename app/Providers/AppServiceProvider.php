@@ -71,7 +71,7 @@ class AppServiceProvider extends ServiceProvider
             );
         });
 
-        View::composer('components.layouts.coordinator', function ($view): void {
+        $staffLayoutComposer = function ($view): void {
             $user = auth()->user();
             if ($user === null || $user->university_id === null) {
                 return;
@@ -80,6 +80,9 @@ class AppServiceProvider extends ServiceProvider
             $term = $year !== null ? Term::activeForAcademicYear($year->id) : null;
             $badge = $year !== null ? trim($year->name.($term !== null ? ' · '.$term->name : '')) : null;
             $view->with('staffAcademicPeriodBadge', $badge);
-        });
+        };
+
+        View::composer('components.layouts.coordinator', $staffLayoutComposer);
+        View::composer('components.layouts.examiner', $staffLayoutComposer);
     }
 }

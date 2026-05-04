@@ -48,7 +48,6 @@ class SecureExamEvidenceController extends Controller
             return;
         }
 
-        abort_unless($user->role === 'coordinator', 403);
         Gate::authorize('view', $examSession);
     }
 

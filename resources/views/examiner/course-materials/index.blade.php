@@ -1,4 +1,4 @@
-<x-layouts.coordinator>
+<x-layouts.examiner>
     <x-slot name="title">{{ __('Course materials') }}</x-slot>
     <x-slot name="subtitle">{{ $course->code }} — {{ $course->title }}</x-slot>
 
@@ -74,4 +74,4 @@
         </div>
         <div>{{ $materials->links() }}</div>
     </div>
-</x-layouts.coordinator>
+</x-layouts.examiner>

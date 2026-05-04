@@ -25,24 +25,32 @@
 
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label class="block text-sm font-medium text-qs-text">{{ __('Name column') }}</label>
-                    <input type="text" name="map_name" value="{{ old('map_name', 'name') }}" class="qs-input mt-1 py-2.5" required>
+                    <label class="block text-sm font-medium text-qs-text">{{ __('Index number column (required)') }}</label>
+                    <input type="text" name="map_index_number" value="{{ old('map_index_number', 'index_number') }}" class="qs-input mt-1 py-2.5" required>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-qs-text">{{ __('Email column') }}</label>
-                    <input type="text" name="map_email" value="{{ old('map_email', 'email') }}" class="qs-input mt-1 py-2.5" required>
+                    <label class="block text-sm font-medium text-qs-text">{{ __('Name column (optional)') }}</label>
+                    <input type="text" name="map_name" value="{{ old('map_name', 'name') }}" class="qs-input mt-1 py-2.5">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-qs-text">{{ __('Index number column (optional)') }}</label>
-                    <input type="text" name="map_index_number" value="{{ old('map_index_number', 'index_number') }}" class="qs-input mt-1 py-2.5">
+                    <label class="block text-sm font-medium text-qs-text">{{ __('Phone column (optional)') }}</label>
+                    <input type="text" name="map_phone" value="{{ old('map_phone', 'phone') }}" class="qs-input mt-1 py-2.5">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-qs-text">{{ __('Program column') }}</label>
+                    <label class="block text-sm font-medium text-qs-text">{{ __('Email column (optional)') }}</label>
+                    <input type="text" name="map_email" value="{{ old('map_email', 'email') }}" class="qs-input mt-1 py-2.5">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-qs-text">{{ __('Program column (code or name)') }}</label>
                     <input type="text" name="map_program" value="{{ old('map_program', 'program') }}" class="qs-input mt-1 py-2.5" required>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-qs-text">{{ __('Level column') }}</label>
                     <input type="text" name="map_level" value="{{ old('map_level', 'level') }}" class="qs-input mt-1 py-2.5" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-qs-text">{{ __('Class name column (optional)') }}</label>
+                    <input type="text" name="map_class_name" value="{{ old('map_class_name', 'class_name') }}" class="qs-input mt-1 py-2.5">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-qs-text">{{ __('Academic year (for auto index)') }}</label>

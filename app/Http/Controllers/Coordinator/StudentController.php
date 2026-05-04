@@ -8,11 +8,11 @@ use App\Models\Level;
 use App\Models\Program;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\StudentPhone;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -109,21 +109,23 @@ class StudentController extends Controller
 
         $validated = $request->validate([
             'csv_file' => ['required', 'file', 'mimes:csv,txt', 'max:4096'],
-            'map_name' => ['required', 'string'],
-            'map_email' => ['required', 'string'],
-            'map_index_number' => ['nullable', 'string'],
-            'map_program' => ['required', 'string'],
-            'map_level' => ['required', 'string'],
+            'map_index_number' => ['required', 'string', 'max:64'],
+            'map_name' => ['nullable', 'string', 'max:64'],
+            'map_email' => ['nullable', 'string', 'max:64'],
+            'map_phone' => ['nullable', 'string', 'max:64'],
+            'map_program' => ['required', 'string', 'max:64'],
+            'map_level' => ['required', 'string', 'max:64'],
+            'map_class_name' => ['nullable', 'string', 'max:64'],
             'year' => ['nullable', 'digits:4'],
         ]);
-        $validated = [
-            ...$validated,
-            'map_name' => Str::lower(trim($validated['map_name'])),
-            'map_email' => Str::lower(trim($validated['map_email'])),
-            'map_index_number' => Str::lower(trim((string) ($validated['map_index_number'] ?? ''))),
-            'map_program' => Str::lower(trim($validated['map_program'])),
-            'map_level' => Str::lower(trim($validated['map_level'])),
-        ];
+
+        $mapIndex = Str::lower(trim($validated['map_index_number']));
+        $mapName = Str::lower(trim((string) ($validated['map_name'] ?? '')));
+        $mapEmail = Str::lower(trim((string) ($validated['map_email'] ?? '')));
+        $mapPhone = Str::lower(trim((string) ($validated['map_phone'] ?? '')));
+        $mapProgram = Str::lower(trim($validated['map_program']));
+        $mapLevel = Str::lower(trim($validated['map_level']));
+        $mapClassName = Str::lower(trim((string) ($validated['map_class_name'] ?? '')));
 
         $departmentIds = $this->departmentIds();
         $allowedPrograms = Program::query()->whereIn('department_id', $departmentIds)->get()->keyBy(fn (Program $program) => Str::lower($program->code ?? $program->name));
@@ -138,44 +140,22 @@ class StudentController extends Controller
 
         $previewRows = [];
         $validRows = [];
-        $seenEmails = [];
         $seenIndexes = [];
+        $seenPhones = [];
 
         foreach ($rows as $rowNumber => $row) {
-            $name = trim((string) ($row[$validated['map_name']] ?? ''));
-            $email = trim((string) ($row[$validated['map_email']] ?? ''));
-            $indexNumber = trim((string) ($row[$validated['map_index_number']] ?? ''));
-            $programRaw = trim((string) ($row[$validated['map_program']] ?? ''));
-            $levelRaw = trim((string) ($row[$validated['map_level']] ?? ''));
+            $name = $mapName !== '' ? trim((string) ($row[$mapName] ?? '')) : '';
+            $email = $mapEmail !== '' ? trim((string) ($row[$mapEmail] ?? '')) : '';
+            $phoneRaw = $mapPhone !== '' ? trim((string) ($row[$mapPhone] ?? '')) : '';
+            $indexNumber = trim((string) ($row[$mapIndex] ?? ''));
+            $programRaw = trim((string) ($row[$mapProgram] ?? ''));
+            $levelRaw = trim((string) ($row[$mapLevel] ?? ''));
+            $classNameRaw = $mapClassName !== '' ? trim((string) ($row[$mapClassName] ?? '')) : '';
 
             $errors = [];
 
-            if ($name === '') {
-                $errors[] = 'Name is required.';
-            }
-
-            if ($email === '') {
-                $errors[] = 'Email is required.';
-            }
-
-            if ($email !== '' && isset($seenEmails[Str::lower($email)])) {
-                $errors[] = 'Duplicate email in file.';
-            }
-            $seenEmails[Str::lower($email)] = true;
-
             if ($email !== '' && User::query()->where('email', $email)->exists()) {
                 $errors[] = 'Email already exists.';
-            }
-
-            if ($indexNumber !== '') {
-                if (isset($seenIndexes[Str::upper($indexNumber)])) {
-                    $errors[] = 'Duplicate index number in file.';
-                }
-                $seenIndexes[Str::upper($indexNumber)] = true;
-
-                if (User::query()->where('index_number', $indexNumber)->exists()) {
-                    $errors[] = 'Index number already exists.';
-                }
             }
 
             $programLookupKey = Str::lower($programRaw);
@@ -200,14 +180,67 @@ class StudentController extends Controller
                 $errors[] = 'Level not recognized.';
             }
 
+            $universityId = $program ? (int) $program->university_id : 0;
+
+            $normalizedPhone = $phoneRaw !== '' ? StudentPhone::normalize($phoneRaw) : null;
+            if ($phoneRaw !== '' && $normalizedPhone === null) {
+                $errors[] = 'Phone number could not be normalized.';
+            }
+            if ($normalizedPhone !== null && ! StudentPhone::isGhanaMobile($normalizedPhone)) {
+                $errors[] = 'Phone must be a valid Ghana mobile number when provided.';
+            }
+            if ($normalizedPhone !== null) {
+                $phoneKey = $universityId.'|'.$normalizedPhone;
+                if (isset($seenPhones[$phoneKey])) {
+                    $errors[] = 'Duplicate phone in file.';
+                }
+                $seenPhones[$phoneKey] = true;
+
+                if ($universityId > 0 && $this->universityHasStudentPhone($universityId, $normalizedPhone)) {
+                    $errors[] = 'Phone already exists for another student in this institution.';
+                }
+            }
+
+            if ($indexNumber !== '') {
+                $idxKey = $universityId.'|'.Str::upper($indexNumber);
+                if (isset($seenIndexes[$idxKey])) {
+                    $errors[] = 'Duplicate index number in file.';
+                }
+                $seenIndexes[$idxKey] = true;
+
+                if ($universityId > 0 && User::query()->where('university_id', $universityId)->where('index_number', $indexNumber)->exists()) {
+                    $errors[] = 'Index number already exists for this institution.';
+                }
+            }
+
+            $classId = null;
+            if ($program && $level) {
+                $classQuery = Classroom::query()
+                    ->where('program_id', $program->id)
+                    ->where('level_id', $level->id)
+                    ->where('is_active', true);
+                if ($classNameRaw !== '') {
+                    $classQuery->where('name', $classNameRaw);
+                }
+                $classroom = $classQuery->orderBy('name')->first();
+                $classId = $classroom?->id;
+                if ($classNameRaw !== '' && $classId === null) {
+                    $errors[] = 'Class not found for the given program, level, and class name.';
+                }
+            }
+
             $previewRow = [
                 'row_number' => $rowNumber + 2,
                 'name' => $name,
-                'email' => $email,
+                'email' => $email !== '' ? $email : null,
+                'phone' => $normalizedPhone,
                 'index_number' => $indexNumber,
+                'class_name' => $classNameRaw,
+                'class_id' => $classId,
                 'program' => $program?->name,
                 'program_id' => $program?->id,
                 'program_code' => $program?->code,
+                'university_id' => $universityId > 0 ? $universityId : null,
                 'level' => $level?->name,
                 'level_id' => $level?->id,
                 'errors' => $errors,
@@ -256,31 +289,38 @@ class StudentController extends Controller
 
         DB::transaction(function () use ($rows, $year, $studentRoleId, &$serialCache, &$imported, &$unassigned): void {
             foreach ($rows as $row) {
-                $classId = Classroom::query()
-                    ->where('program_id', $row['program_id'])
-                    ->where('level_id', $row['level_id'])
-                    ->where('is_active', true)
-                    ->value('id');
+                $classId = $row['class_id'] ?? null;
+                if ($classId === null) {
+                    $classId = Classroom::query()
+                        ->where('program_id', $row['program_id'])
+                        ->where('level_id', $row['level_id'])
+                        ->where('is_active', true)
+                        ->orderBy('name')
+                        ->value('id');
+                }
 
                 if (! $classId) {
                     $unassigned++;
                 }
 
-                $indexNumber = $row['index_number'] !== ''
+                $indexNumber = ($row['index_number'] ?? '') !== ''
                     ? $row['index_number']
                     : $this->nextIndexNumber($row['program_code'] ?: $row['program'], $year, $serialCache);
 
                 $student = User::create([
+                    'university_id' => $row['university_id'],
                     'program_id' => $row['program_id'],
                     'level_id' => $row['level_id'],
                     'class_id' => $classId,
-                    'name' => $row['name'],
-                    'email' => $row['email'],
+                    'name' => ($row['name'] ?? '') !== '' ? $row['name'] : '',
+                    'email' => $row['email'] ?? null,
+                    'phone' => $row['phone'] ?? null,
                     'index_number' => $indexNumber,
                     'role' => 'student',
                     'is_active' => $classId !== null,
-                    'email_verified_at' => now(),
-                    'password' => Hash::make('student123'),
+                    'email_verified_at' => null,
+                    'student_onboarded_at' => null,
+                    'password' => Str::password(32),
                 ]);
 
                 if ($studentRoleId) {
@@ -376,9 +416,9 @@ class StudentController extends Controller
 
         return response()->streamDownload(function (): void {
             $handle = fopen('php://output', 'wb');
-            fputcsv($handle, ['name', 'email', 'index_number', 'program', 'level']);
-            fputcsv($handle, ['Akua Serwaa', 'akua.serwaa@example.com', '', 'BCS', '100']);
-            fputcsv($handle, ['Yaw Boateng', 'yaw.boateng@example.com', '', 'BCS', '100']);
+            fputcsv($handle, ['index_number', 'name', 'phone', 'program', 'level', 'class_name']);
+            fputcsv($handle, ['BCS/2026/001', 'Akua Serwaa', '+233241112233', 'BCS', '100', '']);
+            fputcsv($handle, ['', 'Yaw Boateng', '', 'BCS', '100', 'A']);
             fclose($handle);
         }, 'student-upload-template.csv', ['Content-Type' => 'text/csv']);
     }
@@ -443,6 +483,17 @@ class StudentController extends Controller
         $cache[$key]++;
 
         return sprintf('%s/%d/%03d', $normalizedProgramCode, $year, $cache[$key]);
+    }
+
+    private function universityHasStudentPhone(int $universityId, string $normalizedPhone): bool
+    {
+        return User::query()
+            ->where('university_id', $universityId)
+            ->where('role', 'student')
+            ->whereNotNull('phone')
+            ->where('phone', '!=', '')
+            ->get(['phone'])
+            ->contains(fn (User $u): bool => StudentPhone::normalize($u->phone) === $normalizedPhone);
     }
 
     private function departmentIds()

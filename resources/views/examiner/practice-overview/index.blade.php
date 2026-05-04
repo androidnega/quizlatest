@@ -1,4 +1,4 @@
-<x-layouts.coordinator>
+<x-layouts.examiner>
     <x-slot name="title">{{ __('Practice overview') }}</x-slot>
     <x-slot name="subtitle">{{ __('Aggregated practice activity for your courses — no individual answer review.') }}</x-slot>
 
@@ -46,4 +46,4 @@
             </ul>
         @endif
     </div>
-</x-layouts.coordinator>
+</x-layouts.examiner>

@@ -2,7 +2,7 @@
     :page-title="__('Verify code')"
     :eyebrow="__('Verification')"
     :heading="__('Enter your one-time code')"
-    :description="__('Check your messages or, while developing, open storage/logs/laravel.log for the six-digit code tied to your index number.')"
+    :description="__('Check the SMS on your phone. The code expires in a few minutes.')"
 >
     <form method="POST" action="{{ url('/login/otp') }}" class="space-y-6">
         @csrf
@@ -26,7 +26,7 @@
         </div>
 
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <a href="{{ route('login') }}" class="qs-btn-secondary justify-center px-4 py-2.5 text-sm font-semibold sm:inline-flex sm:w-auto">
+            <a href="{{ route('login.first-time') }}" class="qs-btn-secondary justify-center px-4 py-2.5 text-sm font-semibold sm:inline-flex sm:w-auto">
                 {{ __('Back') }}
             </a>
             <button type="submit" class="qs-btn-primary flex-1 justify-center py-2.5 text-sm font-semibold sm:flex-none sm:min-w-[9rem]">
@@ -36,6 +36,10 @@
     </form>
 
     <p class="mt-8 border-t border-qs-soft pt-6 text-center text-sm text-qs-muted">
+        <a href="{{ route('login') }}" class="qs-link font-medium text-qs-text">{{ __('Already finished setup? Sign in with password') }}</a>
+    </p>
+
+    <p class="mt-4 text-center text-sm text-qs-muted">
         {{ __('Coordinator or admin?') }}
         <a href="{{ route('staff.login') }}" class="qs-link font-medium text-qs-text">{{ __('Staff sign in') }}</a>
     </p>

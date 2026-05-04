@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsCoordinator;
+use App\Http\Middleware\EnsureUserIsExaminer;
 use App\Http\Middleware\EnsureUserIsStudent;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -18,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => EnsureUserIsAdmin::class,
             'coordinator' => EnsureUserIsCoordinator::class,
+            'examiner' => EnsureUserIsExaminer::class,
             'student' => EnsureUserIsStudent::class,
         ]);
     })

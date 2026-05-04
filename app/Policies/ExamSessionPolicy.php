@@ -10,8 +10,8 @@ class ExamSessionPolicy
 {
     public function view(User $user, ExamSession $examSession): bool
     {
-        if ($user->role !== 'coordinator') {
-            return false;
+        if ($user->role === 'admin') {
+            return true;
         }
 
         $examSession->loadMissing('exam');

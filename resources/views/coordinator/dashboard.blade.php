@@ -37,8 +37,9 @@
                 <a href="{{ route('coordinator.students.upload') }}" class="qs-btn-secondary text-sm">{{ __('CSV upload') }}</a>
                 <a href="{{ route('coordinator.classes.index') }}" class="qs-btn-secondary text-sm">{{ __('Classes') }}</a>
                 <a href="{{ route('coordinator.courses.index') }}" class="qs-btn-secondary text-sm">{{ __('Courses') }}</a>
-                <a href="{{ route('examiner.dashboard') }}" class="qs-btn-secondary text-sm">{{ __('Examiner home') }}</a>
-                <a href="{{ route('coordinator.grading.pending') }}" class="qs-btn-secondary text-sm">{{ __('Essay grading') }}</a>
+                @if (\App\Http\Middleware\EnsureUserIsExaminer::mayAccessExaminerPortal(auth()->user()))
+                    <a href="{{ route('examiner.dashboard') }}" class="qs-btn-secondary text-sm">{{ __('Examiner portal') }}</a>
+                @endif
                 <a href="{{ route('coordinator.academic-reset.index') }}" class="qs-btn-secondary text-sm">{{ __('Academic reset') }}</a>
             </div>
         </div>

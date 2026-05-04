@@ -30,6 +30,10 @@ class DashboardController extends Controller
             return redirect()->route('coordinator.dashboard');
         }
 
+        if ($user->role === 'examiner') {
+            return redirect()->route('examiner.dashboard');
+        }
+
         if ($user->role !== 'student') {
             return view('dashboard', [
                 'user' => $user,

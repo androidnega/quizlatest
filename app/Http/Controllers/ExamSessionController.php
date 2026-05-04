@@ -508,7 +508,7 @@ class ExamSessionController extends Controller
         ];
 
         if ($hasEvidence) {
-            $row['evidence_url'] = route('coordinator.exam-sessions.evidence.event', [$examSession, $event]);
+            $row['evidence_url'] = route('examiner.exam-sessions.evidence.event', [$examSession, $event]);
         }
 
         return $row;

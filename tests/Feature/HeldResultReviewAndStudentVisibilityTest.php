@@ -119,7 +119,7 @@ class HeldResultReviewAndStudentVisibilityTest extends TestCase
         $ctx = $this->seedExamSessionContext();
 
         $this->actingAs($ctx['coord']);
-        $this->get(route('coordinator.exams.sessions.index', $ctx['exam']))
+        $this->get(route('examiner.exams.sessions.index', $ctx['exam']))
             ->assertForbidden();
     }
 

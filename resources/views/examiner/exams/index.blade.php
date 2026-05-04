@@ -1,4 +1,4 @@
-<x-layouts.coordinator>
+<x-layouts.examiner>
     <x-slot name="title">Exams</x-slot>
     <x-slot name="subtitle">Build assessments for your assigned courses</x-slot>
 
@@ -29,7 +29,7 @@
                             </td>
                             <td>
                                 <div class="flex flex-wrap justify-end gap-2">
-                                    <a href="{{ route('coordinator.exams.sessions.index', $exam) }}" class="qs-btn-secondary inline-flex min-h-[44px] items-center justify-center px-3 py-2 text-xs font-semibold">
+                                    <a href="{{ route('examiner.exams.sessions.index', $exam) }}" class="qs-btn-secondary inline-flex min-h-[44px] items-center justify-center px-3 py-2 text-xs font-semibold">
                                         {{ __('Sessions') }}
                                     </a>
                                     <a href="{{ route('examiner.exams.builder', $exam) }}" class="qs-btn-primary inline-flex min-h-[44px] items-center justify-center px-3 py-2 text-xs font-semibold">
@@ -48,4 +48,4 @@
         </div>
         <div class="mt-4">{{ $exams->links() }}</div>
     </div>
-</x-layouts.coordinator>
+</x-layouts.examiner>

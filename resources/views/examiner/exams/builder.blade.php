@@ -1,4 +1,4 @@
-<x-layouts.coordinator>
+<x-layouts.examiner>
     <x-slot name="title">Exam builder</x-slot>
     <x-slot name="subtitle">{{ $exam->title }}</x-slot>
 
@@ -417,4 +417,4 @@
             sync();
         });
     </script>
-</x-layouts.coordinator>
+</x-layouts.examiner>

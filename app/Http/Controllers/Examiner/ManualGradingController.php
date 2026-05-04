@@ -1,9 +1,8 @@
 <?php
 
-namespace App\Http\Controllers\Coordinator;
+namespace App\Http\Controllers\Examiner;
 
 use App\Http\Controllers\Controller;
-use App\Models\Course;
 use App\Models\ExaminerCourseAssignment;
 use App\Models\ExamSessionAnswer;
 use App\Services\ResultFinalizationService;
@@ -25,7 +24,7 @@ class ManualGradingController extends Controller
             ->orderByDesc('updated_at')
             ->paginate(20);
 
-        return view('coordinator.grading.index', [
+        return view('examiner.grading.index', [
             'answers' => $answers,
         ]);
     }
@@ -38,7 +37,7 @@ class ManualGradingController extends Controller
         abort_unless($answer->question->isEssay(), 404);
         abort_unless($answer->evaluation_status === 'pending_manual', 404);
 
-        return view('coordinator.grading.show', [
+        return view('examiner.grading.show', [
             'answer' => $answer,
         ]);
     }
@@ -71,7 +70,7 @@ class ManualGradingController extends Controller
         }
 
         return redirect()
-            ->route('coordinator.grading.pending')
+            ->route('examiner.grading.pending')
             ->with('status', 'Grade saved.');
     }
 
@@ -89,36 +88,17 @@ class ManualGradingController extends Controller
     }
 
     /**
-     * @return array<int, int>
-     */
-    private function coordinatorDepartmentIds(Request $request): array
-    {
-        return $request->user()
-            ->coordinatorAssignments()
-            ->where('is_active', true)
-            ->pluck('department_id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
-    }
-
-    /**
+     * Essay grading queue is limited to courses where the user is an assigned examiner.
+     *
      * @return array<int, int>
      */
     private function manageableCourseIds(Request $request): array
     {
-        $fromAssignments = ExaminerCourseAssignment::query()
+        return ExaminerCourseAssignment::query()
             ->where('examiner_user_id', $request->user()->id)
             ->where('is_active', true)
             ->pluck('course_id')
             ->map(fn ($id) => (int) $id)
             ->all();
-
-        $fromDepartments = Course::query()
-            ->whereIn('department_id', $this->coordinatorDepartmentIds($request))
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
-
-        return array_values(array_unique(array_merge($fromAssignments, $fromDepartments)));
     }
 }

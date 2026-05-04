@@ -1,4 +1,4 @@
-<x-layouts.coordinator>
+<x-layouts.examiner>
     <x-slot name="title">Create exam</x-slot>
     <x-slot name="subtitle">Choose a course and basic settings</x-slot>
 
@@ -37,4 +37,4 @@
             </div>
         </form>
     </div>
-</x-layouts.coordinator>
+</x-layouts.examiner>

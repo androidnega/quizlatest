@@ -1,4 +1,4 @@
-<x-layouts.coordinator>
+<x-layouts.examiner>
     <x-slot name="title">Exam sessions</x-slot>
     <x-slot name="subtitle">{{ $exam->title }} — {{ $exam->course?->code }}</x-slot>
 
@@ -85,7 +85,7 @@
                                 <td class="text-sm text-qs-text">{{ $fs->risk_state }}</td>
                                 <td class="text-sm text-qs-text">{{ $fs->violation_count }}</td>
                                 <td class="text-right">
-                                    <a href="{{ route('coordinator.exam-sessions.show', $fs) }}" class="qs-btn-secondary inline-flex min-h-[44px] items-center justify-center px-3 py-2 text-xs font-semibold">{{ __('View session') }}</a>
+                                    <a href="{{ route('examiner.exam-sessions.show', $fs) }}" class="qs-btn-secondary inline-flex min-h-[44px] items-center justify-center px-3 py-2 text-xs font-semibold">{{ __('View session') }}</a>
                                 </td>
                             </tr>
                         @empty
@@ -100,7 +100,7 @@
     </div>
 
     <div class="qs-card rounded-xl p-5 shadow-sm">
-        <form method="GET" action="{{ route('coordinator.exams.sessions.index', $exam) }}" class="mb-5 grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
+        <form method="GET" action="{{ route('examiner.exams.sessions.index', $exam) }}" class="mb-5 grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
             <div class="sm:col-span-1 lg:min-w-[11rem]">
                 <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ __('Status') }}</label>
                 <select name="status" class="qs-input mt-0 min-h-[44px] w-full py-2.5 lg:min-w-[11rem]">
@@ -124,7 +124,7 @@
             <div class="flex flex-col gap-2 sm:col-span-2 sm:flex-row lg:col-span-initial lg:items-end">
                 <button type="submit" class="qs-btn-primary min-h-[44px] w-full px-4 text-sm sm:w-auto">{{ __('Filter') }}</button>
                 @if (request()->hasAny(['status', 'risk_state']))
-                    <a href="{{ route('coordinator.exams.sessions.index', $exam) }}" class="qs-btn-secondary inline-flex min-h-[44px] w-full items-center justify-center px-4 text-sm sm:w-auto">{{ __('Clear') }}</a>
+                    <a href="{{ route('examiner.exams.sessions.index', $exam) }}" class="qs-btn-secondary inline-flex min-h-[44px] w-full items-center justify-center px-4 text-sm sm:w-auto">{{ __('Clear') }}</a>
                 @endif
             </div>
         </form>
@@ -154,7 +154,7 @@
                             </td>
                             <td class="text-sm text-qs-text">{{ $row->risk_state }}</td>
                             <td class="text-right">
-                                <a href="{{ route('coordinator.exam-sessions.show', $row) }}" class="qs-btn-secondary inline-flex min-h-[44px] items-center justify-center px-3 py-2 text-xs font-semibold">{{ __('View session') }}</a>
+                                <a href="{{ route('examiner.exam-sessions.show', $row) }}" class="qs-btn-secondary inline-flex min-h-[44px] items-center justify-center px-3 py-2 text-xs font-semibold">{{ __('View session') }}</a>
                             </td>
                         </tr>
                     @empty
@@ -168,4 +168,4 @@
 
         <div class="mt-4">{{ $sessions->links() }}</div>
     </div>
-</x-layouts.coordinator>
+</x-layouts.examiner>

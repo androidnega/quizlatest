@@ -32,7 +32,7 @@ class SecureSensitiveFileAccessTest extends TestCase
         $ctx['session']->update(['verification_image_path' => $rel]);
 
         $this->actingAs($ctx['coord']);
-        $this->get(route('coordinator.exam-sessions.evidence.verification', $ctx['session']))
+        $this->get(route('examiner.exam-sessions.evidence.verification', $ctx['session']))
             ->assertOk();
     }
 
@@ -47,7 +47,7 @@ class SecureSensitiveFileAccessTest extends TestCase
         $ctx['session']->update(['verification_image_path' => $rel]);
 
         $this->actingAs($ctx['coord']);
-        $this->get(route('coordinator.exam-sessions.evidence.verification', $ctx['session']))
+        $this->get(route('examiner.exam-sessions.evidence.verification', $ctx['session']))
             ->assertOk();
     }
 
@@ -124,7 +124,7 @@ class SecureSensitiveFileAccessTest extends TestCase
         Storage::disk('local')->put('proctoring/x.jpg', 'x');
 
         $this->actingAs($coord);
-        $this->get(route('coordinator.exam-sessions.evidence.verification', $session))
+        $this->get(route('examiner.exam-sessions.evidence.verification', $session))
             ->assertForbidden();
     }
 
@@ -152,7 +152,7 @@ class SecureSensitiveFileAccessTest extends TestCase
         ]);
 
         $this->actingAs($ctx['coord']);
-        $this->get(route('coordinator.exam-sessions.evidence.event', [$ctx['session'], $event]))
+        $this->get(route('examiner.exam-sessions.evidence.event', [$ctx['session'], $event]))
             ->assertOk();
     }
 
@@ -178,7 +178,7 @@ class SecureSensitiveFileAccessTest extends TestCase
         ]);
 
         $this->actingAs($ctx['coord']);
-        $this->get(route('coordinator.exam-sessions.evidence.event', [$ctx['session'], $event]))
+        $this->get(route('examiner.exam-sessions.evidence.event', [$ctx['session'], $event]))
             ->assertNotFound();
     }
 
@@ -205,7 +205,7 @@ class SecureSensitiveFileAccessTest extends TestCase
         $ctx['session']->update(['verification_image_path' => $rel]);
 
         $this->actingAs($ctx['coord']);
-        $this->get(route('coordinator.exam-sessions.show', $ctx['session']))
+        $this->get(route('examiner.exam-sessions.show', $ctx['session']))
             ->assertOk()
             ->assertDontSee($rel, false);
     }

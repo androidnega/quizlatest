@@ -237,6 +237,7 @@ class InitialSetupSeeder extends Seeder
                 'role' => 'student',
                 'is_active' => true,
                 'email_verified_at' => $now,
+                'student_onboarded_at' => $now,
                 'password' => Hash::make('student123'),
                 'remember_token' => null,
                 'created_at' => $now,

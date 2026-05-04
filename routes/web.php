@@ -12,15 +12,15 @@ use App\Http\Controllers\Coordinator\ClassCourseAssignmentController;
 use App\Http\Controllers\Coordinator\ClassroomController;
 use App\Http\Controllers\Coordinator\CourseController;
 use App\Http\Controllers\Coordinator\DashboardController as CoordinatorDashboardController;
-use App\Http\Controllers\Coordinator\ExamSessionReviewController;
 use App\Http\Controllers\Coordinator\LevelController;
-use App\Http\Controllers\Coordinator\ManualGradingController;
 use App\Http\Controllers\Coordinator\ProgramController;
 use App\Http\Controllers\Coordinator\StudentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Examiner\CourseMaterialController as ExaminerCourseMaterialController;
 use App\Http\Controllers\Examiner\DashboardController as ExaminerDashboardController;
 use App\Http\Controllers\Examiner\ExamBuilderController;
+use App\Http\Controllers\Examiner\ExamSessionReviewController as ExaminerExamSessionReviewController;
+use App\Http\Controllers\Examiner\ManualGradingController as ExaminerManualGradingController;
 use App\Http\Controllers\Examiner\PracticeOverviewController;
 use App\Http\Controllers\ExamSessionController;
 use App\Http\Controllers\ProctoringUploadController;
@@ -210,21 +210,11 @@ Route::prefix('coordinator')
         Route::get('/courses/assign/classes', [ClassCourseAssignmentController::class, 'edit'])->name('courses.assign.edit');
         Route::post('/courses/assign/classes', [ClassCourseAssignmentController::class, 'update'])->name('courses.assign.update');
 
-        Route::get('/grading/pending-essays', [ManualGradingController::class, 'index'])->name('grading.pending');
-        Route::get('/grading/answers/{answer}', [ManualGradingController::class, 'show'])->name('grading.show');
-        Route::post('/grading/answers/{answer}', [ManualGradingController::class, 'grade'])->name('grading.grade');
-
-        Route::get('/exams/{exam}/sessions', [ExamSessionReviewController::class, 'index'])->name('exams.sessions.index');
-        Route::get('/exam-sessions/{examSession}/evidence/verification', [SecureExamEvidenceController::class, 'verification'])
-            ->name('exam-sessions.evidence.verification');
-        Route::get('/exam-sessions/{examSession}/evidence/events/{proctoringEvent}', [SecureExamEvidenceController::class, 'eventSnapshot'])
-            ->name('exam-sessions.evidence.event');
-        Route::get('/exam-sessions/{examSession}', [ExamSessionReviewController::class, 'show'])->name('exam-sessions.show');
     });
 
 Route::prefix('examiner')
     ->name('examiner.')
-    ->middleware(['auth', 'verified', 'coordinator'])
+    ->middleware(['auth', 'verified', 'examiner'])
     ->group(function () {
         Route::get('/dashboard', [ExaminerDashboardController::class, 'index'])->name('dashboard');
         Route::get('/exams', [ExamBuilderController::class, 'index'])->name('exams.index');
@@ -251,6 +241,17 @@ Route::prefix('examiner')
         Route::get('/courses/{course}/materials/{material}/download', [ExaminerCourseMaterialController::class, 'download'])->name('courses.materials.download');
         Route::delete('/courses/{course}/materials/{material}', [ExaminerCourseMaterialController::class, 'destroy'])->name('courses.materials.destroy');
         Route::get('/practice-overview', [PracticeOverviewController::class, 'index'])->name('practice-overview.index');
+
+        Route::get('/grading/pending-essays', [ExaminerManualGradingController::class, 'index'])->name('grading.pending');
+        Route::get('/grading/answers/{answer}', [ExaminerManualGradingController::class, 'show'])->name('grading.show');
+        Route::post('/grading/answers/{answer}', [ExaminerManualGradingController::class, 'grade'])->name('grading.grade');
+
+        Route::get('/exams/{exam}/sessions', [ExaminerExamSessionReviewController::class, 'index'])->name('exams.sessions.index');
+        Route::get('/exam-sessions/{examSession}/evidence/verification', [SecureExamEvidenceController::class, 'verification'])
+            ->name('exam-sessions.evidence.verification');
+        Route::get('/exam-sessions/{examSession}/evidence/events/{proctoringEvent}', [SecureExamEvidenceController::class, 'eventSnapshot'])
+            ->name('exam-sessions.evidence.event');
+        Route::get('/exam-sessions/{examSession}', [ExaminerExamSessionReviewController::class, 'show'])->name('exam-sessions.show');
     });
 
 require __DIR__.'/auth.php';

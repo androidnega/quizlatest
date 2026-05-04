@@ -15,6 +15,13 @@ class ExamPolicy
             return true;
         }
 
+        if ($user->role === 'examiner') {
+            return ExaminerCourseAssignment::query()
+                ->where('examiner_user_id', $user->id)
+                ->where('is_active', true)
+                ->exists();
+        }
+
         if ($user->role !== 'coordinator') {
             return false;
         }
@@ -23,10 +30,14 @@ class ExamPolicy
             return true;
         }
 
-        return ExaminerCourseAssignment::query()
+        if (ExaminerCourseAssignment::query()
             ->where('examiner_user_id', $user->id)
             ->where('is_active', true)
-            ->exists();
+            ->exists()) {
+            return true;
+        }
+
+        return $user->roles()->whereHas('permissions', fn ($q) => $q->where('slug', 'examiner'))->exists();
     }
 
     public function view(User $user, Quiz $exam): bool
@@ -50,12 +61,12 @@ class ExamPolicy
     }
 
     /**
-     * Examiner-only: held-result actions, force-submit, session/result review surfaces for an exam.
+     * Held-result actions, force-submit, session/result review surfaces for an exam.
      */
     public function manageResults(User $user, Quiz $exam): bool
     {
-        if ($user->role !== 'coordinator') {
-            return false;
+        if ($user->role === 'admin') {
+            return true;
         }
 
         $course = Course::query()->find($exam->course_id);
@@ -76,12 +87,20 @@ class ExamPolicy
             return true;
         }
 
-        if ($user->role !== 'coordinator') {
+        $course = Course::query()->find($exam->course_id);
+        if ($course === null) {
             return false;
         }
 
-        $course = Course::query()->find($exam->course_id);
-        if ($course === null) {
+        if ($user->role === 'examiner') {
+            return ExaminerCourseAssignment::query()
+                ->where('examiner_user_id', $user->id)
+                ->where('course_id', $course->id)
+                ->where('is_active', true)
+                ->exists();
+        }
+
+        if ($user->role !== 'coordinator') {
             return false;
         }
 

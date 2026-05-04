@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Coordinator;
+namespace App\Http\Controllers\Examiner;
 
 use App\Http\Controllers\Controller;
 use App\Models\ExamSession;
@@ -68,7 +68,7 @@ class ExamSessionReviewController extends Controller
             $session->setAttribute('workflow_display_status', $this->workflowDisplayStatus($session));
         });
 
-        return view('coordinator.exam_sessions.index', [
+        return view('examiner.exam_sessions.index', [
             'exam' => $exam,
             'sessions' => $sessions,
             'riskStates' => self::RISK_STATES,
@@ -213,7 +213,7 @@ class ExamSessionReviewController extends Controller
                 continue;
             }
             $thumbnails[] = [
-                'url' => route('coordinator.exam-sessions.evidence.event', [$examSession, $e]),
+                'url' => route('examiner.exam-sessions.evidence.event', [$examSession, $e]),
                 'event_type' => $e->event_type,
                 'at' => $e->created_at,
             ];
@@ -222,10 +222,10 @@ class ExamSessionReviewController extends Controller
         $verificationPath = $examSession->verification_image_path;
         $verificationEvidenceUrl = null;
         if (is_string($verificationPath) && $verificationPath !== '' && $sensitiveStorage->existsAnywhere($verificationPath)) {
-            $verificationEvidenceUrl = route('coordinator.exam-sessions.evidence.verification', $examSession);
+            $verificationEvidenceUrl = route('examiner.exam-sessions.evidence.verification', $examSession);
         }
 
-        return view('coordinator.exam_sessions.show', [
+        return view('examiner.exam_sessions.show', [
             'session' => $examSession,
             'workflowStatus' => $workflowStatus,
             'timeline' => $timeline,

@@ -45,6 +45,8 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'student_onboarded_at' => 'datetime',
+            'last_student_password_reset_at' => 'datetime',
             'is_active' => 'boolean',
             'face_embedding' => 'array',
             'password' => 'hashed',
