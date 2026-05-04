@@ -40,6 +40,10 @@ Route::get('/', function () {
     return view('home');
 })->name('home');
 
+Route::get('/quiz-hero-demo', function () {
+    return view('quiz-hero-demo');
+})->name('quiz-hero-demo');
+
 Route::any('/staff/login', fn () => redirect('/admin_login', 301));
 
 Route::redirect('/profile', '/dashboard/profile', 301);
