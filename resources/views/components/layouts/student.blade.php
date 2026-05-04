@@ -5,32 +5,24 @@
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'QuizSnap') }} — {{ __('Examiner') }}</title>
+        <title>{{ config('app.name', 'QuizSnap') }} — {{ __('Student') }}</title>
         @include('layouts.partials.favicon')
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="h-full overflow-hidden font-sans antialiased bg-qs-bg text-qs-text">
         @php
-            $sessionsActive = request()->routeIs('examiner.exams.sessions.*') || request()->routeIs('examiner.exam-sessions.*');
-            $examsActive = request()->routeIs('examiner.exams.*') && ! $sessionsActive;
-            $gradingActive = request()->routeIs('examiner.grading.*');
-            $practiceActive = request()->routeIs('examiner.practice-overview.*');
-            $navItems = [
-                ['label' => __('Dashboard'), 'href' => route('examiner.dashboard'), 'active' => request()->routeIs('examiner.dashboard'), 'icon' => 'house'],
-                ['label' => __('Exams'), 'href' => route('examiner.exams.index'), 'active' => $examsActive, 'icon' => 'file-lines'],
-                ['label' => __('Exam builder'), 'href' => route('examiner.exams.create'), 'active' => request()->routeIs('examiner.exams.create'), 'icon' => 'pen-ruler'],
-                ['label' => __('Essay grading'), 'href' => route('examiner.grading.pending'), 'active' => $gradingActive, 'icon' => 'clipboard-check'],
-                ['label' => __('Sessions & held review'), 'href' => route('examiner.exams.index'), 'active' => $sessionsActive, 'icon' => 'chart-simple'],
-                ['label' => __('Practice overview'), 'href' => route('examiner.practice-overview.index'), 'active' => $practiceActive, 'icon' => 'book-open-reader'],
-            ];
+            $dashActive = request()->routeIs('dashboard');
+            $resultsActive = request()->routeIs('student.results.*');
+            $practiceActive = request()->routeIs('student.practice.*');
+            $profileActive = request()->routeIs('profile.*');
         @endphp
         <div
             x-data="{
                 drawerOpen: false,
                 collapsed: (() => {
                     try {
-                        return localStorage.getItem('qs.sidebar.examiner') === '1';
+                        return localStorage.getItem('qs.sidebar.student') === '1';
                     } catch (e) {
                         return false;
                     }
@@ -38,7 +30,7 @@
                 toggleCollapse() {
                     this.collapsed = !this.collapsed;
                     try {
-                        localStorage.setItem('qs.sidebar.examiner', this.collapsed ? '1' : '0');
+                        localStorage.setItem('qs.sidebar.student', this.collapsed ? '1' : '0');
                     } catch (e) {}
                 },
             }"
@@ -57,8 +49,8 @@
             <aside
                 class="fixed inset-y-0 left-0 z-50 flex w-[min(19rem,calc(100vw-2rem))] max-w-full flex-col border-r border-qs-soft bg-qs-bg shadow-xl transition-transform duration-200 ease-out md:hidden"
                 :class="drawerOpen ? 'translate-x-0' : '-translate-x-full'"
-                id="examiner-mobile-nav"
-                aria-label="{{ __('Examiner navigation') }}"
+                id="student-mobile-nav"
+                aria-label="{{ __('Student navigation') }}"
             >
                 <div class="flex shrink-0 items-center justify-between gap-2 border-b border-qs-soft px-4 py-3">
                     <span class="text-sm font-semibold text-qs-text">{{ __('Menu') }}</span>
@@ -72,29 +64,26 @@
                     </button>
                 </div>
                 <div class="border-b border-qs-soft px-4 py-3">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ __('Examiner') }}</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ config('app.name') }}</p>
                 </div>
                 <nav class="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
-                    @foreach ($navItems as $item)
-                        <x-ui.sidebar-link
-                            :href="$item['href']"
-                            :active="$item['active']"
-                            :icon="$item['icon']"
-                            :close-drawer="true"
-                            always-show-label
-                        >{{ $item['label'] }}</x-ui.sidebar-link>
-                    @endforeach
+                    <x-ui.sidebar-link :href="route('dashboard')" :active="$dashActive" icon="house" :close-drawer="true" always-show-label>{{ __('Dashboard') }}</x-ui.sidebar-link>
+                    <x-ui.sidebar-link :href="route('student.results.index')" :active="$resultsActive" icon="square-poll-vertical" :close-drawer="true" always-show-label>{{ __('Results') }}</x-ui.sidebar-link>
+                    @if (! empty($studentPracticeNavEnabled))
+                        <x-ui.sidebar-link :href="route('student.practice.index')" :active="$practiceActive" icon="clipboard-question" :close-drawer="true" always-show-label>{{ __('Practice') }}</x-ui.sidebar-link>
+                    @endif
+                    <x-ui.sidebar-link :href="route('profile.edit')" :active="$profileActive" icon="user" :close-drawer="true" always-show-label>{{ __('Profile') }}</x-ui.sidebar-link>
                 </nav>
             </aside>
 
             <aside
                 class="hidden shrink-0 flex-col border-r border-qs-soft bg-qs-bg transition-[width] duration-200 ease-out md:flex"
                 :class="collapsed ? 'w-[4.25rem]' : 'w-56'"
-                aria-label="{{ __('Examiner navigation') }}"
+                aria-label="{{ __('Student navigation') }}"
             >
                 <div class="flex shrink-0 items-center gap-2 border-b border-qs-soft px-2 py-3" :class="collapsed ? 'flex-col' : 'justify-between'">
                     <div class="min-w-0 px-1" x-show="! collapsed" x-transition>
-                        <p class="truncate text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ __('Examiner') }}</p>
+                        <p class="truncate text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ config('app.name') }}</p>
                     </div>
                     <button
                         type="button"
@@ -106,13 +95,12 @@
                     </button>
                 </div>
                 <nav class="flex flex-1 flex-col space-y-0.5 overflow-y-auto p-2">
-                    @foreach ($navItems as $item)
-                        <x-ui.sidebar-link
-                            :href="$item['href']"
-                            :active="$item['active']"
-                            :icon="$item['icon']"
-                        >{{ $item['label'] }}</x-ui.sidebar-link>
-                    @endforeach
+                    <x-ui.sidebar-link :href="route('dashboard')" :active="$dashActive" icon="house">{{ __('Dashboard') }}</x-ui.sidebar-link>
+                    <x-ui.sidebar-link :href="route('student.results.index')" :active="$resultsActive" icon="square-poll-vertical">{{ __('Results') }}</x-ui.sidebar-link>
+                    @if (! empty($studentPracticeNavEnabled))
+                        <x-ui.sidebar-link :href="route('student.practice.index')" :active="$practiceActive" icon="clipboard-question">{{ __('Practice') }}</x-ui.sidebar-link>
+                    @endif
+                    <x-ui.sidebar-link :href="route('profile.edit')" :active="$profileActive" icon="user">{{ __('Profile') }}</x-ui.sidebar-link>
                 </nav>
             </aside>
 
@@ -125,7 +113,7 @@
                             @click="drawerOpen = true"
                             aria-label="{{ __('Open menu') }}"
                             :aria-expanded="drawerOpen ? 'true' : 'false'"
-                            aria-controls="examiner-mobile-nav"
+                            aria-controls="student-mobile-nav"
                         >
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
                         </button>
@@ -134,7 +122,7 @@
                     <x-ui.shell-profile-menu />
                 </header>
 
-                <main class="qs-app-main-scroll mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+                <main class="qs-app-main-scroll px-4 pb-10 pt-4 sm:px-6 md:px-8 md:pt-5">
                     @if (session('status'))
                         <div class="mb-5 flex items-start gap-3 rounded-xl border border-qs-soft bg-qs-card px-4 py-3 text-sm text-qs-text shadow-sm">
                             <i class="fa-solid fa-circle-check mt-0.5 text-qs-primary" aria-hidden="true"></i>
@@ -143,9 +131,8 @@
                     @endif
 
                     <x-ui.shell-page-heading
-                        :title="$title ?? __('Examiner')"
+                        :title="$title ?? __('Student')"
                         :subtitle="isset($subtitle) ? $subtitle : null"
-                        :period-badge="$staffAcademicPeriodBadge ?? null"
                     />
 
                     {{ $slot }}
