@@ -8,7 +8,7 @@
 
 <div
     {{ $attributes->merge([
-        'class' => 'online-quiz-hero group w-full max-w-lg rounded-3xl border border-qs-soft bg-qs-card p-4 shadow-xl shadow-qs-text/5 outline-none ring-qs-primary/40 transition sm:p-6 md:max-w-xl',
+        'class' => 'online-quiz-hero group w-full min-w-0 max-w-lg overflow-x-hidden rounded-3xl border border-qs-soft bg-white p-4 shadow-lg shadow-qs-text/5 outline-none ring-offset-2 ring-offset-white transition focus-visible:ring-2 focus-visible:ring-qs-primary sm:p-6 md:max-w-xl',
         'data-online-quiz-hero' => '1',
         'tabindex' => '0',
         'role' => 'group',
@@ -18,7 +18,7 @@
 >
     <style>
         .online-quiz-hero { --oq-primary: #166534; --oq-soft: #dce8e0; --oq-cream: #faf7f2; --oq-text: #0f2918; --oq-muted: #5c6b62; --oq-rose: #9f1239; }
-        .online-quiz-hero svg { display: block; width: 100%; height: auto; max-height: min(52vh, 420px); }
+        .online-quiz-hero svg { display: block; width: 100%; height: auto; }
         .online-quiz-hero .oq-anim { animation-play-state: running; }
         .online-quiz-hero--paused .oq-anim { animation-play-state: paused !important; }
 
@@ -110,9 +110,11 @@
 
     <p id="{{ $headingId }}" class="sr-only">{{ __('Interactive illustration of a student taking an online quiz. Click or press Space while this area is focused to pause or resume motion.') }}</p>
 
+    <div class="overflow-hidden rounded-2xl border border-qs-soft/70 bg-qs-card/40">
     <svg
-        class="mx-auto select-none"
+        class="mx-auto max-h-[min(52vh,420px)] w-full max-w-full select-none"
         viewBox="0 0 440 312"
+        preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label="{{ __('Animated illustration of a student taking an online quiz on a computer with notes, clock, keyboard, and a small robot assistant.') }}"
         focusable="false"
@@ -232,11 +234,15 @@
             <rect x="6" y="26" width="10" height="4" rx="1" fill="#dce8e0"/>
         </g>
     </svg>
+    </div>
 
-    <p class="mt-3 text-center text-xs text-qs-muted">
-        <span class="online-quiz-hero__hint-when-playing">{{ __('Click illustration to pause animation') }}</span>
-        <span class="online-quiz-hero__hint-when-paused hidden">{{ __('Click illustration to resume animation') }}</span>
-    </p>
+    <p
+        class="online-quiz-hero__hint mt-3 px-1 text-center text-xs leading-snug text-qs-muted"
+        data-oq-hint
+        aria-live="polite"
+        data-oq-hint-playing="{{ __('Click illustration to pause animation') }}"
+        data-oq-hint-paused="{{ __('Click illustration to resume animation') }}"
+    >{{ __('Click illustration to pause animation') }}</p>
 </div>
 
 <script>
@@ -247,15 +253,15 @@
             }
             root.dataset.oqBound = '1';
 
-            const playing = root.querySelector('.online-quiz-hero__hint-when-playing');
-            const pausedHint = root.querySelector('.online-quiz-hero__hint-when-paused');
+            const hint = root.querySelector('[data-oq-hint]');
 
             function syncHints() {
                 const isPaused = root.classList.contains('online-quiz-hero--paused');
                 root.setAttribute('aria-pressed', isPaused ? 'true' : 'false');
-                if (playing && pausedHint) {
-                    playing.classList.toggle('hidden', isPaused);
-                    pausedHint.classList.toggle('hidden', !isPaused);
+                if (hint) {
+                    const playText = hint.getAttribute('data-oq-hint-playing') || '';
+                    const pauseText = hint.getAttribute('data-oq-hint-paused') || '';
+                    hint.textContent = isPaused ? pauseText : playText;
                 }
             }
 

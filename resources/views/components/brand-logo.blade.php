@@ -5,7 +5,7 @@
 
 @php
     $tag = $href ? 'a' : 'span';
-    $base = 'brand-logo inline-flex items-baseline gap-0 font-bold tracking-tight';
+    $base = 'brand-logo font-brand inline-flex items-baseline gap-0 font-bold tracking-tight no-underline decoration-transparent text-qs-text hover:no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-qs-primary focus-visible:ring-offset-2 focus-visible:rounded-sm';
     $classes = $interactive ? $base.' brand-logo--interactive' : $base;
 @endphp
 

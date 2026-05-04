@@ -12,6 +12,8 @@ class OnlineQuizHeroTest extends TestCase
 
         $this->assertStringContainsString('data-online-quiz-hero', $html);
         $this->assertStringContainsString((string) __('Click illustration to pause animation'), $html);
+        $this->assertStringContainsString('data-oq-hint-paused="'.e(__('Click illustration to resume animation')).'"', $html);
+        $this->assertSame(1, substr_count($html, 'online-quiz-hero__hint'));
         $this->assertStringContainsString((string) __('Animated illustration of a student taking an online quiz on a computer with notes, clock, keyboard, and a small robot assistant.'), $html);
     }
 
