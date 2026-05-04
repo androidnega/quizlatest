@@ -256,4 +256,56 @@ class ExamLifecycleTest extends TestCase
         $this->assertSame($start->format('Y-m-d H:i'), $exam->start_time->format('Y-m-d H:i'));
         $this->assertSame($end->format('Y-m-d H:i'), $exam->end_time->format('Y-m-d H:i'));
     }
+
+    public function test_non_onboarded_student_is_redirected_from_exam_prepare(): void
+    {
+        $ctx = $this->seedExaminerAndStudentContext();
+        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $this->addSectionAndMcq($exam);
+        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
+        $this->actingAs($ctx['coord']);
+        $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
+
+        $exam->refresh();
+        DB::table('users')->where('id', $ctx['student']->id)->update(['student_onboarded_at' => null]);
+
+        $response = $this->actingAs(User::query()->findOrFail($ctx['student']->id))
+            ->get(route('student.exam.prepare', $exam));
+
+        $response->assertRedirect(route('login', absolute: false));
+        $response->assertSessionHasErrors('index_number');
+    }
+
+    public function test_inactive_student_is_redirected_from_exam_prepare(): void
+    {
+        $ctx = $this->seedExaminerAndStudentContext();
+        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $this->addSectionAndMcq($exam);
+        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
+        $this->actingAs($ctx['coord']);
+        $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
+
+        $exam->refresh();
+        DB::table('users')->where('id', $ctx['student']->id)->update(['is_active' => false]);
+
+        $response = $this->actingAs(User::query()->findOrFail($ctx['student']->id))
+            ->get(route('student.exam.prepare', $exam));
+
+        $response->assertRedirect(route('login', absolute: false));
+        $response->assertSessionHasErrors('index_number');
+    }
+
+    public function test_onboarded_active_student_can_prepare_published_exam(): void
+    {
+        $ctx = $this->seedExaminerAndStudentContext();
+        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $this->addSectionAndMcq($exam);
+        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
+        $this->actingAs($ctx['coord']);
+        $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
+
+        $exam->refresh();
+        $this->actingAs($ctx['student']);
+        $this->get(route('student.exam.prepare', $exam))->assertOk();
+    }
 }

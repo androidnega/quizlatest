@@ -5,15 +5,29 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\ExamSession;
 use App\Services\ExamRuntimeInfraGate;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class StudentExamController extends Controller
 {
-    public function take(Request $request, ExamSession $examSession): View
+    public function take(Request $request, ExamSession $examSession): View|RedirectResponse
     {
         abort_unless($request->user()?->role === 'student', 403);
         abort_unless((int) $examSession->student_id === (int) $request->user()->id, 403);
+
+        $user = $request->user();
+        if (! $user->is_active) {
+            return redirect()->route('login')->withErrors([
+                'index_number' => __('Your student account is not active. Please contact your coordinator.'),
+            ]);
+        }
+
+        if ($user->student_onboarded_at === null) {
+            return redirect()->route('login')->withErrors([
+                'index_number' => __('Please complete your student onboarding before starting an exam.'),
+            ]);
+        }
 
         $gate = app(ExamRuntimeInfraGate::class);
 

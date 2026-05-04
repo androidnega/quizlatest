@@ -26,6 +26,18 @@ class StudentExamEntryController extends Controller
         $user = auth()->user();
         abort_unless($user && $user->role === 'student', 403);
 
+        if (! $user->is_active) {
+            return redirect()->route('login')->withErrors([
+                'index_number' => __('Your student account is not active. Please contact your coordinator.'),
+            ]);
+        }
+
+        if ($user->student_onboarded_at === null) {
+            return redirect()->route('login')->withErrors([
+                'index_number' => __('Please complete your student onboarding before starting an exam.'),
+            ]);
+        }
+
         $this->assertEligibleForExamPage($user, $quiz);
 
         $active = ExamSession::query()
