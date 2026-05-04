@@ -1,71 +1,24 @@
-QUIZSNAP — Development seeded roles, permissions, and staff accounts
-====================================================================
-WARNING: These passwords exist only in local/dev seed data. Change or
-remove before any production deployment. Do not reuse these passwords
-outside a disposable environment.
+QuizSnap — dev only (from seeders). Change these before production.
 
-Source of truth: database/seeders/InitialSetupSeeder.php,
-database/seeders/OwnerAdminSeeder.php, and app/Policies/* (runtime checks).
+STAFF LOGIN (/admin_login)
+Use “Username” in the staff login form. Password is the same column below.
 
-----------------------------------------------------------------------
-ROLES (table: roles) — created by InitialSetupSeeder
-----------------------------------------------------------------------
-- Admin          slug: admin
-- Coordinator    slug: coordinator
-- Student        slug: student
+Role          Username                         Password
+admin         admin                            admin123
+admin         manuel                           admin123
+coordinator   kofi.mensah@university.edu       admin123
 
-----------------------------------------------------------------------
-PERMISSIONS (table: permissions) — created by InitialSetupSeeder
-----------------------------------------------------------------------
-- Examiner   slug: examiner   (coordinator role may hold this via permission_role)
-- Student    slug: student     (linked to student role)
 
-permission_role links:
-- coordinator  -> examiner permission
-- student      -> student permission
+STUDENT LOGIN (/login)
+Use index number as login. Password is the same for every seeded student.
 
-(Admins use users.role = "admin" in code; see policies for exact gates.)
+Role          Username (index number)          Password
+student       BCS/<year>/001                   student123
+student       BCS/<year>/002                   student123
+student       BCS/<year>/003                   student123
+student       BCS/<year>/004                   student123
+student       BCS/<year>/005                   student123
 
-----------------------------------------------------------------------
-STAFF LOGIN (/admin_login) — password column + email column as username
-----------------------------------------------------------------------
-1) System Admin (InitialSetupSeeder)
-   Role: admin
-   Username (email field): admin
-   Password: admin123
+Replace <year> with the year your database got from the seed (for example 2026).
 
-2) Owner admin (OwnerAdminSeeder; updateOrCreate)
-   Role: admin
-   Username (email field): manuel
-   Password: admin123
-
-3) Sample coordinator (InitialSetupSeeder)
-   Role: coordinator
-   Username: kofi.mensah@university.edu
-   Password: admin123
-
-----------------------------------------------------------------------
-STUDENT LOGIN (/login) — index number + password
-----------------------------------------------------------------------
-Seeded students (InitialSetupSeeder) — each uses the same dev password:
-
-   Password: student123
-
-   Index numbers use the calendar year when InitialSetupSeeder runs, e.g.:
-   - BCS/2026/001  (Akua Serwaa)
-   - BCS/2026/002  (Yaw Boateng)
-   - BCS/2026/003  (Efua Baidoo)
-   - BCS/2026/004  (Kwesi Annan)
-   - BCS/2026/005  (Abena Dapaah)
-   (Replace 2026 with the year shown in your database for that seed run.)
-
-   Emails (also in users.email): akua.serwaa@university.edu, yaw.boateng@university.edu,
-   efua.baidoo@university.edu, kwesi.annan@university.edu, abena.dapaah@university.edu
-
-----------------------------------------------------------------------
-APPLICATION ROLES (users.role string, used heavily in policies)
-----------------------------------------------------------------------
-admin | coordinator | examiner | student
-
-Examiner may be a dedicated users.role or coordinator with examiner permission;
-see ExamPolicy and related middleware.
+Names for those five students: Akua Serwaa, Yaw Boateng, Efua Baidoo, Kwesi Annan, Abena Dapaah.
