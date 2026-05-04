@@ -45,6 +45,8 @@ class ExamSessionController extends Controller
 
     public function start(Request $request): JsonResponse
     {
+        $this->assertStudentActiveAndOnboardedForExamApi($request);
+
         $validated = $request->validate([
             'exam_id' => ['required', 'integer', 'exists:quizzes,id'],
             'face_embedding' => ['nullable', 'array', 'min:3'],
@@ -65,6 +67,8 @@ class ExamSessionController extends Controller
     public function verifyOtp(Request $request): JsonResponse
     {
         abort_unless($request->user()?->role === 'student', 403);
+
+        $this->assertStudentActiveAndOnboardedForExamApi($request);
 
         abort_unless($this->examPolicy->isOtpEnabled(), 422, 'Phone verification is disabled for this institution.');
 
@@ -717,5 +721,16 @@ class ExamSessionController extends Controller
             ]);
 
         $this->resultFinalization->refreshResultFromSessionState($examSession->fresh(['answers']));
+    }
+
+    private function assertStudentActiveAndOnboardedForExamApi(Request $request): void
+    {
+        $user = $request->user();
+
+        abort_unless($user !== null && $user->role === 'student', 403);
+
+        abort_unless($user->is_active, 422, __('Your student account is not active. Please contact your coordinator.'));
+
+        abort_unless($user->student_onboarded_at !== null, 422, __('Please complete your student onboarding before starting an exam.'));
     }
 }

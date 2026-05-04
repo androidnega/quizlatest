@@ -308,4 +308,88 @@ class ExamLifecycleTest extends TestCase
         $this->actingAs($ctx['student']);
         $this->get(route('student.exam.prepare', $exam))->assertOk();
     }
+
+    public function test_exam_session_start_returns_422_for_non_onboarded_student(): void
+    {
+        $ctx = $this->seedExaminerAndStudentContext();
+        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $this->addSectionAndMcq($exam);
+        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
+        $this->actingAs($ctx['coord']);
+        $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
+
+        $exam->refresh();
+        DB::table('users')->where('id', $ctx['student']->id)->update(['student_onboarded_at' => null]);
+
+        $this->actingAs(User::query()->findOrFail($ctx['student']->id))
+            ->postJson(route('exam-sessions.start'), ['exam_id' => $exam->id])
+            ->assertStatus(422)
+            ->assertJsonFragment([
+                'message' => __('Please complete your student onboarding before starting an exam.'),
+            ]);
+    }
+
+    public function test_exam_session_start_returns_422_for_inactive_student(): void
+    {
+        $ctx = $this->seedExaminerAndStudentContext();
+        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $this->addSectionAndMcq($exam);
+        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
+        $this->actingAs($ctx['coord']);
+        $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
+
+        $exam->refresh();
+        DB::table('users')->where('id', $ctx['student']->id)->update(['is_active' => false]);
+
+        $this->actingAs(User::query()->findOrFail($ctx['student']->id))
+            ->postJson(route('exam-sessions.start'), ['exam_id' => $exam->id])
+            ->assertStatus(422)
+            ->assertJsonFragment([
+                'message' => __('Your student account is not active. Please contact your coordinator.'),
+            ]);
+    }
+
+    public function test_exam_session_verify_otp_returns_422_for_non_onboarded_student(): void
+    {
+        $ctx = $this->seedExaminerAndStudentContext();
+        DB::table('users')->where('id', $ctx['student']->id)->update(['student_onboarded_at' => null]);
+
+        $this->actingAs(User::query()->findOrFail($ctx['student']->id))
+            ->postJson(route('exam-sessions.verify-otp'), [
+                'exam_id' => 1,
+                'otp_code' => '123456',
+            ])
+            ->assertStatus(422)
+            ->assertJsonFragment([
+                'message' => __('Please complete your student onboarding before starting an exam.'),
+            ]);
+    }
+
+    public function test_exam_session_start_onboarded_active_student_passes_onboarding_gate(): void
+    {
+        $ctx = $this->seedExaminerAndStudentContext();
+        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $this->addSectionAndMcq($exam);
+        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
+        $this->actingAs($ctx['coord']);
+        $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
+
+        $exam->refresh();
+        $response = $this->actingAs($ctx['student'])
+            ->postJson(route('exam-sessions.start'), ['exam_id' => $exam->id]);
+
+        $onboardingMessage = __('Please complete your student onboarding before starting an exam.');
+        $inactiveMessage = __('Your student account is not active. Please contact your coordinator.');
+
+        $this->assertNotSame(
+            $onboardingMessage,
+            $response->json('message'),
+            'Onboarded student should not be rejected for onboarding at API start.',
+        );
+        $this->assertNotSame(
+            $inactiveMessage,
+            $response->json('message'),
+            'Active student should not be rejected for inactivity at API start.',
+        );
+    }
 }
