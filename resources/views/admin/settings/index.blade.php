@@ -54,7 +54,7 @@
             <label class="flex items-center gap-3 text-sm text-qs-text">
                 <input type="checkbox" name="allow_redis_fallback" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
                     @checked(old('allow_redis_fallback', $allow_redis_fallback)) @disabled($lock_allow_redis_fallback) />
-                {{ __('Allow Laravel cache / rate limiter fallbacks when Redis is off or down') }}
+                {{ __('Allow application cache and rate limiter fallbacks when Redis is off or down') }}
             </label>
             <p class="text-sm text-qs-muted">
                 {{ __('If live sockets are disabled or unavailable, the system will use polling.') }}
@@ -62,7 +62,7 @@
             <label class="flex items-center gap-3 text-sm text-qs-text">
                 <input type="checkbox" name="enable_live_sockets" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
                     @checked(old('enable_live_sockets', $enable_live_sockets)) @disabled($lock_enable_live_sockets) />
-                {{ __('Enable Laravel Echo / Reverb for live exam session updates') }}
+                {{ __('Enable WebSockets (Reverb) for live exam session updates') }}
             </label>
             <label class="flex items-center gap-3 text-sm text-qs-text">
                 <input type="checkbox" name="allow_polling_fallback" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"

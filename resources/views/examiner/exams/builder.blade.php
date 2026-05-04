@@ -211,7 +211,7 @@
                     @csrf
                     <div>
                         <label class="block text-xs text-qs-muted mb-1">Custom prompt (optional)</label>
-                        <textarea name="ai_custom_prompt" rows="6" class="w-full rounded-lg border border-qs-soft px-3 py-2 text-sm font-mono text-qs-text" placeholder="Paste a full prompt requesting QUIZSNAP JSON…">{{ old('ai_custom_prompt') }}</textarea>
+                        <textarea name="ai_custom_prompt" rows="6" class="w-full rounded-lg border border-qs-soft px-3 py-2 text-sm font-mono text-qs-text" placeholder="Paste a full prompt requesting QuizSnap JSON…">{{ old('ai_custom_prompt') }}</textarea>
                     </div>
                     <p class="text-xs text-qs-muted">Or leave custom prompt empty and fill the fields below.</p>
                     <div class="grid gap-3 sm:grid-cols-2">

@@ -9,7 +9,7 @@
         <div class="mx-auto w-full max-w-lg px-4 sm:px-6 lg:px-8">
             <div class="rounded-xl border border-qs-soft bg-qs-card p-6 shadow-sm">
                 <h3 class="text-lg font-semibold text-qs-text">{{ __('Welcome') }}</h3>
-                <p class="mt-2 text-sm text-qs-muted">{{ __('Choose where to continue in QUIZSNAP.') }}</p>
+                <p class="mt-2 text-sm text-qs-muted">{{ __('Choose where to continue.') }}</p>
 
                 <ul class="mt-6 space-y-3">
                     @if (auth()->user()->role === 'admin')

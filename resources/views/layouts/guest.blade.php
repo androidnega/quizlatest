@@ -6,11 +6,12 @@
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
         @php
-            $app = config('app.name', 'QUIZSNAP');
+            $app = config('app.name', 'QuizSnap');
             $docTitle = $pageTitle ?? $heading;
             $fullTitle = $docTitle ? $docTitle.' — '.$app : $app.' — '.__('Sign in');
         @endphp
         <title>{{ $fullTitle }}</title>
+        @include('layouts.partials.favicon')
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
@@ -18,9 +19,7 @@
         <div class="relative flex min-h-screen flex-col bg-qs-bg">
             <header class="relative z-10 border-b border-qs-soft bg-qs-bg">
                 <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-                    <a href="{{ route('home') }}" class="text-xl font-semibold tracking-tight text-qs-text transition hover:opacity-90">
-                        {{ config('app.name', 'QUIZSNAP') }}
-                    </a>
+                    <x-brand-logo class="text-xl sm:text-2xl" :href="route('home')" />
                     <a href="{{ route('home') }}" class="qs-btn-secondary text-sm font-semibold normal-case tracking-normal">
                         {{ __('Back to home') }}
                     </a>

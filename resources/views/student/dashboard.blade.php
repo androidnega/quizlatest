@@ -96,7 +96,7 @@
             <div>
                 <h3 class="text-lg font-semibold text-qs-text">{{ __('Available exams') }}</h3>
                 @if (! $hasClass)
-                    <p class="mt-2 text-sm text-qs-muted">{{ __('You are not assigned to a class yet. Contact your coordinator.') }}</p>
+                    <p class="mt-2 text-sm text-qs-muted">{{ __('student_ui.class_group_not_assigned') }}</p>
                 @elseif ($availableExams->isEmpty() && ! $activeSession)
                     <p class="mt-2 text-sm text-qs-muted">{{ __('No exams are open for you right now.') }}</p>
                 @else

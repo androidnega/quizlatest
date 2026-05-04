@@ -3,9 +3,7 @@
         <div class="flex h-16 justify-between">
             <div class="flex">
                 <div class="flex shrink-0 items-center">
-                    <a href="{{ route('dashboard') }}">
-                        <x-application-logo class="block h-9 w-auto fill-current text-qs-text" />
-                    </a>
+                    <x-brand-logo class="text-xl sm:text-2xl" :href="route('dashboard')" />
                 </div>
 
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">

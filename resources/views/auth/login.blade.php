@@ -1,7 +1,7 @@
 <x-guest-layout
     :page-title="__('Student sign-in')"
     :eyebrow="__('Student access')"
-    :heading="__('Sign in to QUIZSNAP')"
+    :heading="__('Student sign-in')"
     :description="__('Enter the index number your coordinator registered. We will take you to password sign-in or first-time verification next.')"
 >
     <x-auth-session-status class="mb-6" :status="session('status')" />

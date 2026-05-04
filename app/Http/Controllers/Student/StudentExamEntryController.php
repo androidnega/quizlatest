@@ -88,7 +88,7 @@ class StudentExamEntryController extends Controller
         abort_unless($quiz->status === 'published', 403, 'This exam is not available.');
         abort_unless($quiz->isAvailableForStudentToStart(now()), 403, 'This exam is outside its scheduled window.');
 
-        abort_if($user->class_id === null, 403, 'You must be assigned to a class before taking exams.');
+        abort_if($user->class_id === null, 403, __('student_ui.class_group_not_assigned'));
 
         $hasCourse = DB::table('class_course')
             ->where('class_id', $user->class_id)

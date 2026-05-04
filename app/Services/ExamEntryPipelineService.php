@@ -42,7 +42,7 @@ class ExamEntryPipelineService
         // 1. Authenticated student + basic eligibility
         $student = $request->user();
         abort_unless($student && $student->role === 'student', 403);
-        abort_unless($student->class_id !== null, 422, 'Student must be assigned to class.');
+        abort_unless($student->class_id !== null, 422, __('student_ui.class_group_not_assigned'));
         abort_unless(! $this->globalControl->blocksExamStarts(), 423, 'Exam entry temporarily unavailable.');
 
         $examId = (int) $validated['exam_id'];

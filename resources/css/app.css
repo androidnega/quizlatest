@@ -85,4 +85,86 @@
     .qs-table tbody tr {
         @apply border-t border-qs-soft/80 hover:bg-qs-card/80;
     }
+
+    .brand-logo__char {
+        display: inline-block;
+        transition:
+            color 0.2s ease,
+            transform 0.2s ease;
+    }
+
+    .brand-logo--interactive .brand-logo__char--quiz {
+        color: var(--qs-primary);
+    }
+
+    .brand-logo--interactive .brand-logo__char--snap {
+        color: #1e5a3a;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+        .brand-logo--interactive:hover .brand-logo__char {
+            animation: qs-brand-pop 0.48s ease forwards;
+            animation-delay: calc(var(--brand-i, 0) * 42ms);
+        }
+    }
+
+    .animated-word {
+        color: var(--qs-text);
+    }
+
+    .animated-word__char {
+        display: inline-block;
+        transition:
+            color 0.2s ease,
+            transform 0.2s ease;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+        .animated-word:hover .animated-word__char {
+            animation: qs-word-pop 0.42s ease forwards;
+            animation-delay: calc(var(--aw-i, 0) * 38ms);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .brand-logo--interactive:hover .brand-logo__char,
+        .animated-word:hover .animated-word__char {
+            animation: none !important;
+        }
+
+        @media (hover: hover) {
+            .brand-logo--interactive:hover .brand-logo__char--quiz,
+            .animated-word:hover .animated-word__char {
+                color: var(--qs-primary);
+            }
+
+            .brand-logo--interactive:hover .brand-logo__char--snap {
+                color: #1e5a3a;
+            }
+        }
+    }
+}
+
+@keyframes qs-brand-pop {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    35% {
+        transform: translateY(-3px) scale(1.04);
+        color: var(--qs-primary);
+    }
+}
+
+@keyframes qs-word-pop {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    40% {
+        transform: translateY(-2px) scale(1.03);
+        color: var(--qs-primary);
+    }
 }

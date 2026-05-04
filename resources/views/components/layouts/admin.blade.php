@@ -5,7 +5,8 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'Laravel') }} - Admin</title>
+        <title>{{ config('app.name', 'QuizSnap') }} — {{ __('Admin') }}</title>
+        @include('layouts.partials.favicon')
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
@@ -46,7 +47,10 @@
                     </button>
                 </div>
                 <div class="border-b border-qs-soft px-4 py-4">
-                    <p class="text-lg font-semibold text-qs-text">QUIZSNAP Admin</p>
+                    <div class="flex flex-wrap items-baseline gap-2">
+                        <x-brand-logo class="text-lg" />
+                        <span class="text-sm font-semibold text-qs-muted">{{ __('Admin') }}</span>
+                    </div>
                     <p class="mt-1 text-sm text-qs-muted">{{ auth()->user()->name }}</p>
                 </div>
                 <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
@@ -62,7 +66,10 @@
             {{-- Desktop sidebar --}}
             <aside class="hidden min-h-screen w-64 shrink-0 flex-col border-r border-qs-soft bg-qs-bg md:flex">
                 <div class="border-b border-qs-soft px-6 py-5">
-                    <h1 class="text-lg font-semibold text-qs-text">QUIZSNAP Admin</h1>
+                    <div class="flex flex-wrap items-baseline gap-2">
+                        <x-brand-logo class="text-lg" />
+                        <span class="text-sm font-semibold text-qs-muted">{{ __('Admin') }}</span>
+                    </div>
                     <p class="mt-1 text-sm text-qs-muted">{{ auth()->user()->name }}</p>
                 </div>
                 <nav class="flex-1 space-y-1 px-4 py-4">

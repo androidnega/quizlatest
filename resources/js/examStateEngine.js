@@ -79,7 +79,7 @@ export class ExamStateEngine {
     }
 
     /**
-     * Entry point for Laravel Echo events (no UI here).
+     * Entry point for Echo realtime events (no UI here).
      */
     handleRealtimeEvent(eventName, payload) {
         switch (eventName) {
