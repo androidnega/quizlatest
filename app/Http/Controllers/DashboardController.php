@@ -27,7 +27,7 @@ class DashboardController extends Controller
         }
 
         if ($user->role === 'coordinator') {
-            return redirect()->route('coordinator.dashboard');
+            return app(Coordinator\DashboardController::class)->index();
         }
 
         if ($user->role === 'examiner') {

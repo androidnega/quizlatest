@@ -328,7 +328,7 @@ class AuthenticationTest extends TestCase
             ->assertRedirect(route('admin.dashboard', absolute: false));
     }
 
-    public function test_dashboard_redirects_coordinator_to_coordinator_dashboard_route(): void
+    public function test_dashboard_renders_coordinator_workspace_for_coordinator(): void
     {
         $user = User::factory()->create([
             'role' => 'coordinator',
@@ -338,7 +338,8 @@ class AuthenticationTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('dashboard'))
-            ->assertRedirect(route('coordinator.dashboard', absolute: false));
+            ->assertOk()
+            ->assertSee('Coordinator Dashboard', false);
     }
 
     public function test_dashboard_redirects_examiner_to_examiner_dashboard_route(): void

@@ -14,7 +14,6 @@
         @php
             $navOn = fn (bool $on): string => $on ? 'bg-qs-accent text-qs-text shadow-sm' : 'text-qs-text hover:bg-qs-card';
             $coursesOnlyActive = request()->routeIs('coordinator.courses.*') && ! request()->routeIs('coordinator.courses.assign.*');
-            $examinerPortalActive = request()->routeIs('examiner.*');
         @endphp
         <div
             x-data="{ staffNavOpen: false }"
@@ -54,10 +53,7 @@
                     <p class="mt-1 text-sm text-qs-muted">{{ auth()->user()->name }}</p>
                 </div>
                 <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-                    <a href="{{ route('coordinator.dashboard') }}" @click="staffNavOpen = false" class="{{ $navOn(request()->routeIs('coordinator.dashboard')) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Dashboard') }}</a>
-                    @if (\App\Http\Middleware\EnsureUserIsExaminer::mayAccessExaminerPortal(auth()->user()))
-                        <a href="{{ route('examiner.dashboard') }}" @click="staffNavOpen = false" class="{{ $navOn($examinerPortalActive) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Examiner portal') }}</a>
-                    @endif
+                    <a href="{{ route('dashboard') }}" @click="staffNavOpen = false" class="{{ $navOn(request()->routeIs('dashboard')) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Dashboard') }}</a>
                     <a href="{{ route('coordinator.students.index') }}" @click="staffNavOpen = false" class="{{ $navOn(request()->routeIs('coordinator.students.*')) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Students') }}</a>
                     <a href="{{ route('coordinator.programs.index') }}" @click="staffNavOpen = false" class="{{ $navOn(request()->routeIs('coordinator.programs.*')) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Programs') }}</a>
                     <a href="{{ route('coordinator.levels.index') }}" @click="staffNavOpen = false" class="{{ $navOn(request()->routeIs('coordinator.levels.*')) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Levels') }}</a>
@@ -74,10 +70,7 @@
                     <p class="mt-1 text-sm text-qs-muted">{{ auth()->user()->name }}</p>
                 </div>
                 <nav class="flex-1 space-y-1 px-4 py-5">
-                    <a href="{{ route('coordinator.dashboard') }}" class="{{ $navOn(request()->routeIs('coordinator.dashboard')) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Dashboard') }}</a>
-                    @if (\App\Http\Middleware\EnsureUserIsExaminer::mayAccessExaminerPortal(auth()->user()))
-                        <a href="{{ route('examiner.dashboard') }}" class="{{ $navOn($examinerPortalActive) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Examiner portal') }}</a>
-                    @endif
+                    <a href="{{ route('dashboard') }}" class="{{ $navOn(request()->routeIs('dashboard')) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Dashboard') }}</a>
                     <a href="{{ route('coordinator.students.index') }}" class="{{ $navOn(request()->routeIs('coordinator.students.*')) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Students') }}</a>
                     <a href="{{ route('coordinator.programs.index') }}" class="{{ $navOn(request()->routeIs('coordinator.programs.*')) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Programs') }}</a>
                     <a href="{{ route('coordinator.levels.index') }}" class="{{ $navOn(request()->routeIs('coordinator.levels.*')) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Levels') }}</a>

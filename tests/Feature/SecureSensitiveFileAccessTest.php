@@ -21,7 +21,7 @@ class SecureSensitiveFileAccessTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_coordinator_can_stream_verification_evidence_from_private_disk(): void
+    public function test_examiner_can_stream_verification_evidence_from_private_disk(): void
     {
         $ctx = $this->seedScopedExamContext();
         Storage::fake('local');
@@ -31,12 +31,12 @@ class SecureSensitiveFileAccessTest extends TestCase
         Storage::disk('local')->put($rel, '%PNG fake');
         $ctx['session']->update(['verification_image_path' => $rel]);
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $this->get(route('examiner.exam-sessions.evidence.verification', $ctx['session']))
             ->assertOk();
     }
 
-    public function test_coordinator_can_stream_legacy_public_verification_image(): void
+    public function test_examiner_can_stream_legacy_public_verification_image(): void
     {
         $ctx = $this->seedScopedExamContext();
         Storage::fake('local');
@@ -46,7 +46,7 @@ class SecureSensitiveFileAccessTest extends TestCase
         Storage::disk('public')->put($rel, '%PNG legacy');
         $ctx['session']->update(['verification_image_path' => $rel]);
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $this->get(route('examiner.exam-sessions.evidence.verification', $ctx['session']))
             ->assertOk();
     }
@@ -128,7 +128,7 @@ class SecureSensitiveFileAccessTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_coordinator_can_stream_proctoring_snapshot_for_matching_event(): void
+    public function test_examiner_can_stream_proctoring_snapshot_for_matching_event(): void
     {
         $ctx = $this->seedScopedExamContext();
         Storage::fake('local');
@@ -151,7 +151,7 @@ class SecureSensitiveFileAccessTest extends TestCase
             'created_at' => now(),
         ]);
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $this->get(route('examiner.exam-sessions.evidence.event', [$ctx['session'], $event]))
             ->assertOk();
     }
@@ -177,7 +177,7 @@ class SecureSensitiveFileAccessTest extends TestCase
             'created_at' => now(),
         ]);
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $this->get(route('examiner.exam-sessions.evidence.event', [$ctx['session'], $event]))
             ->assertNotFound();
     }
@@ -204,7 +204,7 @@ class SecureSensitiveFileAccessTest extends TestCase
         Storage::disk('local')->put($rel, '%PNG fake');
         $ctx['session']->update(['verification_image_path' => $rel]);
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $this->get(route('examiner.exam-sessions.show', $ctx['session']))
             ->assertOk()
             ->assertDontSee($rel, false);
@@ -231,7 +231,7 @@ class SecureSensitiveFileAccessTest extends TestCase
     public function test_examiner_can_download_course_material_they_manage(): void
     {
         $ctx = $this->seedPracticeMaterialContext();
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
 
         $this->get(route('examiner.courses.materials.download', [$ctx['course'], $ctx['material']]))
             ->assertOk();
@@ -286,7 +286,7 @@ class SecureSensitiveFileAccessTest extends TestCase
             'created_at' => now(),
         ]);
 
-        $response = $this->actingAs($ctx['coord'])
+        $response = $this->actingAs($ctx['examiner'])
             ->getJson(route('exam-sessions.review-timeline', $ctx['session']));
 
         $response->assertOk();
@@ -330,7 +330,7 @@ class SecureSensitiveFileAccessTest extends TestCase
             'created_at' => now(),
         ]);
 
-        $response = $this->actingAs($ctx['coord'])
+        $response = $this->actingAs($ctx['examiner'])
             ->getJson(route('exam-sessions.review-timeline', $ctx['session']));
 
         $response->assertOk();
@@ -346,14 +346,21 @@ class SecureSensitiveFileAccessTest extends TestCase
     }
 
     /**
-     * @return array{coord: User, exam: Quiz, session: ExamSession}
+     * @return array{examiner: User, exam: Quiz, session: ExamSession}
      */
     private function seedScopedExamContext(): array
     {
         $this->seed(InitialSetupSeeder::class);
 
         $uniId = (int) DB::table('universities')->value('id');
-        $coord = User::query()->where('email', 'kofi.mensah@university.edu')->firstOrFail();
+        $examiner = User::factory()->create([
+            'role' => 'examiner',
+            'university_id' => $uniId,
+            'email' => 'examiner.secure.'.Str::random(8).'@test.edu',
+            'index_number' => null,
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
         $deptId = (int) DB::table('departments')->where('code', 'CS')->value('id');
         $programId = (int) DB::table('programs')->where('code', 'BCS')->value('id');
         $levelId = (int) DB::table('levels')->where('code', '100')->value('id');
@@ -371,7 +378,7 @@ class SecureSensitiveFileAccessTest extends TestCase
 
         DB::table('examiner_course_assignments')->insert([
             'course_id' => $courseId,
-            'examiner_user_id' => $coord->id,
+            'examiner_user_id' => $examiner->id,
             'assigned_by' => null,
             'is_active' => true,
             'permissions' => null,
@@ -396,7 +403,7 @@ class SecureSensitiveFileAccessTest extends TestCase
         $quizId = DB::table('quizzes')->insertGetId([
             'university_id' => $uniId,
             'course_id' => $courseId,
-            'created_by' => $coord->id,
+            'created_by' => $examiner->id,
             'title' => 'Midterm',
             'description' => null,
             'assessment_type' => 'exam',
@@ -433,11 +440,11 @@ class SecureSensitiveFileAccessTest extends TestCase
 
         $exam = Quiz::query()->findOrFail($quizId);
 
-        return ['coord' => $coord, 'exam' => $exam, 'session' => $session];
+        return ['examiner' => $examiner->fresh(), 'exam' => $exam, 'session' => $session];
     }
 
     /**
-     * @return array{course: Course, material: CourseMaterial, student: User, coord: User}
+     * @return array{course: Course, material: CourseMaterial, student: User, examiner: User}
      */
     private function seedPracticeMaterialContext(bool $restrictMaterialToAltClass = false): array
     {
@@ -448,6 +455,14 @@ class SecureSensitiveFileAccessTest extends TestCase
         $system->set('enable_course_material_uploads', '1', $admin);
 
         $coord = User::query()->where('email', 'kofi.mensah@university.edu')->firstOrFail();
+        $examiner = User::factory()->create([
+            'role' => 'examiner',
+            'university_id' => $coord->university_id,
+            'email' => 'examiner.matsec.'.Str::random(8).'@test.edu',
+            'index_number' => null,
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
         $dept = Department::query()->where('code', 'CS')->firstOrFail();
 
         $course = Course::query()->create([
@@ -461,7 +476,7 @@ class SecureSensitiveFileAccessTest extends TestCase
 
         DB::table('examiner_course_assignments')->insert([
             'course_id' => $course->id,
-            'examiner_user_id' => $coord->id,
+            'examiner_user_id' => $examiner->id,
             'assigned_by' => null,
             'is_active' => true,
             'permissions' => null,
@@ -524,7 +539,7 @@ class SecureSensitiveFileAccessTest extends TestCase
         $material = CourseMaterial::query()->create([
             'course_id' => $course->id,
             'class_id' => $restrictMaterialToAltClass ? $classB : null,
-            'uploaded_by' => $coord->id,
+            'uploaded_by' => $examiner->id,
             'title' => 'Lecture notes',
             'file_path' => $rel,
             'file_type' => 'txt',
@@ -537,7 +552,7 @@ class SecureSensitiveFileAccessTest extends TestCase
             'course' => $course,
             'material' => $material,
             'student' => $student,
-            'coord' => $coord,
+            'examiner' => $examiner->fresh(),
         ];
     }
 }

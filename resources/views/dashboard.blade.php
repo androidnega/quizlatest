@@ -21,13 +21,8 @@
                     @endif
                     @if (auth()->user()->role === 'coordinator')
                         <li>
-                            <a href="{{ route('coordinator.dashboard') }}" class="qs-btn-primary flex min-h-[44px] w-full items-center justify-center rounded-lg text-center text-sm font-semibold">
+                            <a href="{{ route('dashboard') }}" class="qs-btn-primary flex min-h-[44px] w-full items-center justify-center rounded-lg text-center text-sm font-semibold">
                                 {{ __('Coordinator dashboard') }}
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ route('examiner.dashboard') }}" class="qs-btn-secondary flex min-h-[44px] w-full items-center justify-center rounded-lg border border-qs-soft text-center text-sm font-semibold">
-                                {{ __('Examiner dashboard') }}
                             </a>
                         </li>
                     @endif

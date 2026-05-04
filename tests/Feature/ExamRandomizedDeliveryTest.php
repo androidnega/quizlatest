@@ -25,14 +25,21 @@ class ExamRandomizedDeliveryTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * @return array{coord: User, student: User, courseId: int, classId: int}
+     * @return array{examiner: User, student: User, courseId: int, classId: int}
      */
     private function seedCoordinatorStudentCourseClass(): array
     {
         $this->seed(InitialSetupSeeder::class);
 
         $uniId = (int) DB::table('universities')->value('id');
-        $coord = User::query()->where('email', 'kofi.mensah@university.edu')->firstOrFail();
+        $examiner = User::factory()->create([
+            'role' => 'examiner',
+            'university_id' => $uniId,
+            'email' => 'examiner.rand.'.Str::random(8).'@test.edu',
+            'index_number' => null,
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
         $deptId = (int) DB::table('departments')->where('code', 'CS')->value('id');
         $programId = (int) DB::table('programs')->where('code', 'BCS')->value('id');
         $levelId = (int) DB::table('levels')->where('code', '100')->value('id');
@@ -67,18 +74,30 @@ class ExamRandomizedDeliveryTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        DB::table('examiner_course_assignments')->insert([
+            'course_id' => $courseId,
+            'examiner_user_id' => $examiner->id,
+            'assigned_by' => null,
+            'is_active' => true,
+            'permissions' => null,
+            'starts_at' => null,
+            'ends_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         $student = User::query()->where('role', 'student')->firstOrFail();
         DB::table('users')->where('id', $student->id)->update(['class_id' => $classId]);
 
-        return ['coord' => $coord, 'student' => $student->fresh(), 'courseId' => $courseId, 'classId' => $classId];
+        return ['examiner' => $examiner->fresh(), 'student' => $student->fresh(), 'courseId' => $courseId, 'classId' => $classId];
     }
 
-    private function createDraftExam(User $coord, int $courseId): Quiz
+    private function createDraftExam(User $examiner, int $courseId): Quiz
     {
         $quizId = DB::table('quizzes')->insertGetId([
-            'university_id' => $coord->university_id,
+            'university_id' => $examiner->university_id,
             'course_id' => $courseId,
-            'created_by' => $coord->id,
+            'created_by' => $examiner->id,
             'title' => 'Randomized delivery exam',
             'description' => null,
             'assessment_type' => 'exam',
@@ -140,7 +159,7 @@ class ExamRandomizedDeliveryTest extends TestCase
     public function test_randomized_questions_runtime_is_flat_and_follows_display_order(): void
     {
         $ctx = $this->seedCoordinatorStudentCourseClass();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
 
         $s1 = ExamSection::query()->create(['exam_id' => $exam->id, 'title' => 'Alpha', 'section_order' => 1]);
         $s2 = ExamSection::query()->create(['exam_id' => $exam->id, 'title' => 'Beta', 'section_order' => 2]);
@@ -193,7 +212,7 @@ class ExamRandomizedDeliveryTest extends TestCase
     public function test_non_randomized_preserves_multiple_sections(): void
     {
         $ctx = $this->seedCoordinatorStudentCourseClass();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
 
         $s1 = ExamSection::query()->create(['exam_id' => $exam->id, 'title' => 'Alpha', 'section_order' => 1]);
         $s2 = ExamSection::query()->create(['exam_id' => $exam->id, 'title' => 'Beta', 'section_order' => 2]);
@@ -236,7 +255,7 @@ class ExamRandomizedDeliveryTest extends TestCase
     public function test_randomize_options_sets_option_order_only_for_mcq(): void
     {
         $ctx = $this->seedCoordinatorStudentCourseClass();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
 
         $section = ExamSection::query()->create(['exam_id' => $exam->id, 'title' => 'A', 'section_order' => 1]);
 
@@ -289,7 +308,7 @@ class ExamRandomizedDeliveryTest extends TestCase
     public function test_all_supported_types_can_be_selected_when_randomized(): void
     {
         $ctx = $this->seedCoordinatorStudentCourseClass();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
 
         $section = ExamSection::query()->create(['exam_id' => $exam->id, 'title' => 'Mixed', 'section_order' => 1]);
 
@@ -338,7 +357,7 @@ class ExamRandomizedDeliveryTest extends TestCase
     public function test_evaluation_and_breakdown_ignore_unassigned_answers(): void
     {
         $ctx = $this->seedCoordinatorStudentCourseClass();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
 
         $section = ExamSection::query()->create(['exam_id' => $exam->id, 'title' => 'A', 'section_order' => 1]);
 
@@ -399,7 +418,7 @@ class ExamRandomizedDeliveryTest extends TestCase
     public function test_assignment_is_stable_on_repeat_call(): void
     {
         $ctx = $this->seedCoordinatorStudentCourseClass();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
 
         $section = ExamSection::query()->create(['exam_id' => $exam->id, 'title' => 'A', 'section_order' => 1]);
         for ($i = 1; $i <= 3; $i++) {

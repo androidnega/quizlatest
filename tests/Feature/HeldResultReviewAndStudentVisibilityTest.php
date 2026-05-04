@@ -17,7 +17,7 @@ class HeldResultReviewAndStudentVisibilityTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * @return array{coord: User, exam: Quiz, session: ExamSession, student: User}
+     * @return array{coord: User, examiner: User, exam: Quiz, session: ExamSession, student: User}
      */
     private function seedExamSessionContext(): array
     {
@@ -25,6 +25,14 @@ class HeldResultReviewAndStudentVisibilityTest extends TestCase
 
         $uniId = (int) DB::table('universities')->value('id');
         $coord = User::query()->where('email', 'kofi.mensah@university.edu')->firstOrFail();
+        $examiner = User::factory()->create([
+            'role' => 'examiner',
+            'university_id' => $uniId,
+            'email' => 'examiner.held.'.Str::random(8).'@test.edu',
+            'index_number' => null,
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
         $deptId = (int) DB::table('departments')->where('code', 'CS')->value('id');
         $programId = (int) DB::table('programs')->where('code', 'BCS')->value('id');
         $levelId = (int) DB::table('levels')->where('code', '100')->value('id');
@@ -55,7 +63,7 @@ class HeldResultReviewAndStudentVisibilityTest extends TestCase
         $quizId = DB::table('quizzes')->insertGetId([
             'university_id' => $uniId,
             'course_id' => $courseId,
-            'created_by' => $coord->id,
+            'created_by' => $examiner->id,
             'title' => 'Midterm',
             'description' => null,
             'assessment_type' => 'exam',
@@ -102,7 +110,7 @@ class HeldResultReviewAndStudentVisibilityTest extends TestCase
 
         $exam = Quiz::query()->findOrFail($quizId);
 
-        return ['coord' => $coord, 'exam' => $exam, 'session' => $session, 'student' => $student];
+        return ['coord' => $coord, 'examiner' => $examiner->fresh(), 'exam' => $exam, 'session' => $session, 'student' => $student];
     }
 
     public function test_department_coordinator_without_examiner_assignment_cannot_release_held(): void
@@ -129,7 +137,7 @@ class HeldResultReviewAndStudentVisibilityTest extends TestCase
 
         DB::table('examiner_course_assignments')->insert([
             'course_id' => $ctx['exam']->course_id,
-            'examiner_user_id' => $ctx['coord']->id,
+            'examiner_user_id' => $ctx['examiner']->id,
             'assigned_by' => null,
             'is_active' => true,
             'permissions' => null,
@@ -139,7 +147,7 @@ class HeldResultReviewAndStudentVisibilityTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $this->postJson(route('exam-sessions.review.release', $ctx['session']))
             ->assertOk()
             ->assertJson(['status' => 'released']);

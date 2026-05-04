@@ -16,7 +16,7 @@ class CoordinatorExamSessionReviewTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * @return array{coord: User, exam: Quiz, session: ExamSession}
+     * @return array{examiner: User, coord: User, exam: Quiz, session: ExamSession}
      */
     private function seedScopedExamContext(): array
     {
@@ -24,6 +24,14 @@ class CoordinatorExamSessionReviewTest extends TestCase
 
         $uniId = (int) DB::table('universities')->value('id');
         $coord = User::query()->where('email', 'kofi.mensah@university.edu')->firstOrFail();
+        $examiner = User::factory()->create([
+            'role' => 'examiner',
+            'university_id' => $uniId,
+            'email' => 'examiner.sessions.'.Str::random(8).'@test.edu',
+            'index_number' => null,
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
         $deptId = (int) DB::table('departments')->where('code', 'CS')->value('id');
         $programId = (int) DB::table('programs')->where('code', 'BCS')->value('id');
         $levelId = (int) DB::table('levels')->where('code', '100')->value('id');
@@ -41,7 +49,7 @@ class CoordinatorExamSessionReviewTest extends TestCase
 
         DB::table('examiner_course_assignments')->insert([
             'course_id' => $courseId,
-            'examiner_user_id' => $coord->id,
+            'examiner_user_id' => $examiner->id,
             'assigned_by' => null,
             'is_active' => true,
             'permissions' => null,
@@ -66,7 +74,7 @@ class CoordinatorExamSessionReviewTest extends TestCase
         $quizId = DB::table('quizzes')->insertGetId([
             'university_id' => $uniId,
             'course_id' => $courseId,
-            'created_by' => $coord->id,
+            'created_by' => $examiner->id,
             'title' => 'Midterm',
             'description' => null,
             'assessment_type' => 'exam',
@@ -103,7 +111,7 @@ class CoordinatorExamSessionReviewTest extends TestCase
 
         $exam = Quiz::query()->findOrFail($quizId);
 
-        return ['coord' => $coord, 'exam' => $exam, 'session' => $session];
+        return ['examiner' => $examiner->fresh(), 'coord' => $coord, 'exam' => $exam, 'session' => $session];
     }
 
     public function test_guest_redirected_from_sessions_index(): void
@@ -114,11 +122,11 @@ class CoordinatorExamSessionReviewTest extends TestCase
             ->assertRedirect();
     }
 
-    public function test_coordinator_can_view_sessions_index(): void
+    public function test_examiner_can_view_sessions_index(): void
     {
         $ctx = $this->seedScopedExamContext();
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $this->get(route('examiner.exams.sessions.index', $ctx['exam']))
             ->assertOk()
             ->assertSeeText('Exam analytics')
@@ -126,22 +134,38 @@ class CoordinatorExamSessionReviewTest extends TestCase
             ->assertSeeText($ctx['session']->student->name);
     }
 
-    public function test_coordinator_can_view_session_detail(): void
+    public function test_examiner_can_view_session_detail(): void
     {
         $ctx = $this->seedScopedExamContext();
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $this->get(route('examiner.exam-sessions.show', $ctx['session']))
             ->assertOk()
             ->assertSeeText('Proctoring timeline');
     }
 
-    public function test_coordinator_cannot_view_exam_sessions_outside_department(): void
+    public function test_coordinator_cannot_view_examiner_sessions_index(): void
+    {
+        $ctx = $this->seedScopedExamContext();
+
+        $this->actingAs($ctx['coord']);
+        $this->get(route('examiner.exams.sessions.index', $ctx['exam']))
+            ->assertForbidden();
+    }
+
+    public function test_examiner_cannot_view_exam_sessions_without_course_assignment(): void
     {
         $this->seed(InitialSetupSeeder::class);
 
         $uniId = (int) DB::table('universities')->value('id');
-        $coord = User::query()->where('email', 'kofi.mensah@university.edu')->firstOrFail();
+        $examiner = User::factory()->create([
+            'role' => 'examiner',
+            'university_id' => $uniId,
+            'email' => 'examiner.orphan.'.Str::random(8).'@test.edu',
+            'index_number' => null,
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
         $programId = (int) DB::table('programs')->where('code', 'BCS')->value('id');
         $levelId = (int) DB::table('levels')->where('code', '100')->value('id');
 
@@ -171,7 +195,7 @@ class CoordinatorExamSessionReviewTest extends TestCase
         $quizId = DB::table('quizzes')->insertGetId([
             'university_id' => $uniId,
             'course_id' => $courseId,
-            'created_by' => $coord->id,
+            'created_by' => $examiner->id,
             'title' => 'Other',
             'description' => null,
             'assessment_type' => 'exam',
@@ -206,7 +230,7 @@ class CoordinatorExamSessionReviewTest extends TestCase
             'exam_status' => 'submitted',
         ]);
 
-        $this->actingAs($coord);
+        $this->actingAs($examiner);
         $this->get(route('examiner.exams.sessions.index', $exam))
             ->assertForbidden();
     }

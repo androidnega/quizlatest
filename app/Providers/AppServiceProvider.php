@@ -21,6 +21,7 @@ use App\Policies\ProgramPolicy;
 use App\Policies\UniversityPolicy;
 use App\Policies\UserPolicy;
 use App\Services\PracticeModuleSettings;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -40,6 +41,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if (config('app.name') === 'Laravel') {
+            Config::set('app.name', 'QuizSnap');
+        }
+
         Gate::policy(Quiz::class, ExamPolicy::class);
         Gate::policy(ExamSession::class, ExamSessionPolicy::class);
         Gate::policy(University::class, UniversityPolicy::class);

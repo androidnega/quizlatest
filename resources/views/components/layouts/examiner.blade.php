@@ -62,9 +62,6 @@
                     <a href="{{ route('examiner.grading.pending') }}" @click="staffNavOpen = false" class="{{ $navOn($gradingActive) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Essay grading') }}</a>
                     <a href="{{ route('examiner.exams.index') }}" @click="staffNavOpen = false" class="{{ $navOn($sessionsActive) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Sessions & held review') }}</a>
                     <a href="{{ route('examiner.practice-overview.index') }}" @click="staffNavOpen = false" class="{{ $navOn($practiceActive) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Practice overview') }}</a>
-                    @if (auth()->user()->role === 'coordinator')
-                        <a href="{{ route('coordinator.dashboard') }}" @click="staffNavOpen = false" class="{{ $navOn(request()->routeIs('coordinator.dashboard')) }} flex min-h-[44px] items-center rounded-lg px-4 py-3 text-sm font-medium">{{ __('Coordinator panel') }}</a>
-                    @endif
                 </nav>
             </aside>
 
@@ -80,9 +77,6 @@
                     <a href="{{ route('examiner.grading.pending') }}" class="{{ $navOn($gradingActive) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Essay grading') }}</a>
                     <a href="{{ route('examiner.exams.index') }}" class="{{ $navOn($sessionsActive) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Sessions & held review') }}</a>
                     <a href="{{ route('examiner.practice-overview.index') }}" class="{{ $navOn($practiceActive) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Practice overview') }}</a>
-                    @if (auth()->user()->role === 'coordinator')
-                        <a href="{{ route('coordinator.dashboard') }}" class="{{ $navOn(request()->routeIs('coordinator.dashboard')) }} flex min-h-[44px] items-center rounded-lg px-3 text-sm font-medium transition">{{ __('Coordinator panel') }}</a>
-                    @endif
                 </nav>
             </aside>
 

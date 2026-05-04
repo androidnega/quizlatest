@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\AcademicYear;
 use App\Models\Classroom;
 use App\Models\Course;
-use App\Models\ExaminerCourseAssignment;
 use App\Models\Program;
 use App\Models\User;
 use Illuminate\Contracts\View\View;
@@ -57,14 +56,6 @@ class DashboardController extends Controller
             ->whereIn('department_id', $departmentIds)
             ->count();
 
-        $assignedCourseCount = ExaminerCourseAssignment::query()
-            ->join('courses', 'examiner_course_assignments.course_id', '=', 'courses.id')
-            ->where('examiner_course_assignments.examiner_user_id', $coordinator->id)
-            ->where('examiner_course_assignments.is_active', true)
-            ->whereIn('courses.department_id', $departmentIds)
-            ->distinct('examiner_course_assignments.course_id')
-            ->count('examiner_course_assignments.course_id');
-
         $recentStudents = User::query()
             ->where('role', 'student')
             ->whereHas('program', fn ($query) => $query->whereIn('department_id', $departmentIds))
@@ -79,7 +70,6 @@ class DashboardController extends Controller
             'programTotal' => $programTotal,
             'classCount' => $classCount,
             'courseCount' => $courseCount,
-            'assignedCourseCount' => $assignedCourseCount,
             'recentStudents' => $recentStudents,
         ]);
     }

@@ -16,7 +16,7 @@ class ExaminerAccessTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * @return array{coord: User, exam: Quiz, session: ExamSession}
+     * @return array{examiner: User, coord: User, exam: Quiz, session: ExamSession}
      */
     private function seedScopedExamContext(): array
     {
@@ -24,6 +24,14 @@ class ExaminerAccessTest extends TestCase
 
         $uniId = (int) DB::table('universities')->value('id');
         $coord = User::query()->where('email', 'kofi.mensah@university.edu')->firstOrFail();
+        $examiner = User::factory()->create([
+            'role' => 'examiner',
+            'university_id' => $uniId,
+            'email' => 'examiner.access.'.Str::random(8).'@test.edu',
+            'index_number' => null,
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
         $deptId = (int) DB::table('departments')->where('code', 'CS')->value('id');
         $programId = (int) DB::table('programs')->where('code', 'BCS')->value('id');
         $levelId = (int) DB::table('levels')->where('code', '100')->value('id');
@@ -41,7 +49,7 @@ class ExaminerAccessTest extends TestCase
 
         DB::table('examiner_course_assignments')->insert([
             'course_id' => $courseId,
-            'examiner_user_id' => $coord->id,
+            'examiner_user_id' => $examiner->id,
             'assigned_by' => null,
             'is_active' => true,
             'permissions' => null,
@@ -66,7 +74,7 @@ class ExaminerAccessTest extends TestCase
         $quizId = DB::table('quizzes')->insertGetId([
             'university_id' => $uniId,
             'course_id' => $courseId,
-            'created_by' => $coord->id,
+            'created_by' => $examiner->id,
             'title' => 'Midterm',
             'description' => null,
             'assessment_type' => 'exam',
@@ -102,23 +110,33 @@ class ExaminerAccessTest extends TestCase
         ]);
 
         return [
+            'examiner' => $examiner->fresh(),
             'coord' => $coord,
             'exam' => Quiz::query()->findOrFail($quizId),
             'session' => $session,
         ];
     }
 
-    public function test_coordinator_with_scope_can_access_examiner_dashboard_and_sessions(): void
+    public function test_examiner_with_course_assignment_can_access_examiner_dashboard_and_sessions(): void
+    {
+        $ctx = $this->seedScopedExamContext();
+
+        $this->actingAs($ctx['examiner'])
+            ->get(route('examiner.dashboard'))
+            ->assertOk();
+
+        $this->actingAs($ctx['examiner'])
+            ->get(route('examiner.exams.sessions.index', $ctx['exam']))
+            ->assertOk();
+    }
+
+    public function test_coordinator_cannot_access_examiner_dashboard_even_when_seeded_as_coordinator(): void
     {
         $ctx = $this->seedScopedExamContext();
 
         $this->actingAs($ctx['coord'])
             ->get(route('examiner.dashboard'))
-            ->assertOk();
-
-        $this->actingAs($ctx['coord'])
-            ->get(route('examiner.exams.sessions.index', $ctx['exam']))
-            ->assertOk();
+            ->assertForbidden();
     }
 
     public function test_student_cannot_access_examiner_dashboard(): void

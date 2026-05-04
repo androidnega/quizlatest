@@ -31,20 +31,6 @@ class EnsureUserIsExaminer
 
     public static function mayAccessExaminerPortal(User $user): bool
     {
-        if ($user->role === 'examiner') {
-            return true;
-        }
-
-        if ($user->role === 'coordinator') {
-            if ($user->coordinatorAssignments()->where('is_active', true)->exists()) {
-                return true;
-            }
-        }
-
-        if ($user->examinerCourseAssignments()->where('is_active', true)->exists()) {
-            return true;
-        }
-
-        return $user->roles()->whereHas('permissions', fn ($q) => $q->where('slug', 'examiner'))->exists();
+        return $user->role === 'examiner';
     }
 }

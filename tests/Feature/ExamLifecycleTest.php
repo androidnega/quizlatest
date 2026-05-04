@@ -9,6 +9,7 @@ use App\Models\User;
 use Database\Seeders\InitialSetupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class ExamLifecycleTest extends TestCase
@@ -16,17 +17,25 @@ class ExamLifecycleTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * @return array{coord: User, student: User, courseId: int, classId: int}
+     * @return array{examiner: User, student: User, courseId: int, classId: int}
      */
     private function seedExaminerAndStudentContext(): array
     {
         $this->seed(InitialSetupSeeder::class);
 
         $uniId = (int) DB::table('universities')->value('id');
-        $coord = User::query()->where('email', 'kofi.mensah@university.edu')->firstOrFail();
         $deptId = (int) DB::table('departments')->where('code', 'CS')->value('id');
         $programId = (int) DB::table('programs')->where('code', 'BCS')->value('id');
         $levelId = (int) DB::table('levels')->where('code', '100')->value('id');
+
+        $examiner = User::factory()->create([
+            'role' => 'examiner',
+            'university_id' => $uniId,
+            'email' => 'examiner.lifecycle.'.Str::random(8).'@test.edu',
+            'index_number' => null,
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
 
         $courseId = DB::table('courses')->insertGetId([
             'university_id' => $uniId,
@@ -35,6 +44,18 @@ class ExamLifecycleTest extends TestCase
             'title' => 'Lifecycle Test Course',
             'credit_hours' => 3,
             'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('examiner_course_assignments')->insert([
+            'course_id' => $courseId,
+            'examiner_user_id' => $examiner->id,
+            'assigned_by' => null,
+            'is_active' => true,
+            'permissions' => null,
+            'starts_at' => null,
+            'ends_at' => null,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -61,15 +82,15 @@ class ExamLifecycleTest extends TestCase
         $student = User::query()->where('role', 'student')->firstOrFail();
         DB::table('users')->where('id', $student->id)->update(['class_id' => $classId]);
 
-        return ['coord' => $coord, 'student' => $student->fresh(), 'courseId' => $courseId, 'classId' => $classId];
+        return ['examiner' => $examiner->fresh(), 'student' => $student->fresh(), 'courseId' => $courseId, 'classId' => $classId];
     }
 
-    private function createDraftExam(User $coord, int $courseId, float $totalMarks = 0): Quiz
+    private function createDraftExam(User $examiner, int $courseId, float $totalMarks = 0): Quiz
     {
         $quizId = DB::table('quizzes')->insertGetId([
-            'university_id' => $coord->university_id,
+            'university_id' => $examiner->university_id,
             'course_id' => $courseId,
-            'created_by' => $coord->id,
+            'created_by' => $examiner->id,
             'title' => 'Lifecycle exam',
             'description' => null,
             'assessment_type' => 'exam',
@@ -111,9 +132,9 @@ class ExamLifecycleTest extends TestCase
         $exam->update(['total_marks' => 5]);
     }
 
-    private function setDeliveryForCoordinator(User $coord, Quiz $exam, int $questionsPerStudent = 1): void
+    private function setDeliveryForExaminer(User $examiner, Quiz $exam, int $questionsPerStudent = 1): void
     {
-        $this->actingAs($coord);
+        $this->actingAs($examiner);
         $this->patch(route('examiner.exams.delivery.update', $exam), [
             'questions_per_student' => $questionsPerStudent,
         ])->assertRedirect();
@@ -122,10 +143,10 @@ class ExamLifecycleTest extends TestCase
     public function test_publish_rejects_when_questions_per_student_exceeds_approved_pool(): void
     {
         $ctx = $this->seedExaminerAndStudentContext();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId'], 0);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId'], 0);
         $this->addSectionAndMcq($exam);
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $this->patch(route('examiner.exams.delivery.update', $exam->fresh()), [
             'questions_per_student' => 5,
             'randomize_questions' => false,
@@ -139,15 +160,15 @@ class ExamLifecycleTest extends TestCase
     public function test_publish_requires_sections_questions_and_positive_marks(): void
     {
         $ctx = $this->seedExaminerAndStudentContext();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId'], 0);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId'], 0);
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $this->post(route('examiner.exams.publish', $exam))
             ->assertSessionHasErrors('lifecycle');
 
         $this->addSectionAndMcq($exam->fresh());
 
-        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
+        $this->setDeliveryForExaminer($ctx['examiner'], $exam->fresh());
 
         $this->post(route('examiner.exams.publish', $exam->fresh()))
             ->assertSessionDoesntHaveErrors()
@@ -161,22 +182,22 @@ class ExamLifecycleTest extends TestCase
     public function test_student_cannot_prepare_draft_or_archived_only_published_in_window(): void
     {
         $ctx = $this->seedExaminerAndStudentContext();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
         $this->addSectionAndMcq($exam);
 
         $this->actingAs($ctx['student']);
         $this->get(route('student.exam.prepare', $exam))->assertForbidden();
 
-        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
+        $this->setDeliveryForExaminer($ctx['examiner'], $exam->fresh());
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
 
         $exam->refresh();
         $this->actingAs($ctx['student']);
         $this->get(route('student.exam.prepare', $exam))->assertOk();
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $exam->update([
             'start_time' => now()->addDay(),
             'end_time' => now()->addDays(2),
@@ -185,15 +206,15 @@ class ExamLifecycleTest extends TestCase
         $this->actingAs($ctx['student']);
         $this->get(route('student.exam.prepare', $exam->fresh()))->assertForbidden();
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $this->post(route('examiner.exams.unpublish', $exam->fresh()))->assertRedirect();
         $exam->refresh();
         $exam->update(['start_time' => null, 'end_time' => null]);
-        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
-        $this->actingAs($ctx['coord']);
+        $this->setDeliveryForExaminer($ctx['examiner'], $exam->fresh());
+        $this->actingAs($ctx['examiner']);
         $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $this->post(route('examiner.exams.archive', $exam->fresh()))->assertRedirect();
 
         $exam->refresh();
@@ -206,14 +227,14 @@ class ExamLifecycleTest extends TestCase
     public function test_published_exam_blocks_content_mutations_and_clone_creates_draft(): void
     {
         $ctx = $this->seedExaminerAndStudentContext();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
         $this->addSectionAndMcq($exam);
 
         $section = $exam->fresh()->sections()->firstOrFail();
 
-        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
+        $this->setDeliveryForExaminer($ctx['examiner'], $exam->fresh());
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
 
         $exam->refresh();
@@ -238,12 +259,12 @@ class ExamLifecycleTest extends TestCase
     public function test_draft_can_update_schedule(): void
     {
         $ctx = $this->seedExaminerAndStudentContext();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
 
         $start = now()->addHour()->startOfMinute();
         $end = now()->addHours(3)->startOfMinute();
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $this->patch(route('examiner.exams.schedule.update', $exam), [
             'start_time' => $start->format('Y-m-d\TH:i'),
             'end_time' => $end->format('Y-m-d\TH:i'),
@@ -260,10 +281,10 @@ class ExamLifecycleTest extends TestCase
     public function test_non_onboarded_student_is_redirected_from_exam_prepare(): void
     {
         $ctx = $this->seedExaminerAndStudentContext();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
         $this->addSectionAndMcq($exam);
-        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
-        $this->actingAs($ctx['coord']);
+        $this->setDeliveryForExaminer($ctx['examiner'], $exam->fresh());
+        $this->actingAs($ctx['examiner']);
         $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
 
         $exam->refresh();
@@ -279,10 +300,10 @@ class ExamLifecycleTest extends TestCase
     public function test_inactive_student_is_redirected_from_exam_prepare(): void
     {
         $ctx = $this->seedExaminerAndStudentContext();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
         $this->addSectionAndMcq($exam);
-        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
-        $this->actingAs($ctx['coord']);
+        $this->setDeliveryForExaminer($ctx['examiner'], $exam->fresh());
+        $this->actingAs($ctx['examiner']);
         $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
 
         $exam->refresh();
@@ -298,10 +319,10 @@ class ExamLifecycleTest extends TestCase
     public function test_onboarded_active_student_can_prepare_published_exam(): void
     {
         $ctx = $this->seedExaminerAndStudentContext();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
         $this->addSectionAndMcq($exam);
-        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
-        $this->actingAs($ctx['coord']);
+        $this->setDeliveryForExaminer($ctx['examiner'], $exam->fresh());
+        $this->actingAs($ctx['examiner']);
         $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
 
         $exam->refresh();
@@ -312,10 +333,10 @@ class ExamLifecycleTest extends TestCase
     public function test_exam_session_start_returns_422_for_non_onboarded_student(): void
     {
         $ctx = $this->seedExaminerAndStudentContext();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
         $this->addSectionAndMcq($exam);
-        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
-        $this->actingAs($ctx['coord']);
+        $this->setDeliveryForExaminer($ctx['examiner'], $exam->fresh());
+        $this->actingAs($ctx['examiner']);
         $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
 
         $exam->refresh();
@@ -332,10 +353,10 @@ class ExamLifecycleTest extends TestCase
     public function test_exam_session_start_returns_422_for_inactive_student(): void
     {
         $ctx = $this->seedExaminerAndStudentContext();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
         $this->addSectionAndMcq($exam);
-        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
-        $this->actingAs($ctx['coord']);
+        $this->setDeliveryForExaminer($ctx['examiner'], $exam->fresh());
+        $this->actingAs($ctx['examiner']);
         $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
 
         $exam->refresh();
@@ -368,10 +389,10 @@ class ExamLifecycleTest extends TestCase
     public function test_exam_session_start_onboarded_active_student_passes_onboarding_gate(): void
     {
         $ctx = $this->seedExaminerAndStudentContext();
-        $exam = $this->createDraftExam($ctx['coord'], $ctx['courseId']);
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
         $this->addSectionAndMcq($exam);
-        $this->setDeliveryForCoordinator($ctx['coord'], $exam->fresh());
-        $this->actingAs($ctx['coord']);
+        $this->setDeliveryForExaminer($ctx['examiner'], $exam->fresh());
+        $this->actingAs($ctx['examiner']);
         $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
 
         $exam->refresh();

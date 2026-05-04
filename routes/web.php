@@ -11,7 +11,6 @@ use App\Http\Controllers\Coordinator\AcademicResetController;
 use App\Http\Controllers\Coordinator\ClassCourseAssignmentController;
 use App\Http\Controllers\Coordinator\ClassroomController;
 use App\Http\Controllers\Coordinator\CourseController;
-use App\Http\Controllers\Coordinator\DashboardController as CoordinatorDashboardController;
 use App\Http\Controllers\Coordinator\LevelController;
 use App\Http\Controllers\Coordinator\ProgramController;
 use App\Http\Controllers\Coordinator\StudentController;
@@ -61,10 +60,10 @@ Route::any('/admin/{path?}', function (?string $path = null) {
 Route::any('/coordinator/{path?}', function (?string $path = null) {
     $path = $path === null ? '' : ltrim($path, '/');
     if ($path === '' || $path === 'dashboard') {
-        return redirect('/dashboard/coordinator', 301);
+        return redirect('/dashboard', 301);
     }
 
-    return redirect('/dashboard/coordinator/'.$path, 301);
+    return redirect('/dashboard/'.$path, 301);
 })->where('path', '.*');
 
 Route::any('/examiner/{path?}', function (?string $path = null) {
@@ -136,6 +135,12 @@ Route::middleware('auth')->group(function () {
 
 Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::any('coordinator/{path?}', function (?string $path = null) {
+        $path = $path === null || $path === '' ? '' : '/'.ltrim($path, '/');
+
+        return redirect('/dashboard'.$path, 301);
+    })->where('path', '.*');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::get('/profile/face-image', [ProfileFaceImageController::class, 'show'])->name('profile.face-image');
@@ -215,12 +220,9 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
             Route::put('/academic-years/{academic_year}/terms/{term}', [AcademicYearController::class, 'updateTerm'])->name('academic-years.terms.update');
         });
 
-    Route::prefix('coordinator')
+    Route::middleware('coordinator')
         ->name('coordinator.')
-        ->middleware('coordinator')
         ->group(function () {
-            Route::get('/', [CoordinatorDashboardController::class, 'index'])->name('dashboard');
-
             Route::get('/academic-reset', [AcademicResetController::class, 'index'])->name('academic-reset.index');
             Route::post('/academic-reset/preview', [AcademicResetController::class, 'preview'])->name('academic-reset.preview');
             Route::get('/academic-reset/{snapshot}/review', [AcademicResetController::class, 'review'])->name('academic-reset.review');

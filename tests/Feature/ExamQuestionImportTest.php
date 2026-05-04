@@ -8,6 +8,7 @@ use App\Services\SystemSettingsService;
 use Database\Seeders\InitialSetupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class ExamQuestionImportTest extends TestCase
@@ -15,14 +16,21 @@ class ExamQuestionImportTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * @return array{coord: User, exam: Quiz}
+     * @return array{examiner: User, exam: Quiz}
      */
     private function seedDraftExam(): array
     {
         $this->seed(InitialSetupSeeder::class);
 
         $uniId = (int) DB::table('universities')->value('id');
-        $coord = User::query()->where('email', 'kofi.mensah@university.edu')->firstOrFail();
+        $examiner = User::factory()->create([
+            'role' => 'examiner',
+            'university_id' => $uniId,
+            'email' => 'examiner.import.'.Str::random(8).'@test.edu',
+            'index_number' => null,
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
         $deptId = (int) DB::table('departments')->where('code', 'CS')->value('id');
 
         $courseId = DB::table('courses')->insertGetId([
@@ -36,10 +44,22 @@ class ExamQuestionImportTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        DB::table('examiner_course_assignments')->insert([
+            'course_id' => $courseId,
+            'examiner_user_id' => $examiner->id,
+            'assigned_by' => null,
+            'is_active' => true,
+            'permissions' => null,
+            'starts_at' => null,
+            'ends_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         $quizId = DB::table('quizzes')->insertGetId([
             'university_id' => $uniId,
             'course_id' => $courseId,
-            'created_by' => $coord->id,
+            'created_by' => $examiner->id,
             'title' => 'Draft import exam',
             'description' => null,
             'assessment_type' => 'exam',
@@ -55,7 +75,7 @@ class ExamQuestionImportTest extends TestCase
         ]);
 
         return [
-            'coord' => $coord,
+            'examiner' => $examiner->fresh(),
             'exam' => Quiz::query()->findOrFail($quizId),
         ];
     }
@@ -64,7 +84,7 @@ class ExamQuestionImportTest extends TestCase
     {
         $ctx = $this->seedDraftExam();
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $response = $this->from(route('examiner.exams.builder', $ctx['exam']))
             ->post(route('examiner.exams.questions.import.preview', $ctx['exam']), [
                 'import_json' => '{',
@@ -94,7 +114,7 @@ class ExamQuestionImportTest extends TestCase
             ],
         ];
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
 
         $this->post(route('examiner.exams.questions.import.preview', $ctx['exam']), [
             'import_json' => json_encode($payload, JSON_THROW_ON_ERROR),
@@ -128,7 +148,7 @@ class ExamQuestionImportTest extends TestCase
         $admin = User::query()->where('role', 'admin')->firstOrFail();
         app(SystemSettingsService::class)->set('enable_ai', 'false', $admin);
 
-        $this->actingAs($ctx['coord']);
+        $this->actingAs($ctx['examiner']);
         $html = $this->get(route('examiner.exams.builder', $ctx['exam']))->assertOk()->getContent();
         $this->assertStringNotContainsString('Generate with AI (internal)', $html);
     }

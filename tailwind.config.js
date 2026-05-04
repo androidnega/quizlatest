@@ -32,6 +32,7 @@ export default {
             },
             fontFamily: {
                 sans: ['ui-sans-serif', 'system-ui', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', ...defaultTheme.fontFamily.sans],
+                brand: ['Antonio', 'ui-sans-serif', 'system-ui', 'Segoe UI', 'sans-serif'],
             },
         },
     },

@@ -15,17 +15,22 @@
             <p class="text-sm font-medium text-qs-muted">{{ __('Active classes') }}</p>
             <p class="mt-4 text-3xl font-semibold text-qs-text">{{ $classCount }}</p>
         </div>
-        <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm transition hover:shadow-md">
-            <p class="text-sm font-medium text-qs-muted">{{ __('Programs (active / total)') }}</p>
-            <p class="mt-4 text-3xl font-semibold text-qs-text">{{ $activeProgramCount }} <span class="text-lg text-qs-muted">/ {{ $programTotal }}</span></p>
+    </div>
+
+    <div class="mt-8 grid gap-6 lg:grid-cols-2">
+        <div class="rounded-xl border border-qs-soft bg-qs-bg p-6 shadow-sm">
+            <h3 class="text-lg font-semibold text-qs-text">{{ __('Programs in your departments') }}</h3>
+            <p class="mt-4 text-4xl font-semibold tabular-nums text-qs-text">{{ $activeProgramCount }} <span class="text-2xl font-medium text-qs-muted">/ {{ $programTotal }}</span></p>
+            <p class="mt-3 text-sm leading-relaxed text-qs-muted">
+                {{ __('The first number is programs turned on for scheduling. The second is all programs in departments you coordinate — including ones turned off.') }}
+            </p>
         </div>
-        <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm transition hover:shadow-md">
-            <p class="text-sm font-medium text-qs-muted">{{ __('Courses in scope') }}</p>
-            <p class="mt-4 text-3xl font-semibold text-qs-text">{{ $courseCount }}</p>
-        </div>
-        <div class="rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm transition hover:shadow-md">
-            <p class="text-sm font-medium text-qs-muted">{{ __('Your examiner course assignments') }}</p>
-            <p class="mt-4 text-3xl font-semibold text-qs-text">{{ $assignedCourseCount }}</p>
+        <div class="rounded-xl border border-qs-soft bg-qs-bg p-6 shadow-sm">
+            <h3 class="text-lg font-semibold text-qs-text">{{ __('Courses in scope') }}</h3>
+            <p class="mt-4 text-4xl font-semibold tabular-nums text-qs-text">{{ $courseCount }}</p>
+            <p class="mt-3 text-sm leading-relaxed text-qs-muted">
+                {{ __('Count of courses belonging to the same departments as your coordinator assignments. This is the catalog you can link to classes and timetables — separate from the examiner exam builder.') }}
+            </p>
         </div>
     </div>
 
@@ -37,9 +42,6 @@
                 <a href="{{ route('coordinator.students.upload') }}" class="qs-btn-secondary text-sm">{{ __('CSV upload') }}</a>
                 <a href="{{ route('coordinator.classes.index') }}" class="qs-btn-secondary text-sm">{{ __('Classes') }}</a>
                 <a href="{{ route('coordinator.courses.index') }}" class="qs-btn-secondary text-sm">{{ __('Courses') }}</a>
-                @if (\App\Http\Middleware\EnsureUserIsExaminer::mayAccessExaminerPortal(auth()->user()))
-                    <a href="{{ route('examiner.dashboard') }}" class="qs-btn-secondary text-sm">{{ __('Examiner portal') }}</a>
-                @endif
                 <a href="{{ route('coordinator.academic-reset.index') }}" class="qs-btn-secondary text-sm">{{ __('Academic reset') }}</a>
             </div>
         </div>
