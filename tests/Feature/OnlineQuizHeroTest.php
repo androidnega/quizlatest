@@ -11,10 +11,9 @@ class OnlineQuizHeroTest extends TestCase
         $html = $this->get('/')->assertOk()->getContent();
 
         $this->assertStringContainsString('data-online-quiz-hero', $html);
-        $this->assertStringContainsString((string) __('Click illustration to pause animation'), $html);
-        $this->assertStringContainsString('data-oq-hint-paused="'.e(__('Click illustration to resume animation')).'"', $html);
-        $this->assertSame(1, substr_count($html, 'online-quiz-hero__hint'));
-        $this->assertStringContainsString((string) __('Animated illustration of a student taking an online quiz on a computer with notes, clock, keyboard, and a small robot assistant.'), $html);
+        $this->assertStringContainsString((string) __('Illustration of a student taking an online quiz at a computer with notes, keyboard, and a small robot assistant beside the keyboard.'), $html);
+        $this->assertStringNotContainsString((string) __('Click illustration to pause animation'), $html);
+        $this->assertStringNotContainsString((string) __('Student Taking an Online Quiz'), $html);
     }
 
     public function test_quiz_hero_demo_route_renders_component(): void

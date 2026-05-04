@@ -9,7 +9,7 @@
 </head>
 <body class="min-h-screen bg-white font-sans text-qs-text antialiased">
     <main class="mx-auto flex max-w-xl flex-col items-center justify-center px-4 py-16">
-        <x-online-quiz-hero class="w-full" heading-id="oq-hero-demo-heading" />
+        <x-online-quiz-hero class="w-full" />
     </main>
 </body>
 </html>
