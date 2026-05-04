@@ -6,7 +6,7 @@
 >
     <x-auth-session-status class="mb-6" :status="session('status')" />
 
-    <form method="POST" action="{{ url('/login') }}" class="space-y-6">
+    <form method="POST" action="{{ route('login') }}" class="space-y-6">
         @csrf
 
         <div>
@@ -23,9 +23,4 @@
             <a href="{{ route('student.password-reset.request') }}" class="qs-link font-medium text-qs-text">{{ __('Forgot password?') }}</a>
         </p>
     </form>
-
-    <p class="mt-8 border-t border-qs-soft pt-6 text-center text-sm text-qs-muted">
-        {{ __('Coordinator or admin?') }}
-        <a href="{{ route('staff.login') }}" class="qs-link font-medium text-qs-text">{{ __('Staff sign in') }}</a>
-    </p>
 </x-guest-layout>

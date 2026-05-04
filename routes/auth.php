@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\BreakGlassEmergencyController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
@@ -69,11 +70,27 @@ Route::middleware('guest')->group(function () {
     Route::post('student/reset-password', [StudentPasswordResetController::class, 'updatePassword'])
         ->middleware('throttle:12,1');
 
-    Route::get('staff/login', [StaffSessionController::class, 'create'])
-        ->name('staff.login');
+    Route::prefix('admin_login')->group(function () {
+        Route::get('/', [StaffSessionController::class, 'create'])
+            ->name('staff.login');
 
-    Route::post('staff/login', [StaffSessionController::class, 'store'])
-        ->middleware('throttle:12,1');
+        Route::post('/', [StaffSessionController::class, 'store'])
+            ->middleware('throttle:12,1');
+
+        Route::get('/emergency', [BreakGlassEmergencyController::class, 'create'])
+            ->name('breakglass.emergency');
+
+        Route::post('/emergency', [BreakGlassEmergencyController::class, 'store'])
+            ->middleware('throttle:6,1')
+            ->name('breakglass.emergency.store');
+
+        Route::get('/emergency/verify', [BreakGlassEmergencyController::class, 'verifyForm'])
+            ->name('breakglass.emergency.verify.form');
+
+        Route::post('/emergency/verify', [BreakGlassEmergencyController::class, 'verify'])
+            ->middleware('throttle:12,1')
+            ->name('breakglass.emergency.verify');
+    });
 });
 
 Route::middleware('auth')->group(function () {

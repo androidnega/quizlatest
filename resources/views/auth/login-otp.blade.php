@@ -38,9 +38,4 @@
     <p class="mt-8 border-t border-qs-soft pt-6 text-center text-sm text-qs-muted">
         <a href="{{ route('login', ['restart' => 1]) }}" class="qs-link font-medium text-qs-text">{{ __('Already finished setup? Start from index number') }}</a>
     </p>
-
-    <p class="mt-4 text-center text-sm text-qs-muted">
-        {{ __('Coordinator or admin?') }}
-        <a href="{{ route('staff.login') }}" class="qs-link font-medium text-qs-text">{{ __('Staff sign in') }}</a>
-    </p>
 </x-guest-layout>

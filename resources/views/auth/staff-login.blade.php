@@ -1,8 +1,9 @@
 <x-guest-layout
-    :page-title="__('Staff sign-in')"
+    :page-title="__('Staff portal')"
     :eyebrow="__('Staff access')"
-    :heading="__('Sign in to QUIZSNAP')"
-    :description="__('Use the email or username and password issued by your institution. Students should use the main student sign-in instead.')"
+    :heading="__('Sign in to the staff portal')"
+    :description="__('Use the email or username and password issued by your institution.')"
+    content-max="max-w-md"
 >
     <x-auth-session-status class="mb-6" :status="session('status')" />
 
@@ -10,7 +11,7 @@
         @csrf
 
         <div>
-            <x-input-label for="email" :value="__('Email / username')" />
+            <x-input-label for="email" :value="__('Email or username')" />
             <x-text-input id="email" name="email" type="text" :value="old('email')" required autofocus autocomplete="username" />
             <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
@@ -22,12 +23,12 @@
         </div>
 
         <label for="remember_me" class="flex cursor-pointer items-center gap-2">
-            <input id="remember_me" type="checkbox" class="rounded border-qs-soft text-qs-accent shadow-sm focus:ring-qs-accent/40" name="remember">
+            <input id="remember_me" type="checkbox" class="rounded border-qs-soft text-qs-primary shadow-sm focus:ring-qs-primary/40" name="remember">
             <span class="text-sm text-qs-text">{{ __('Remember me') }}</span>
         </label>
 
         <button type="submit" class="qs-btn-primary w-full justify-center py-2.5 text-sm font-semibold">
-            {{ __('Log in') }}
+            {{ __('Continue') }}
         </button>
     </form>
 

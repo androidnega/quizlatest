@@ -32,6 +32,8 @@ class AuthenticationTest extends TestCase
         $response->assertSee(__('Continue'), false);
         $response->assertDontSee('type="password"', false);
         $response->assertDontSee(__('First-time sign-in'), false);
+        $response->assertDontSee(__('Staff sign in'), false);
+        $response->assertDontSee(__('Staff portal'), false);
     }
 
     public function test_legacy_first_time_login_url_redirects_to_login(): void
@@ -237,7 +239,7 @@ class AuthenticationTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->post('/staff/login', [
+        $this->post('/admin_login', [
             'email' => $user->email,
             'password' => 'password',
         ])
@@ -254,7 +256,7 @@ class AuthenticationTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->post('/staff/login', [
+        $this->post('/admin_login', [
             'email' => $user->email,
             'password' => 'password',
         ])
@@ -297,5 +299,63 @@ class AuthenticationTest extends TestCase
 
         $this->assertAuthenticatedAs($user);
         $this->assertTrue(Hash::check('NewSecurePass9!', $user->fresh()->password));
+    }
+
+    public function test_staff_login_page_is_available_at_admin_login(): void
+    {
+        $response = $this->get('/admin_login');
+
+        $response->assertOk();
+        $response->assertSee(__('Staff portal'), false);
+        $response->assertSee(__('Email or username'), false);
+    }
+
+    public function test_legacy_staff_login_url_redirects_to_admin_login(): void
+    {
+        $this->get('/staff/login')->assertRedirect('/admin_login');
+    }
+
+    public function test_dashboard_redirects_admin_to_admin_dashboard_route(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'admin',
+            'email' => 'admin-dash@example.com',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertRedirect(route('admin.dashboard', absolute: false));
+    }
+
+    public function test_dashboard_redirects_coordinator_to_coordinator_dashboard_route(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'coordinator',
+            'email' => 'coord-dash@example.com',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertRedirect(route('coordinator.dashboard', absolute: false));
+    }
+
+    public function test_dashboard_redirects_examiner_to_examiner_dashboard_route(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'examiner',
+            'email' => 'exam-dash@example.com',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertRedirect(route('examiner.dashboard', absolute: false));
+    }
+
+    public function test_legacy_admin_path_redirects_to_dashboard_admin(): void
+    {
+        $this->get('/admin/universities')->assertRedirect('/dashboard/admin/universities');
     }
 }
