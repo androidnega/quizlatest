@@ -14,7 +14,7 @@
         </div>
 
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <a href="{{ route('login.first-time') }}" class="qs-btn-secondary justify-center px-4 py-2.5 text-sm font-semibold sm:inline-flex sm:w-auto">
+            <a href="{{ route('login', ['restart' => 1]) }}" class="qs-btn-secondary justify-center px-4 py-2.5 text-sm font-semibold sm:inline-flex sm:w-auto">
                 {{ __('Back') }}
             </a>
             <button type="submit" class="qs-btn-primary flex-1 justify-center py-2.5 text-sm font-semibold sm:flex-none sm:min-w-[9rem]">

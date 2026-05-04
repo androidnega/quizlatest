@@ -16,14 +16,20 @@ Route::middleware('guest')->group(function () {
     Route::get('login', [StudentLoginController::class, 'create'])
         ->name('login');
 
-    Route::post('login', [StudentLoginController::class, 'loginWithPassword'])
+    Route::post('login', [StudentLoginController::class, 'submitIndex'])
+        ->middleware('throttle:15,1');
+
+    Route::get('login/password', [StudentLoginController::class, 'createPasswordStep'])
+        ->name('login.password');
+
+    Route::post('login/password', [StudentLoginController::class, 'completeReturningLogin'])
         ->middleware('throttle:12,1');
 
-    Route::get('login/first-time', [StudentLoginController::class, 'createFirstTime'])
+    Route::get('login/first-time', [StudentLoginController::class, 'redirectLegacyFirstTime'])
         ->name('login.first-time');
 
-    Route::post('login/first-time', [StudentLoginController::class, 'storeFirstTime'])
-        ->middleware('throttle:12,1')
+    Route::post('login/first-time', [StudentLoginController::class, 'submitIndex'])
+        ->middleware('throttle:15,1')
         ->name('login.first-time.store');
 
     Route::get('login/first-time/phone', [StudentLoginController::class, 'createFirstTimePhone'])

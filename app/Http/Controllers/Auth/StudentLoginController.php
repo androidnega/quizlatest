@@ -19,83 +19,34 @@ class StudentLoginController extends Controller
 
     private const OTP_MAX_ATTEMPTS = 8;
 
+    /** @var string Session key: index number for returning student password step */
+    private const SESSION_RETURNING_INDEX = 'student_login_returning_index';
+
     public function __construct(
         private readonly StudentFirstLoginOtpNotifier $firstLoginOtpNotifier,
     ) {}
 
-    public function create(): View
+    public function create(Request $request): View|RedirectResponse
     {
+        if ($request->boolean('restart')) {
+            $this->clearFirstLoginSession($request);
+            $request->session()->forget(self::SESSION_RETURNING_INDEX);
+
+            return redirect()->route('login');
+        }
+
         return view('auth.login');
     }
 
-    /**
-     * Returning students: index number or phone + password.
-     */
-    public function loginWithPassword(Request $request): RedirectResponse
+    public function redirectLegacyFirstTime(): RedirectResponse
     {
-        $validated = $request->validate([
-            'identifier' => ['required', 'string', 'max:255'],
-            'password' => ['required', 'string', 'max:255'],
-            'remember' => ['sometimes', 'boolean'],
-        ]);
-
-        $identifier = trim($validated['identifier']);
-        $phoneNorm = StudentPhone::normalize($identifier);
-
-        $user = User::query()
-            ->where('role', 'student')
-            ->where(function ($q) use ($identifier, $phoneNorm) {
-                $q->where('index_number', $identifier);
-                if ($phoneNorm !== null) {
-                    $q->orWhere('phone', $identifier)->orWhere('phone', $phoneNorm);
-                }
-            })
-            ->first();
-
-        if ($user === null || ! $user->is_active) {
-            return back()
-                ->withInput($request->only('identifier'))
-                ->withErrors(['identifier' => __('No active student account matches these credentials.')]);
-        }
-
-        if ($user->student_onboarded_at === null) {
-            return back()
-                ->withInput($request->only('identifier'))
-                ->withErrors([
-                    'identifier' => __('This account has not finished first-time setup. Use “First-time sign-in” below.'),
-                ]);
-        }
-
-        if (! Hash::check($validated['password'], $user->password)) {
-            return back()
-                ->withInput($request->only('identifier'))
-                ->withErrors(['identifier' => __('No active student account matches these credentials.')]);
-        }
-
-        Auth::login($user, (bool) ($validated['remember'] ?? false));
-        $request->session()->regenerate();
-
-        return redirect()->intended(route('dashboard', absolute: false));
-    }
-
-    public function createFirstTime(): View
-    {
-        return view('auth.login-first-time');
-    }
-
-    public function createFirstTimePhone(Request $request): View|RedirectResponse
-    {
-        if (! $request->session()->get('student_first_login_needs_phone')) {
-            return redirect()->route('login.first-time');
-        }
-
-        return view('auth.login-first-time-phone');
+        return redirect()->route('login');
     }
 
     /**
-     * First-time flow: index number → OTP to existing phone, or collect phone then OTP.
+     * Step 1: index number only — routes to first-time OTP flow or password step.
      */
-    public function storeFirstTime(Request $request): RedirectResponse
+    public function submitIndex(Request $request): RedirectResponse
     {
         $validated = $request->validate([
             'index_number' => ['required', 'string', 'max:255'],
@@ -106,43 +57,92 @@ class StudentLoginController extends Controller
         $user = User::query()
             ->where('index_number', $indexNumber)
             ->where('role', 'student')
+            ->where('is_active', true)
             ->first();
 
-        if ($user === null || ! $user->is_active) {
-            return back()
-                ->withInput($request->only('index_number'))
-                ->withErrors(['index_number' => __('No active student account matches this index number.')]);
-        }
-
-        if ($user->student_onboarded_at !== null) {
+        if ($user === null) {
             return back()
                 ->withInput($request->only('index_number'))
                 ->withErrors([
-                    'index_number' => __('You have already completed setup. Sign in with your index number or phone and password.'),
+                    'index_number' => $this->genericIndexFailureMessage(),
                 ]);
         }
 
-        $request->session()->forget([
-            'student_login_pending_phone_digits',
-            'student_first_login_needs_phone',
-        ]);
-
-        $request->session()->put('student_login_user_id', $user->id);
-
-        $existingPhone = StudentPhone::normalize($user->phone);
-        if ($existingPhone !== null) {
-            return $this->issueOtpAndRedirect($request, $user, $existingPhone);
+        if ($user->student_onboarded_at === null) {
+            return $this->beginFirstTimeFromVerifiedStudent($request, $user);
         }
 
-        $request->session()->put('student_first_login_needs_phone', true);
+        $this->clearFirstLoginSession($request);
+        $request->session()->put(self::SESSION_RETURNING_INDEX, $indexNumber);
 
-        return redirect()->route('login.first-time.phone');
+        return redirect()->route('login.password');
+    }
+
+    public function createPasswordStep(Request $request): View|RedirectResponse
+    {
+        if (! $request->session()->has(self::SESSION_RETURNING_INDEX)) {
+            return redirect()->route('login');
+        }
+
+        return view('auth.login-password', [
+            'index_number' => (string) $request->session()->get(self::SESSION_RETURNING_INDEX),
+        ]);
+    }
+
+    /**
+     * Returning students: password using index number held in session.
+     */
+    public function completeReturningLogin(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'password' => ['required', 'string', 'max:255'],
+            'remember' => ['sometimes', 'boolean'],
+        ]);
+
+        $indexNumber = $request->session()->get(self::SESSION_RETURNING_INDEX);
+        if (! is_string($indexNumber) || $indexNumber === '') {
+            return redirect()->route('login');
+        }
+
+        $user = User::query()
+            ->where('index_number', $indexNumber)
+            ->where('role', 'student')
+            ->where('is_active', true)
+            ->first();
+
+        if ($user === null || $user->student_onboarded_at === null) {
+            $request->session()->forget(self::SESSION_RETURNING_INDEX);
+
+            return redirect()->route('login')
+                ->withErrors(['index_number' => $this->genericIndexFailureMessage()]);
+        }
+
+        if (! Hash::check($validated['password'], $user->password)) {
+            return back()->withErrors([
+                'password' => __('These credentials do not match our records.'),
+            ]);
+        }
+
+        Auth::login($user, (bool) ($validated['remember'] ?? false));
+        $request->session()->forget(self::SESSION_RETURNING_INDEX);
+        $request->session()->regenerate();
+
+        return redirect()->intended(route('dashboard', absolute: false));
+    }
+
+    public function createFirstTimePhone(Request $request): View|RedirectResponse
+    {
+        if (! $request->session()->get('student_first_login_needs_phone')) {
+            return redirect()->route('login');
+        }
+
+        return view('auth.login-first-time-phone');
     }
 
     public function storeFirstTimePhone(Request $request): RedirectResponse
     {
         if (! $request->session()->get('student_first_login_needs_phone') || ! $request->session()->has('student_login_user_id')) {
-            return redirect()->route('login.first-time')
+            return redirect()->route('login')
                 ->withErrors(['index_number' => __('Your session expired. Please start again.')]);
         }
 
@@ -159,7 +159,7 @@ class StudentLoginController extends Controller
         if ($user === null || $user->role !== 'student' || ! $user->is_active || $user->student_onboarded_at !== null) {
             $this->clearFirstLoginSession($request);
 
-            return redirect()->route('login.first-time')
+            return redirect()->route('login')
                 ->withErrors(['index_number' => __('Your session expired. Please start again.')]);
         }
 
@@ -171,7 +171,7 @@ class StudentLoginController extends Controller
     public function showOtp(Request $request): View|RedirectResponse
     {
         if (! $request->session()->has('student_login_user_id') || ! $request->session()->has('student_login_otp_hash')) {
-            return redirect()->route('login.first-time');
+            return redirect()->route('login');
         }
 
         return view('auth.login-otp');
@@ -184,7 +184,7 @@ class StudentLoginController extends Controller
         ]);
 
         if (! $request->session()->has('student_login_user_id')) {
-            return redirect()->route('login.first-time')->withErrors([
+            return redirect()->route('login')->withErrors([
                 'index_number' => __('Your session expired. Please start again.'),
             ]);
         }
@@ -193,7 +193,7 @@ class StudentLoginController extends Controller
         if ($expiresAt === null || now()->timestamp > $expiresAt) {
             $this->clearOtpPayload($request);
 
-            return redirect()->route('login.first-time')->withErrors([
+            return redirect()->route('login')->withErrors([
                 'index_number' => __('The code expired. Please try again.'),
             ]);
         }
@@ -202,7 +202,7 @@ class StudentLoginController extends Controller
         if ($attempts >= self::OTP_MAX_ATTEMPTS) {
             $this->clearFirstLoginSession($request);
 
-            return redirect()->route('login.first-time')->withErrors([
+            return redirect()->route('login')->withErrors([
                 'index_number' => __('Too many incorrect attempts. Please start again.'),
             ]);
         }
@@ -221,14 +221,17 @@ class StudentLoginController extends Controller
         $this->clearOtpPayload($request);
 
         if ($user === null || $user->role !== 'student' || ! $user->is_active) {
-            return redirect()->route('login.first-time')->withErrors([
+            return redirect()->route('login')->withErrors([
                 'index_number' => __('Unable to complete verification.'),
             ]);
         }
 
         if ($user->student_onboarded_at !== null) {
-            return redirect()->route('login')
-                ->withErrors(['identifier' => __('Use your password to sign in.')]);
+            $this->clearFirstLoginSession($request);
+            $request->session()->put(self::SESSION_RETURNING_INDEX, (string) $user->index_number);
+
+            return redirect()->route('login.password')
+                ->with('status', __('Your account is ready. Enter your password to continue.'));
         }
 
         $pending = $request->session()->pull('student_login_pending_phone_digits');
@@ -240,6 +243,27 @@ class StudentLoginController extends Controller
         $request->session()->put('student_onboarding_user_id', $user->id);
 
         return redirect()->route('student.onboarding');
+    }
+
+    private function beginFirstTimeFromVerifiedStudent(Request $request, User $user): RedirectResponse
+    {
+        $request->session()->forget(self::SESSION_RETURNING_INDEX);
+
+        $request->session()->forget([
+            'student_login_pending_phone_digits',
+            'student_first_login_needs_phone',
+        ]);
+
+        $request->session()->put('student_login_user_id', $user->id);
+
+        $existingPhone = StudentPhone::normalize($user->phone);
+        if ($existingPhone !== null) {
+            return $this->issueOtpAndRedirect($request, $user, $existingPhone);
+        }
+
+        $request->session()->put('student_first_login_needs_phone', true);
+
+        return redirect()->route('login.first-time.phone');
     }
 
     private function issueOtpAndRedirect(Request $request, User $user, string $phoneDigits): RedirectResponse
@@ -290,5 +314,10 @@ class StudentLoginController extends Controller
             'student_login_pending_phone_digits',
             'student_first_login_needs_phone',
         ]);
+    }
+
+    private function genericIndexFailureMessage(): string
+    {
+        return __('We could not continue with those details. Check your index number and try again, or contact your coordinator.');
     }
 }

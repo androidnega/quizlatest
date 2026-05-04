@@ -27,7 +27,7 @@ class StaffSessionController extends Controller
             $request->session()->regenerateToken();
 
             throw ValidationException::withMessages([
-                'email' => __('Students must sign in using index number on the main login page.'),
+                'email' => __('Students must sign in using their index number on the main student login page.'),
             ]);
         }
 

@@ -26,7 +26,7 @@
         </div>
 
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <a href="{{ route('login.first-time') }}" class="qs-btn-secondary justify-center px-4 py-2.5 text-sm font-semibold sm:inline-flex sm:w-auto">
+            <a href="{{ route('login', ['restart' => 1]) }}" class="qs-btn-secondary justify-center px-4 py-2.5 text-sm font-semibold sm:inline-flex sm:w-auto">
                 {{ __('Back') }}
             </a>
             <button type="submit" class="qs-btn-primary flex-1 justify-center py-2.5 text-sm font-semibold sm:flex-none sm:min-w-[9rem]">
@@ -36,7 +36,7 @@
     </form>
 
     <p class="mt-8 border-t border-qs-soft pt-6 text-center text-sm text-qs-muted">
-        <a href="{{ route('login') }}" class="qs-link font-medium text-qs-text">{{ __('Already finished setup? Sign in with password') }}</a>
+        <a href="{{ route('login', ['restart' => 1]) }}" class="qs-link font-medium text-qs-text">{{ __('Already finished setup? Start from index number') }}</a>
     </p>
 
     <p class="mt-4 text-center text-sm text-qs-muted">

@@ -17,7 +17,7 @@ class StudentOnboardingController extends Controller
     {
         $user = $this->resolveOnboardingUser($request);
         if ($user === null) {
-            return redirect()->route('login.first-time')
+            return redirect()->route('login')
                 ->withErrors(['index_number' => __('Your setup session expired. Start again with your index number.')]);
         }
 
@@ -30,7 +30,7 @@ class StudentOnboardingController extends Controller
     {
         $user = $this->resolveOnboardingUser($request);
         if ($user === null) {
-            return redirect()->route('login.first-time')
+            return redirect()->route('login')
                 ->withErrors(['index_number' => __('Your setup session expired. Start again with your index number.')]);
         }
 

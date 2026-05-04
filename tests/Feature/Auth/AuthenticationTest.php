@@ -11,17 +11,80 @@ class AuthenticationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_login_screen_can_be_rendered(): void
+    public function test_login_screen_shows_only_index_and_continue(): void
     {
         $response = $this->get('/login');
 
         $response->assertStatus(200);
-        $response->assertSee(__('Index number or phone'), false);
-        $response->assertSee(__('Password'), false);
-        $response->assertSee(__('First-time sign-in'), false);
+        $response->assertSee(__('Index number'), false);
+        $response->assertSee(__('Continue'), false);
+        $response->assertDontSee('type="password"', false);
+        $response->assertDontSee(__('First-time sign-in'), false);
     }
 
-    public function test_first_time_flow_sends_otp_and_redirects_to_onboarding_after_verify(): void
+    public function test_legacy_first_time_login_url_redirects_to_login(): void
+    {
+        $this->get('/login/first-time')
+            ->assertRedirect(route('login', absolute: false));
+    }
+
+    public function test_onboarded_student_index_submits_to_password_step(): void
+    {
+        User::factory()->create([
+            'role' => 'student',
+            'index_number' => 'BCS/2099/010',
+            'is_active' => true,
+            'student_onboarded_at' => now(),
+        ]);
+
+        $this->post('/login', [
+            'index_number' => 'BCS/2099/010',
+        ])
+            ->assertRedirect(route('login.password', absolute: false));
+
+        $this->get('/login/password')
+            ->assertOk()
+            ->assertSee('BCS/2099/010', false);
+    }
+
+    public function test_returning_student_can_login_with_password_after_index_step(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'student',
+            'index_number' => 'BCS/2099/010',
+            'is_active' => true,
+            'student_onboarded_at' => now(),
+        ]);
+
+        $this->post('/login', ['index_number' => 'BCS/2099/010'])
+            ->assertRedirect(route('login.password', absolute: false));
+
+        $this->post('/login/password', [
+            'password' => 'password',
+            'remember' => '1',
+        ])
+            ->assertRedirect(route('dashboard', absolute: false));
+
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_wrong_password_after_index_step_fails_cleanly(): void
+    {
+        User::factory()->create([
+            'role' => 'student',
+            'index_number' => 'BCS/2099/077',
+            'is_active' => true,
+            'student_onboarded_at' => now(),
+        ]);
+
+        $this->post('/login', ['index_number' => 'BCS/2099/077']);
+        $this->post('/login/password', ['password' => 'wrong-password'])
+            ->assertSessionHasErrors('password');
+
+        $this->assertGuest();
+    }
+
+    public function test_non_onboarded_student_index_redirects_to_otp_flow(): void
     {
         $user = User::factory()->create([
             'role' => 'student',
@@ -32,7 +95,7 @@ class AuthenticationTest extends TestCase
             'email_verified_at' => null,
         ]);
 
-        $this->post('/login/first-time', [
+        $this->post('/login', [
             'index_number' => 'BCS/2099/001',
         ])
             ->assertRedirect(route('login.otp', absolute: false));
@@ -45,6 +108,22 @@ class AuthenticationTest extends TestCase
         $this->assertSame($user->id, session('student_onboarding_user_id'));
     }
 
+    public function test_legacy_post_first_time_route_still_submits_index(): void
+    {
+        User::factory()->create([
+            'role' => 'student',
+            'index_number' => 'BCS/2099/001',
+            'phone' => '+233241112233',
+            'is_active' => true,
+            'student_onboarded_at' => null,
+        ]);
+
+        $this->post('/login/first-time', [
+            'index_number' => 'BCS/2099/001',
+        ])
+            ->assertRedirect(route('login.otp', absolute: false));
+    }
+
     public function test_first_time_without_saved_phone_redirects_to_phone_step(): void
     {
         User::factory()->create([
@@ -55,7 +134,7 @@ class AuthenticationTest extends TestCase
             'student_onboarded_at' => null,
         ]);
 
-        $this->post('/login/first-time', [
+        $this->post('/login', [
             'index_number' => 'BCS/2099/099',
         ])
             ->assertRedirect(route('login.first-time.phone', absolute: false));
@@ -71,7 +150,7 @@ class AuthenticationTest extends TestCase
             'student_onboarded_at' => null,
         ]);
 
-        $this->post('/login/first-time', ['index_number' => 'BCS/2099/088']);
+        $this->post('/login', ['index_number' => 'BCS/2099/088']);
         $this->post('/login/first-time/phone', ['phone' => '+233241112233'])
             ->assertRedirect(route('login.otp', absolute: false));
 
@@ -82,46 +161,26 @@ class AuthenticationTest extends TestCase
         $this->assertSame('233241112233', $user->phone);
     }
 
-    public function test_returning_students_can_sign_in_with_password(): void
+    public function test_unknown_index_number_is_rejected_without_specific_reason(): void
     {
-        $user = User::factory()->create([
-            'role' => 'student',
-            'index_number' => 'BCS/2099/010',
-            'email' => 'returning@example.com',
-            'is_active' => true,
-        ]);
-
         $this->post('/login', [
-            'identifier' => 'BCS/2099/010',
-            'password' => 'password',
-        ])
-            ->assertRedirect(route('dashboard', absolute: false));
-
-        $this->assertAuthenticatedAs($user);
-    }
-
-    public function test_returning_students_can_sign_in_with_phone(): void
-    {
-        $user = User::factory()->create([
-            'role' => 'student',
-            'index_number' => 'BCS/2099/011',
-            'phone' => '233241112233',
-            'is_active' => true,
-        ]);
-
-        $this->post('/login', [
-            'identifier' => '+233241112233',
-            'password' => 'password',
-        ])
-            ->assertRedirect(route('dashboard', absolute: false));
-
-        $this->assertAuthenticatedAs($user);
-    }
-
-    public function test_unknown_index_number_is_rejected_on_first_time(): void
-    {
-        $this->post('/login/first-time', [
             'index_number' => 'DOES/NOT/EXIST',
+        ])
+            ->assertSessionHasErrors('index_number');
+
+        $this->assertGuest();
+    }
+
+    public function test_coordinator_index_cannot_be_used_on_student_login(): void
+    {
+        User::factory()->create([
+            'role' => 'coordinator',
+            'index_number' => 'COORD/2099/001',
+            'is_active' => true,
+        ]);
+
+        $this->post('/login', [
+            'index_number' => 'COORD/2099/001',
         ])
             ->assertSessionHasErrors('index_number');
 
@@ -138,30 +197,24 @@ class AuthenticationTest extends TestCase
             'student_onboarded_at' => null,
         ]);
 
-        $this->post('/login/first-time', ['index_number' => 'BCS/2099/002']);
+        $this->post('/login', ['index_number' => 'BCS/2099/002']);
         $this->post('/login/otp', ['otp' => '000000'])
             ->assertSessionHasErrors('otp');
 
         $this->assertGuest();
     }
 
-    public function test_password_login_rejects_accounts_pending_onboarding(): void
+    public function test_onboarded_student_cannot_skip_to_password_without_index_session(): void
     {
         User::factory()->create([
             'role' => 'student',
             'index_number' => 'BCS/2099/003',
             'is_active' => true,
-            'student_onboarded_at' => null,
-            'password' => 'temporary-password-123',
+            'student_onboarded_at' => now(),
         ]);
 
-        $this->post('/login', [
-            'identifier' => 'BCS/2099/003',
-            'password' => 'temporary-password-123',
-        ])
-            ->assertSessionHasErrors('identifier');
-
-        $this->assertGuest();
+        $this->get('/login/password')
+            ->assertRedirect(route('login', absolute: false));
     }
 
     public function test_staff_login_rejects_student_accounts(): void
