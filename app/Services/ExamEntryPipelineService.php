@@ -21,7 +21,7 @@ class ExamEntryPipelineService
         private readonly SystemSettingsService $systemSettings,
         private readonly SystemExamPolicyService $examPolicy,
         private readonly ExamOtpService $examOtp,
-        private readonly RedisHealthService $redisHealth,
+        private readonly ExamRuntimeInfraGate $infraGate,
         private readonly ExamRedisService $examRedis,
     ) {}
 
@@ -85,7 +85,7 @@ class ExamEntryPipelineService
 
             // 4. OTP — backend must be reachable when OTP is enabled
             if ($this->examPolicy->isOtpEnabled()) {
-                if (! $this->redisHealth->isAvailable() && ! config('exam_otp.fallback_enabled')) {
+                if (! $this->infraGate->examOtpStorageOperational()) {
                     return [
                         'status' => 'service_unavailable',
                         'message' => 'Verification service temporarily unavailable. Try again.',

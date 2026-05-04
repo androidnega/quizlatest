@@ -118,9 +118,13 @@ async function main() {
     const sessionId = meta('exam-session-id');
     const examId = Number(meta('exam-id'));
     const studentId = Number(meta('student-id'));
+    const enableLiveSockets = meta('qs-enable-live-sockets') === '1';
+    const allowPollingFallback = meta('qs-allow-polling-fallback') === '1';
     if (!sessionId || !examId) {
         return;
     }
+
+    const effectivePollMs = enableLiveSockets ? POLL_MS : 8000;
 
     const els = {
         title: document.getElementById('exam-title'),
@@ -892,11 +896,22 @@ async function main() {
         startTimerClock();
     }
 
-    window.setInterval(() => void fetchState().catch(() => {}), POLL_MS);
+    window.setInterval(() => void fetchState().catch(() => {}), effectivePollMs);
 
-    const echo = createProctoringEcho();
-    if (echo) {
-        examStateEngine.attachRealtime(echo, sessionId, axios);
+    let echo = null;
+    if (enableLiveSockets) {
+        echo = createProctoringEcho();
+        if (echo) {
+            examStateEngine.attachRealtime(echo, sessionId, axios);
+            const conn = echo?.connector?.pusher?.connection;
+            if (conn && allowPollingFallback) {
+                const onSocketIssue = () => {
+                    void fetchState().catch(() => {});
+                };
+                conn.bind('error', onSocketIssue);
+                conn.bind('unavailable', onSocketIssue);
+            }
+        }
     }
 
     try {

@@ -1,4 +1,7 @@
-@extends('layouts.exam-runtime')
+@extends('layouts.exam-runtime', [
+    'enableLiveSockets' => $enableLiveSockets,
+    'allowPollingFallback' => $allowPollingFallback,
+])
 
 @section('content')
 <div id="exam-app" class="min-h-screen flex flex-col">

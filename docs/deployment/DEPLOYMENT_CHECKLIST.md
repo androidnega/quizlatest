@@ -127,7 +127,30 @@ There is **no** `Schedule::` definition in this repository yet. When scheduled t
 
 Until then, cron is optional.
 
-## 12. Smoke tests (manual)
+## 12. cPanel / shared hosting (no Supervisor, optional Redis / Reverb)
+
+Typical cPanel stacks provide **MySQL**, **PHP**, **cron**, and a document root. They often **do not** provide Redis, long-running WebSocket daemons, or systemd/Supervisor.
+
+1. **Build assets locally or on a build machine** (Node LTS): `npm ci && npm run build`.
+2. **Upload the Laravel application** and ensure **`public/build`** (including **`public/build/manifest.json`**) is deployed with the release. Production does **not** use `npm run dev`.
+3. **Set the hosting account document root** to the Laravel **`public/`** directory (not the repository root).
+4. **Configure `.env`**: `APP_URL`, database (`DB_*`), `APP_KEY`, mail, session. Set **`QUEUE_CONNECTION=database`** (or `sync`) if no Redis worker is available.
+5. **Redis optional**: In **Admin → System settings → Infrastructure**, you can disable Redis and enable fallbacks so exams use **database / file cache** and Laravel rate limiting where applicable. If Redis is absent, ensure `CACHE_STORE` / `SESSION_DRIVER` use drivers available on the host (often `file` or `database`).
+6. **Reverb optional**: If you cannot run `php artisan reverb:start` continuously, disable **live sockets** in admin settings and enable **polling fallback**. The student exam UI will poll **`/exam-sessions/{session}/state`** instead of WebSockets.
+7. **Migrations and caches** (SSH or terminal in cPanel):
+
+   ```bash
+   php artisan migrate --force
+   php artisan config:cache
+   php artisan route:cache
+   php artisan view:cache
+   ```
+
+8. **Cron**: When `Schedule::` tasks exist, add the standard `schedule:run` cron entry pointing at the project path.
+
+Use **Admin → Dashboard** platform health to confirm database, storage, Vite manifest, Redis mode, and live socket hints after deploy.
+
+## 13. Smoke tests (manual)
 
 - `/up` health check
 - Login (admin / coordinator / student)
@@ -136,7 +159,7 @@ Until then, cron is optional.
 - Proctoring evidence route (authorized staff only)
 - Course material download (student / examiner)
 
-## 13. Post-deploy
+## 14. Post-deploy
 
 - Rotate build artifacts on old releases
 - Confirm log rotation (see [INFRASTRUCTURE_REQUIREMENTS.md](./INFRASTRUCTURE_REQUIREMENTS.md))

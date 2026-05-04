@@ -8,14 +8,15 @@
     }
     :root {
         --qs-bg: #ffffff;
-        --qs-card: #f4f7fb;
-        --qs-surface: #f4f7fb;
-        --qs-text: #0f172a;
-        --qs-muted: #64748b;
-        --qs-soft: #cbd5e1;
-        --qs-accent: #f2a650;
-        --qs-danger: #b42318;
-        --qs-danger-soft: #fbecec;
+        --qs-primary: #166534;
+        --qs-soft: #dce8e0;
+        --qs-card: #faf7f2;
+        --qs-surface: #faf7f2;
+        --qs-text: #0f2918;
+        --qs-muted: #5c6b62;
+        --qs-accent: #166534;
+        --qs-danger: #9f1239;
+        --qs-danger-soft: #ffe4e9;
     }
 
     body {
@@ -34,7 +35,7 @@
     }
 
     .qs-link {
-        @apply text-qs-text underline-offset-2 hover:underline;
+        @apply text-qs-primary underline-offset-2 hover:underline;
     }
 
     .qs-card {
@@ -42,7 +43,7 @@
     }
 
     .qs-btn-primary {
-        @apply inline-flex items-center justify-center rounded-lg border border-qs-accent bg-qs-accent px-4 py-2 text-sm font-semibold text-qs-text shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-qs-accent focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+        @apply inline-flex items-center justify-center rounded-lg border border-qs-primary bg-qs-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-qs-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
     }
 
     .qs-btn-secondary {
@@ -58,7 +59,7 @@
     }
 
     .qs-input {
-        @apply mt-1 block w-full rounded-lg border border-qs-soft bg-qs-bg px-3 py-2 text-sm text-qs-text shadow-sm placeholder:text-qs-muted/70 focus:border-qs-accent focus:outline-none focus:ring-2 focus:ring-qs-accent/40;
+        @apply mt-1 block w-full rounded-lg border border-qs-soft bg-qs-bg px-3 py-2 text-sm text-qs-text shadow-sm placeholder:text-qs-muted/70 focus:border-qs-primary focus:outline-none focus:ring-2 focus:ring-qs-primary/40;
     }
 
     .qs-table-wrap {

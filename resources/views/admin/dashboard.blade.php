@@ -21,45 +21,114 @@
         </div>
     </div>
 
-    <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <div class="qs-surface rounded-xl p-5">
-            <p class="text-sm text-qs-muted">{{ __('Active exam sessions (Redis)') }}</p>
-            <p class="mt-2 text-3xl font-semibold text-qs-text">{{ $activeExamSessions }}</p>
-            <p class="mt-1 text-xs text-qs-muted">{{ __('Key: qs:exam_active_sessions:global') }}</p>
-        </div>
-        <div class="qs-surface rounded-xl p-5">
-            <p class="text-sm text-qs-muted">{{ __('Redis') }}</p>
-            <p class="mt-2 text-lg font-semibold {{ $redisAvailable ? 'text-qs-text' : 'text-qs-danger' }}">
-                {{ $redisAvailable ? __('Connected') : __('Unavailable') }}
-            </p>
-            <p class="mt-1 text-xs text-qs-muted">{{ __('Runtime counters and OTP depend on Redis health.') }}</p>
-        </div>
-        <div class="qs-surface rounded-xl p-5">
-            <p class="text-sm text-qs-muted">{{ __('SMS / OTP') }}</p>
-            <p class="mt-2 text-sm font-semibold text-qs-text">{{ __('OTP') }}: {{ $otpEnabled ? __('On') : __('Off') }}</p>
-            <p class="mt-1 text-sm font-semibold text-qs-text">{{ __('SMS channel') }}: {{ $smsEnabled ? __('On') : __('Off') }}</p>
-        </div>
-        <div class="qs-surface rounded-xl p-5">
-            <p class="text-sm text-qs-muted">{{ __('Private storage (sensitive)') }}</p>
-            <p class="mt-2 text-lg font-semibold text-qs-text">
-                @if ($privateStorageBytes !== null)
-                    {{ \Illuminate\Support\Number::fileSize($privateStorageBytes, 1) }}
-                @else
-                    —
-                @endif
-            </p>
-            <p class="mt-1 text-xs text-qs-muted">{{ __('Approximate size of the private disk (course materials, proctoring evidence, portraits).') }}</p>
-        </div>
-        <div class="qs-surface rounded-xl p-5">
-            <p class="text-sm text-qs-muted">{{ __('Public storage (legacy)') }}</p>
-            <p class="mt-2 text-lg font-semibold text-qs-text">
-                @if ($publicStorageBytes !== null)
-                    {{ \Illuminate\Support\Number::fileSize($publicStorageBytes, 1) }}
-                @else
-                    —
-                @endif
-            </p>
-            <p class="mt-1 text-xs text-qs-muted">{{ __('Public disk; may still hold older uploads until migrated.') }}</p>
+    <div class="mt-6">
+        <h3 class="text-base font-semibold text-qs-text">{{ __('Platform health') }}</h3>
+        <p class="mt-1 text-sm text-qs-muted">{{ __('No secrets are shown. Values reflect this server only.') }}</p>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="qs-surface rounded-xl p-5">
+                <p class="text-sm text-qs-muted">{{ __('Active exam sessions') }}</p>
+                <p class="mt-2 text-2xl font-semibold text-qs-text">
+                    @if ($activeSessions['value'] !== null)
+                        {{ $activeSessions['value'] }}
+                    @else
+                        {{ __('Unavailable') }}
+                    @endif
+                </p>
+                <p class="mt-1 text-xs text-qs-muted">
+                    @if ($activeSessions['source'] === 'redis')
+                        {{ __('Source: Redis counter') }}
+                    @elseif ($activeSessions['source'] === 'database_estimate')
+                        {{ __('Source: database estimate (active + paused)') }}
+                    @else
+                        {{ __('Source: not available') }}
+                    @endif
+                </p>
+            </div>
+            <div class="qs-surface rounded-xl p-5">
+                <p class="text-sm text-qs-muted">{{ __('Redis') }}</p>
+                <p class="mt-2 text-lg font-semibold text-qs-text">
+                    @if ($redisMode === 'connected')
+                        {{ __('Enabled and connected') }}
+                    @elseif ($redisMode === 'fallback_active')
+                        {{ __('Fallback active (cache / database)') }}
+                    @elseif ($redisMode === 'disabled_by_admin')
+                        {{ __('Disabled by admin') }}
+                    @else
+                        {{ __('Unavailable') }}
+                    @endif
+                </p>
+                <p class="mt-1 text-xs text-qs-muted">{{ __('Ping') }}: {{ $redisPing ? __('OK') : __('Fail') }}</p>
+            </div>
+            <div class="qs-surface rounded-xl p-5">
+                <p class="text-sm text-qs-muted">{{ __('Live sockets (Reverb)') }}</p>
+                <p class="mt-2 text-lg font-semibold text-qs-text">
+                    @if ($liveSocketsMode === 'enabled_configured')
+                        {{ __('Enabled and configured') }}
+                    @elseif ($liveSocketsMode === 'disabled_by_admin')
+                        {{ __('Disabled by admin') }}
+                    @else
+                        {{ __('Misconfigured') }}
+                    @endif
+                </p>
+                <p class="mt-1 text-xs text-qs-muted">
+                    @if ($liveSocketsClientHint === 'fallback_polling_available')
+                        {{ __('Students can use polling fallback.') }}
+                    @elseif ($liveSocketsClientHint === 'polling_available')
+                        {{ __('Polling is available if sockets fail.') }}
+                    @else
+                        {{ __('Polling fallback is disabled in settings.') }}
+                    @endif
+                </p>
+            </div>
+            <div class="qs-surface rounded-xl p-5">
+                <p class="text-sm text-qs-muted">{{ __('Vite build') }}</p>
+                <p class="mt-2 text-lg font-semibold {{ $viteBuildPresent && $viteBuildDirPresent ? 'text-qs-text' : 'text-qs-danger' }}">
+                    {{ $viteBuildPresent && $viteBuildDirPresent ? __('Ready') : __('Incomplete') }}
+                </p>
+                <p class="mt-1 text-xs text-qs-muted">
+                    {{ __('public/build') }}: {{ $viteBuildDirPresent ? __('exists') : __('missing') }};
+                    {{ __('manifest.json') }}: {{ $viteBuildPresent ? __('exists') : __('missing') }}
+                </p>
+                <p class="mt-1 text-xs text-qs-muted">{{ __('Run npm run build before production; deploy public/build.') }}</p>
+            </div>
+            <div class="qs-surface rounded-xl p-5">
+                <p class="text-sm text-qs-muted">{{ __('Database') }}</p>
+                <p class="mt-2 text-lg font-semibold {{ $dbConnected ? 'text-qs-text' : 'text-qs-danger' }}">
+                    {{ $dbConnected ? __('Connected') : __('Not connected') }}
+                </p>
+            </div>
+            <div class="qs-surface rounded-xl p-5">
+                <p class="text-sm text-qs-muted">{{ __('Private storage') }}</p>
+                <p class="mt-2 text-lg font-semibold {{ $privateWritable ? 'text-qs-text' : 'text-qs-danger' }}">
+                    {{ $privateWritable ? __('Writable') : __('Not writable') }}
+                </p>
+                <p class="mt-1 text-xs text-qs-muted">
+                    @if ($privateStorageBytes !== null)
+                        {{ \Illuminate\Support\Number::fileSize($privateStorageBytes, 1) }}
+                    @else
+                        —
+                    @endif
+                </p>
+            </div>
+            <div class="qs-surface rounded-xl p-5">
+                <p class="text-sm text-qs-muted">{{ __('Queue driver') }}</p>
+                <p class="mt-2 text-lg font-semibold text-qs-text">{{ $queueDriver }}</p>
+            </div>
+            <div class="qs-surface rounded-xl p-5">
+                <p class="text-sm text-qs-muted">{{ __('Public storage (legacy)') }}</p>
+                <p class="mt-2 text-lg font-semibold text-qs-text">
+                    @if ($publicStorageBytes !== null)
+                        {{ \Illuminate\Support\Number::fileSize($publicStorageBytes, 1) }}
+                    @else
+                        —
+                    @endif
+                </p>
+            </div>
+            <div class="qs-surface rounded-xl p-5">
+                <p class="text-sm text-qs-muted">{{ __('SMS / OTP policy') }}</p>
+                <p class="mt-2 text-sm font-semibold text-qs-text">{{ __('OTP') }}: {{ $otpEnabled ? __('On') : __('Off') }}</p>
+                <p class="mt-1 text-sm font-semibold text-qs-text">{{ __('SMS channel') }}: {{ $smsEnabled ? __('On') : __('Off') }}</p>
+            </div>
         </div>
     </div>
 

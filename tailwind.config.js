@@ -14,20 +14,20 @@ export default {
         extend: {
             colors: {
                 /**
-                 * QUIZSNAP official palette (single token system).
-                 * qs-bg: page chrome | qs-card / qs-surface: calm panels | qs-text: navy | qs-soft: blue-gray structure | qs-accent: gold
-                 * qs-muted: darker blue-gray for readable secondary typography (same family as qs-soft)
+                 * QUIZSNAP — white-first UI, deep green brand, soft sage structure, warm cream panels, rose danger.
+                 * `accent` mirrors `primary` for legacy classnames (qs-accent → same token).
                  */
                 qs: {
                     bg: '#FFFFFF',
-                    card: '#F4F7FB',
-                    surface: '#F4F7FB',
-                    text: '#0F172A',
-                    muted: '#64748B',
-                    soft: '#CBD5E1',
-                    accent: '#F2A650',
-                    danger: '#B42318',
-                    'danger-soft': '#FBECEC',
+                    primary: '#166534',
+                    accent: '#166534',
+                    soft: '#DCE8E0',
+                    card: '#FAF7F2',
+                    surface: '#FAF7F2',
+                    text: '#0F2918',
+                    muted: '#5C6B62',
+                    danger: '#9F1239',
+                    'danger-soft': '#FFE4E9',
                 },
             },
             fontFamily: {

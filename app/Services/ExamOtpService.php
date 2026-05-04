@@ -18,7 +18,7 @@ class ExamOtpService
 {
     public function __construct(
         private readonly ArkeselSmsService $sms,
-        private readonly RedisHealthService $redisHealth,
+        private readonly ExamRuntimeInfraGate $infraGate,
         private readonly SystemExamPolicyService $examPolicy,
         private readonly ExamRedisService $examRedis,
     ) {}
@@ -259,18 +259,24 @@ class ExamOtpService
 
     private function assertOtpBackendReady(): void
     {
-        if ($this->redisHealth->isAvailable()) {
-            return;
-        }
-        if ($this->fallbackEnabled()) {
+        if ($this->infraGate->examOtpStorageOperational()) {
             return;
         }
         $this->throwServiceUnavailable();
     }
 
-    private function fallbackEnabled(): bool
+    /**
+     * Laravel cache may be used for OTP when Redis is not the primary store or after Redis errors.
+     */
+    private function allowOtpCacheStorage(): bool
     {
-        return (bool) config('exam_otp.fallback_enabled', false);
+        return (bool) config('exam_otp.fallback_enabled', false)
+            || $this->infraGate->allowRedisFallback();
+    }
+
+    private function useRedisForOtpStorage(): bool
+    {
+        return $this->infraGate->useRedisForExamRuntime();
     }
 
     private function fallbackCache(): CacheRepository
@@ -291,7 +297,7 @@ class ExamOtpService
 
     private function storeGet(string $key): ?string
     {
-        if ($this->redisHealth->isAvailable()) {
+        if ($this->useRedisForOtpStorage()) {
             try {
                 $v = Redis::get($key);
                 if ($v !== null && $v !== false && $v !== '') {
@@ -299,20 +305,20 @@ class ExamOtpService
                 }
             } catch (\Throwable) {
                 Log::warning('OTP Redis unavailable');
-                if ($this->fallbackEnabled()) {
+                if ($this->allowOtpCacheStorage()) {
                     return $this->cacheGetOrNull($key);
                 }
                 $this->throwServiceUnavailable();
             }
 
-            if ($this->fallbackEnabled()) {
+            if ($this->allowOtpCacheStorage()) {
                 return $this->cacheGetOrNull($key);
             }
 
             return null;
         }
 
-        if ($this->fallbackEnabled()) {
+        if ($this->allowOtpCacheStorage()) {
             return $this->cacheGetOrNull($key);
         }
 
@@ -328,14 +334,14 @@ class ExamOtpService
 
     private function storeSetex(string $key, int $ttlSeconds, string $value): void
     {
-        if ($this->redisHealth->isAvailable()) {
+        if ($this->useRedisForOtpStorage()) {
             try {
                 Redis::setex($key, $ttlSeconds, $value);
 
                 return;
             } catch (\Throwable) {
                 Log::warning('OTP Redis unavailable');
-                if ($this->fallbackEnabled()) {
+                if ($this->allowOtpCacheStorage()) {
                     $this->fallbackCache()->put($key, $value, $ttlSeconds);
 
                     return;
@@ -343,7 +349,7 @@ class ExamOtpService
                 $this->throwServiceUnavailable();
             }
         }
-        if ($this->fallbackEnabled()) {
+        if ($this->allowOtpCacheStorage()) {
             $this->fallbackCache()->put($key, $value, $ttlSeconds);
 
             return;
@@ -356,20 +362,20 @@ class ExamOtpService
      */
     private function storeSetNxEx(string $key, string $value, int $ttlSeconds): bool
     {
-        if ($this->redisHealth->isAvailable()) {
+        if ($this->useRedisForOtpStorage()) {
             try {
                 $result = Redis::set($key, $value, 'EX', $ttlSeconds, 'NX');
 
                 return $result === true || $result === 'OK' || $result === 1;
             } catch (\Throwable) {
                 Log::warning('OTP Redis unavailable');
-                if ($this->fallbackEnabled()) {
+                if ($this->allowOtpCacheStorage()) {
                     return $this->fallbackCache()->add($key, $value, $ttlSeconds);
                 }
                 $this->throwServiceUnavailable();
             }
         }
-        if ($this->fallbackEnabled()) {
+        if ($this->allowOtpCacheStorage()) {
             return $this->fallbackCache()->add($key, $value, $ttlSeconds);
         }
         $this->throwServiceUnavailable();
@@ -377,19 +383,17 @@ class ExamOtpService
 
     private function storeDelBestEffort(string $key): void
     {
-        if ($this->redisHealth->isAvailable()) {
+        if ($this->useRedisForOtpStorage()) {
             try {
                 Redis::del($key);
             } catch (\Throwable) {
                 Log::warning('OTP Redis unavailable');
             }
         }
-        if ($this->fallbackEnabled()) {
-            try {
-                $this->fallbackCache()->forget($key);
-            } catch (\Throwable) {
-                //
-            }
+        try {
+            $this->fallbackCache()->forget($key);
+        } catch (\Throwable) {
+            //
         }
     }
 

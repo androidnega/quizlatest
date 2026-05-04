@@ -76,6 +76,15 @@ class AdminSettingsController extends Controller
             'lock_deepseek_api_key' => $this->systemSettings->isLocked('deepseek_api_key'),
             'lock_deepseek_model' => $this->systemSettings->isLocked('deepseek_model'),
             'lock_allow_examiner_practice_overview' => $this->systemSettings->isLocked('allow_examiner_practice_overview'),
+
+            'enable_redis_runtime' => $this->systemSettings->getBool('enable_redis_runtime', true),
+            'allow_redis_fallback' => $this->systemSettings->getBool('allow_redis_fallback', true),
+            'enable_live_sockets' => $this->systemSettings->getBool('enable_live_sockets', true),
+            'allow_polling_fallback' => $this->systemSettings->getBool('allow_polling_fallback', true),
+            'lock_enable_redis_runtime' => $this->systemSettings->isLocked('enable_redis_runtime'),
+            'lock_allow_redis_fallback' => $this->systemSettings->isLocked('allow_redis_fallback'),
+            'lock_enable_live_sockets' => $this->systemSettings->isLocked('enable_live_sockets'),
+            'lock_allow_polling_fallback' => $this->systemSettings->isLocked('allow_polling_fallback'),
         ]);
     }
 
@@ -138,6 +147,11 @@ class AdminSettingsController extends Controller
         $this->setBoolIfUnlocked('enable_ai_summary', $request->boolean('enable_ai_summary'), $user);
         $this->setBoolIfUnlocked('enable_ai_practice_quiz_generation', $request->boolean('enable_ai_practice_quiz_generation'), $user);
         $this->setBoolIfUnlocked('allow_examiner_practice_overview', $request->boolean('allow_examiner_practice_overview'), $user);
+
+        $this->setBoolIfUnlocked('enable_redis_runtime', $request->boolean('enable_redis_runtime'), $user);
+        $this->setBoolIfUnlocked('allow_redis_fallback', $request->boolean('allow_redis_fallback'), $user);
+        $this->setBoolIfUnlocked('enable_live_sockets', $request->boolean('enable_live_sockets'), $user);
+        $this->setBoolIfUnlocked('allow_polling_fallback', $request->boolean('allow_polling_fallback'), $user);
 
         if (array_key_exists('practice_quiz_daily_limit', $validated) && $validated['practice_quiz_daily_limit'] !== null && ! $this->systemSettings->isLocked('practice_quiz_daily_limit')) {
             $this->systemSettings->set('practice_quiz_daily_limit', (string) (int) $validated['practice_quiz_daily_limit'], $user);

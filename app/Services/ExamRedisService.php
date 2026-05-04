@@ -2,27 +2,26 @@
 
 namespace App\Services;
 
+use App\Models\ExamSession;
 use App\Models\Quiz;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
- * Redis-backed exam runtime primitives (locks, rate limits, cache, counters).
- * All operations are best-effort when Redis is unavailable except documented callers.
+ * Exam runtime primitives: Redis when enabled, otherwise Laravel cache / RateLimiter fallbacks (cPanel-friendly).
  */
 final class ExamRedisService
 {
     public function __construct(
-        private readonly RedisHealthService $redisHealth,
+        private readonly ExamRuntimeInfraGate $gate,
     ) {}
 
     public function acquireSessionStartLock(int $studentId, int $examId): bool
     {
-        if (! $this->redisHealth->isAvailable()) {
-            return true;
-        }
         if (! $this->validId($studentId) || ! $this->validId($examId)) {
             return false;
         }
@@ -30,27 +29,50 @@ final class ExamRedisService
         $key = $this->sessionLockKey($studentId, $examId);
         $ttl = max(1, (int) config('exam_redis.session_lock_ttl_seconds', 60));
 
-        try {
-            $r = Redis::set($key, '1', 'EX', $ttl, 'NX');
+        if ($this->gate->useRedisForExamRuntime()) {
+            try {
+                $r = Redis::set($key, '1', 'EX', $ttl, 'NX');
 
-            return $r === true || $r === 'OK' || $r === 1;
-        } catch (\Throwable $e) {
-            Log::warning('exam_redis.session_lock_failed', ['error' => $e->getMessage()]);
+                return $r === true || $r === 'OK' || $r === 1;
+            } catch (\Throwable $e) {
+                Log::warning('exam_redis.session_lock_failed', ['error' => $e->getMessage()]);
+                if ($this->gate->useCacheBackedExamRuntimeFallbacks()) {
+                    return Cache::add($key, '1', $ttl);
+                }
 
-            return true;
+                return true;
+            }
         }
+
+        if ($this->gate->useCacheBackedExamRuntimeFallbacks()) {
+            return Cache::add($key, '1', $ttl);
+        }
+
+        Log::warning('exam_runtime.session_lock_skipped', ['reason' => 'no_redis_no_fallback']);
+
+        return true;
     }
 
     public function releaseSessionStartLock(int $studentId, int $examId): void
     {
-        if (! $this->redisHealth->isAvailable() || ! $this->validId($studentId) || ! $this->validId($examId)) {
+        if (! $this->validId($studentId) || ! $this->validId($examId)) {
             return;
         }
 
+        $key = $this->sessionLockKey($studentId, $examId);
+
+        if ($this->gate->useRedisForExamRuntime()) {
+            try {
+                Redis::del($key);
+            } catch (\Throwable $e) {
+                Log::warning('exam_redis.session_lock_release_failed', ['error' => $e->getMessage()]);
+            }
+        }
+
         try {
-            Redis::del($this->sessionLockKey($studentId, $examId));
-        } catch (\Throwable $e) {
-            Log::warning('exam_redis.session_lock_release_failed', ['error' => $e->getMessage()]);
+            Cache::forget($key);
+        } catch (\Throwable) {
+            //
         }
     }
 
@@ -59,27 +81,44 @@ final class ExamRedisService
      */
     public function enforceExamStartRateLimit(int $studentId): void
     {
-        if (! $this->redisHealth->isAvailable() || ! $this->validId($studentId)) {
+        if (! $this->validId($studentId)) {
             return;
         }
 
         $window = max(1, (int) config('exam_redis.exam_start_window_seconds', 60));
         $max = max(1, (int) config('exam_redis.exam_start_max_attempts', 30));
-        $key = 'exam_start_attempts:'.$studentId;
+        $rlKey = 'exam_start_attempts:'.$studentId;
 
-        try {
-            $n = (int) Redis::incr($key);
-            if ($n === 1) {
-                Redis::expire($key, $window);
+        if ($this->gate->useRedisForExamRuntime()) {
+            try {
+                $n = (int) Redis::incr($rlKey);
+                if ($n === 1) {
+                    Redis::expire($rlKey, $window);
+                }
+                if ($n > $max) {
+                    abort(429, 'Too many exam start attempts. Try again shortly.');
+                }
+
+                return;
+            } catch (HttpException $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                Log::warning('exam_redis.start_rate_failed', ['error' => $e->getMessage()]);
+                if (! $this->gate->useCacheBackedExamRuntimeFallbacks()) {
+                    return;
+                }
             }
-            if ($n > $max) {
+        }
+
+        if ($this->gate->useCacheBackedExamRuntimeFallbacks()) {
+            if (! RateLimiter::attempt($rlKey, $max, fn () => true, $window)) {
                 abort(429, 'Too many exam start attempts. Try again shortly.');
             }
-        } catch (HttpException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
-            Log::warning('exam_redis.start_rate_failed', ['error' => $e->getMessage()]);
+
+            return;
         }
+
+        Log::warning('exam_runtime.start_rate_skipped', ['reason' => 'no_redis_no_fallback']);
     }
 
     /**
@@ -87,27 +126,44 @@ final class ExamRedisService
      */
     public function enforceOtpSendRateLimit(int $studentId): void
     {
-        if (! $this->redisHealth->isAvailable() || ! $this->validId($studentId)) {
+        if (! $this->validId($studentId)) {
             return;
         }
 
         $window = max(1, (int) config('exam_otp.send_window_seconds', 600));
         $max = max(1, (int) config('exam_otp.max_send_per_window', 5));
-        $key = 'exam_otp_send_rate:'.$studentId;
+        $rlKey = 'exam_otp_send_rate:'.$studentId;
 
-        try {
-            $n = (int) Redis::incr($key);
-            if ($n === 1) {
-                Redis::expire($key, $window);
+        if ($this->gate->useRedisForExamRuntime()) {
+            try {
+                $n = (int) Redis::incr($rlKey);
+                if ($n === 1) {
+                    Redis::expire($rlKey, $window);
+                }
+                if ($n > $max) {
+                    abort(429, 'Too many verification codes requested. Try again later.');
+                }
+
+                return;
+            } catch (HttpException $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                Log::warning('exam_redis.otp_send_rate_failed', ['error' => $e->getMessage()]);
+                if (! $this->gate->useCacheBackedExamRuntimeFallbacks()) {
+                    return;
+                }
             }
-            if ($n > $max) {
+        }
+
+        if ($this->gate->useCacheBackedExamRuntimeFallbacks()) {
+            if (! RateLimiter::attempt($rlKey, $max, fn () => true, $window)) {
                 abort(429, 'Too many verification codes requested. Try again later.');
             }
-        } catch (HttpException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
-            Log::warning('exam_redis.otp_send_rate_failed', ['error' => $e->getMessage()]);
+
+            return;
         }
+
+        Log::warning('exam_runtime.otp_send_rate_skipped', ['reason' => 'no_redis_no_fallback']);
     }
 
     /**
@@ -115,10 +171,6 @@ final class ExamRedisService
      */
     public function enforceProctoringEventBudget(string $sessionId, int $eventCount = 1): void
     {
-        if (! $this->redisHealth->isAvailable()) {
-            return;
-        }
-
         $sessionId = trim($sessionId);
         if ($sessionId === '' || ! Str::isUuid($sessionId)) {
             abort(422, 'Invalid session identifier.');
@@ -129,93 +181,120 @@ final class ExamRedisService
         $max = max(1, (int) config('exam_redis.proctoring_events_max_per_window', 200));
         $key = 'proctoring_event_flood:'.$sessionId;
 
-        try {
-            $n = 0;
-            for ($i = 0; $i < $eventCount; $i++) {
-                $n = (int) Redis::incr($key);
-                if ($n === 1) {
-                    Redis::expire($key, $window);
+        if ($this->gate->useRedisForExamRuntime()) {
+            try {
+                $n = 0;
+                for ($i = 0; $i < $eventCount; $i++) {
+                    $n = (int) Redis::incr($key);
+                    if ($n === 1) {
+                        Redis::expire($key, $window);
+                    }
+                }
+                if ($n > $max) {
+                    abort(429, 'Too many proctoring events. Slow down and try again.');
+                }
+
+                return;
+            } catch (HttpException $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                Log::warning('exam_redis.proctoring_flood_failed', ['error' => $e->getMessage()]);
+                if (! $this->gate->useCacheBackedExamRuntimeFallbacks()) {
+                    return;
                 }
             }
-            if ($n > $max) {
-                abort(429, 'Too many proctoring events. Slow down and try again.');
-            }
-        } catch (HttpException $e) {
-            throw $e;
-        } catch (\Throwable $e) {
-            Log::warning('exam_redis.proctoring_flood_failed', ['error' => $e->getMessage()]);
         }
+
+        if ($this->gate->useCacheBackedExamRuntimeFallbacks()) {
+            for ($i = 0; $i < $eventCount; $i++) {
+                if (! RateLimiter::attempt($key, $max, fn () => true, $window)) {
+                    abort(429, 'Too many proctoring events. Slow down and try again.');
+                }
+            }
+
+            return;
+        }
+
+        Log::warning('exam_runtime.proctoring_flood_skipped', ['reason' => 'no_redis_no_fallback']);
     }
 
     public function rememberQuiz(int $examId, \Closure $loader): Quiz
     {
-        if (! $this->validId($examId) || ! $this->redisHealth->isAvailable()) {
+        if (! $this->validId($examId)) {
             return $loader();
         }
 
         $key = 'exam_config:'.$examId;
+        $cacheKey = 'qs_exam_config:'.$examId;
         $ttl = max(60, (int) config('exam_redis.exam_config_ttl_seconds', 480));
 
-        try {
-            $raw = Redis::get($key);
-            if (is_string($raw) && $raw !== '') {
-                /** @var array<string, mixed>|null $row */
-                $row = json_decode($raw, true);
-                if (is_array($row) && isset($row['id']) && (int) $row['id'] === $examId) {
-                    return $this->quizFromCacheRow($row);
+        if ($this->gate->useRedisForExamRuntime()) {
+            try {
+                $raw = Redis::get($key);
+                if (is_string($raw) && $raw !== '') {
+                    /** @var array<string, mixed>|null $row */
+                    $row = json_decode($raw, true);
+                    if (is_array($row) && isset($row['id']) && (int) $row['id'] === $examId) {
+                        return $this->quizFromCacheRow($row);
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::warning('exam_redis.exam_config_read_failed', ['error' => $e->getMessage()]);
+            }
+
+            /** @var Quiz $quiz */
+            $quiz = $loader();
+
+            try {
+                Redis::setex($key, $ttl, json_encode($this->quizToRow($quiz), JSON_THROW_ON_ERROR));
+            } catch (\Throwable $e) {
+                Log::warning('exam_redis.exam_config_write_failed', ['error' => $e->getMessage()]);
+                if ($this->gate->useCacheBackedExamRuntimeFallbacks()) {
+                    Cache::put($cacheKey, $quiz, $ttl);
                 }
             }
-        } catch (\Throwable $e) {
-            Log::warning('exam_redis.exam_config_read_failed', ['error' => $e->getMessage()]);
+
+            return $quiz;
         }
 
-        /** @var Quiz $quiz */
-        $quiz = $loader();
+        if ($this->gate->useCacheBackedExamRuntimeFallbacks()) {
+            /** @var Quiz $cached */
+            $cached = Cache::remember($cacheKey, $ttl, $loader);
 
-        try {
-            $payload = [
-                'id' => (int) $quiz->id,
-                'university_id' => $quiz->university_id !== null ? (int) $quiz->university_id : null,
-                'course_id' => $quiz->course_id !== null ? (int) $quiz->course_id : null,
-                'created_by' => $quiz->created_by !== null ? (int) $quiz->created_by : null,
-                'title' => (string) $quiz->title,
-                'description' => $quiz->description,
-                'assessment_type' => $quiz->assessment_type,
-                'status' => $quiz->status,
-                'published_at' => $quiz->published_at?->toAtomString(),
-                'duration_minutes' => (int) ($quiz->duration_minutes ?? 0),
-                'total_marks' => $quiz->total_marks,
-                'questions_per_student' => $quiz->questions_per_student,
-                'randomize_questions' => (bool) ($quiz->randomize_questions ?? false),
-                'randomize_options' => (bool) ($quiz->randomize_options ?? false),
-                'proctoring_settings' => is_array($quiz->proctoring_settings) ? $quiz->proctoring_settings : [],
-                'start_time' => $quiz->start_time?->toAtomString(),
-                'end_time' => $quiz->end_time?->toAtomString(),
-            ];
-            Redis::setex($key, $ttl, json_encode($payload, JSON_THROW_ON_ERROR));
-        } catch (\Throwable $e) {
-            Log::warning('exam_redis.exam_config_write_failed', ['error' => $e->getMessage()]);
+            return $cached;
         }
 
-        return $quiz;
+        return $loader();
     }
 
     public function forgetExamConfig(int $examId): void
     {
-        if (! $this->redisHealth->isAvailable() || ! $this->validId($examId)) {
+        if (! $this->validId($examId)) {
             return;
         }
 
+        if ($this->gate->useRedisForExamRuntime()) {
+            try {
+                Redis::del('exam_config:'.$examId);
+            } catch (\Throwable $e) {
+                Log::warning('exam_redis.exam_config_forget_failed', ['error' => $e->getMessage()]);
+            }
+        }
+
         try {
-            Redis::del('exam_config:'.$examId);
-        } catch (\Throwable $e) {
-            Log::warning('exam_redis.exam_config_forget_failed', ['error' => $e->getMessage()]);
+            Cache::forget('qs_exam_config:'.$examId);
+        } catch (\Throwable) {
+            //
         }
     }
 
     public function incrementActiveSessions(int $examId): void
     {
-        if (! $this->redisHealth->isAvailable() || ! $this->validId($examId)) {
+        if (! $this->validId($examId)) {
+            return;
+        }
+
+        if (! $this->gate->useRedisForExamRuntime()) {
             return;
         }
 
@@ -229,7 +308,11 @@ final class ExamRedisService
 
     public function decrementActiveSessions(int $examId): void
     {
-        if (! $this->redisHealth->isAvailable() || ! $this->validId($examId)) {
+        if (! $this->validId($examId)) {
+            return;
+        }
+
+        if (! $this->gate->useRedisForExamRuntime()) {
             return;
         }
 
@@ -241,21 +324,45 @@ final class ExamRedisService
         }
     }
 
+    /**
+     * @deprecated Use activeSessionCountSnapshot for admin health.
+     */
     public function getGlobalActiveSessionCount(): int
     {
-        if (! $this->redisHealth->isAvailable()) {
-            return 0;
+        $snap = $this->activeSessionCountSnapshot();
+
+        return is_int($snap['value']) ? $snap['value'] : 0;
+    }
+
+    /**
+     * @return array{value: ?int, source: string}
+     */
+    public function activeSessionCountSnapshot(): array
+    {
+        if ($this->gate->useRedisForExamRuntime()) {
+            try {
+                $v = Redis::get('qs:exam_active_sessions:global');
+
+                return [
+                    'value' => is_numeric($v) ? max(0, (int) $v) : 0,
+                    'source' => 'redis',
+                ];
+            } catch (\Throwable $e) {
+                Log::warning('exam_redis.active_count_read_failed', ['error' => $e->getMessage()]);
+            }
         }
 
-        try {
-            $v = Redis::get('qs:exam_active_sessions:global');
-
-            return is_numeric($v) ? max(0, (int) $v) : 0;
-        } catch (\Throwable $e) {
-            Log::warning('exam_redis.active_count_read_failed', ['error' => $e->getMessage()]);
-
-            return 0;
+        if ($this->gate->useCacheBackedExamRuntimeFallbacks()) {
+            return [
+                'value' => ExamSession::query()->whereIn('status', ['active', 'paused'])->count(),
+                'source' => 'database_estimate',
+            ];
         }
+
+        return [
+            'value' => null,
+            'source' => 'unavailable',
+        ];
     }
 
     private function decrNonNegative(string $key): void
@@ -275,6 +382,29 @@ final class ExamRedisService
     private function validId(int $id): bool
     {
         return $id > 0 && $id < 2_147_483_647;
+    }
+
+    private function quizToRow(Quiz $quiz): array
+    {
+        return [
+            'id' => (int) $quiz->id,
+            'university_id' => $quiz->university_id !== null ? (int) $quiz->university_id : null,
+            'course_id' => $quiz->course_id !== null ? (int) $quiz->course_id : null,
+            'created_by' => $quiz->created_by !== null ? (int) $quiz->created_by : null,
+            'title' => (string) $quiz->title,
+            'description' => $quiz->description,
+            'assessment_type' => $quiz->assessment_type,
+            'status' => $quiz->status,
+            'published_at' => $quiz->published_at?->toAtomString(),
+            'duration_minutes' => (int) ($quiz->duration_minutes ?? 0),
+            'total_marks' => $quiz->total_marks,
+            'questions_per_student' => $quiz->questions_per_student,
+            'randomize_questions' => (bool) ($quiz->randomize_questions ?? false),
+            'randomize_options' => (bool) ($quiz->randomize_options ?? false),
+            'proctoring_settings' => is_array($quiz->proctoring_settings) ? $quiz->proctoring_settings : [],
+            'start_time' => $quiz->start_time?->toAtomString(),
+            'end_time' => $quiz->end_time?->toAtomString(),
+        ];
     }
 
     /**

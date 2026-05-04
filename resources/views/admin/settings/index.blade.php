@@ -30,12 +30,46 @@
             'deepseek_api_key' => 'DeepSeek API key',
             'deepseek_model' => 'DeepSeek model',
             'allow_examiner_practice_overview' => 'Allow examiner practice analytics',
+            'enable_redis_runtime' => 'Enable Redis for exam runtime',
+            'allow_redis_fallback' => 'Allow Redis fallbacks (cache / DB)',
+            'enable_live_sockets' => 'Enable live WebSockets (Reverb)',
+            'allow_polling_fallback' => 'Allow polling fallback for exam UI',
         ];
     @endphp
 
     <form method="post" action="{{ route('admin.settings.update') }}" class="space-y-8">
         @csrf
         @method('PUT')
+
+        <section class="qs-surface rounded-xl p-6 space-y-4">
+            <h3 class="text-base font-semibold text-qs-text">{{ __('Infrastructure (cPanel / shared hosting)') }}</h3>
+            <p class="text-sm text-qs-muted">
+                {{ __('If Redis is disabled or unavailable, the system will use database/cache fallback. This is slower but keeps exams running.') }}
+            </p>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="enable_redis_runtime" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
+                    @checked(old('enable_redis_runtime', $enable_redis_runtime)) @disabled($lock_enable_redis_runtime) />
+                {{ __('Use Redis for exam runtime (locks, counters, OTP store when available)') }}
+            </label>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="allow_redis_fallback" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
+                    @checked(old('allow_redis_fallback', $allow_redis_fallback)) @disabled($lock_allow_redis_fallback) />
+                {{ __('Allow Laravel cache / rate limiter fallbacks when Redis is off or down') }}
+            </label>
+            <p class="text-sm text-qs-muted">
+                {{ __('If live sockets are disabled or unavailable, the system will use polling.') }}
+            </p>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="enable_live_sockets" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
+                    @checked(old('enable_live_sockets', $enable_live_sockets)) @disabled($lock_enable_live_sockets) />
+                {{ __('Enable Laravel Echo / Reverb for live exam session updates') }}
+            </label>
+            <label class="flex items-center gap-3 text-sm text-qs-text">
+                <input type="checkbox" name="allow_polling_fallback" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
+                    @checked(old('allow_polling_fallback', $allow_polling_fallback)) @disabled($lock_allow_polling_fallback) />
+                {{ __('Allow silent HTTP polling when WebSockets fail or are disabled') }}
+            </label>
+        </section>
 
         <section class="qs-surface rounded-xl p-6 space-y-4">
             <h3 class="text-base font-semibold text-qs-text">OTP</h3>

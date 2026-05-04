@@ -19,13 +19,7 @@
     </head>
     <body class="font-sans antialiased bg-qs-bg text-qs-text">
         <div class="relative flex min-h-screen flex-col bg-qs-bg">
-            <div class="pointer-events-none absolute inset-0 overflow-hidden">
-                <div class="absolute -left-24 top-0 h-72 w-72 rounded-full bg-qs-accent/10 blur-3xl"></div>
-                <div class="absolute -right-24 bottom-0 h-80 w-80 rounded-full bg-qs-soft/40 blur-3xl"></div>
-                <div class="absolute inset-0 opacity-[0.4] bg-[radial-gradient(circle_at_1px_1px,rgb(148_163_184/0.18)_1px,transparent_0)] bg-[length:28px_28px]"></div>
-            </div>
-
-            <header class="relative z-10 border-b border-qs-soft/80 bg-qs-bg/80 backdrop-blur-sm">
+            <header class="relative z-10 border-b border-qs-soft bg-qs-bg">
                 <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
                     <a href="{{ route('home') }}" class="text-xl font-semibold tracking-tight text-qs-text transition hover:opacity-90">
                         {{ config('app.name', 'QUIZSNAP') }}
@@ -37,8 +31,8 @@
             </header>
 
             <main class="relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-12 sm:py-16">
-                <div class="w-full max-w-md">
-                    <div class="rounded-2xl border border-qs-soft bg-qs-bg/90 p-8 shadow-[0_25px_80px_-24px_rgba(15,23,42,0.14)] backdrop-blur-sm sm:p-10">
+                <div class="w-full {{ $contentMax }}">
+                    <div class="rounded-2xl border border-qs-soft bg-qs-bg p-8 shadow-sm sm:p-10">
                         @if ($heading)
                             <header class="mb-8">
                                 @if ($eyebrow)
@@ -58,5 +52,6 @@
                 </div>
             </main>
         </div>
+        @stack('scripts')
     </body>
 </html>
