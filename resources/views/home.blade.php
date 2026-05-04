@@ -37,18 +37,18 @@
                     <p class="text-xs font-semibold uppercase tracking-[0.2em] text-qs-primary">{{ __('Built for schools') }}</p>
                     <h1 class="mt-4 text-3xl font-semibold leading-[1.12] tracking-tight text-qs-text sm:text-4xl lg:text-5xl">
                         <span class="block">{{ __('Secure digital') }}</span>
-                        <span class="mt-1 block text-qs-primary">
-                            <x-animated-word as="span" :text="__('quizzes and exams')" class="font-semibold text-qs-primary" />
+                        <span class="mt-1 block min-w-0 max-w-full overflow-x-auto whitespace-nowrap text-qs-primary [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                            <x-animated-word variant="hero" as="span" :text="__('quizzes and exams')" class="font-semibold text-qs-primary" />
                         </span>
                         <span class="mt-1 block text-qs-text">{{ __('for schools') }}</span>
                     </h1>
                     <p class="sr-only">{{ __('Verified students. Smart assessments. Trusted results.') }}</p>
                     <p class="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-semibold text-qs-text sm:text-base" aria-hidden="true">
-                        <x-animated-word as="span" :text="__('Verified students')" class="text-qs-primary" />
+                        <span class="text-qs-primary">{{ __('Verified students') }}</span>
                         <span class="text-qs-muted">·</span>
-                        <x-animated-word as="span" :text="__('Smart assessments')" class="text-qs-primary" />
+                        <span class="text-qs-primary">{{ __('Smart assessments') }}</span>
                         <span class="text-qs-muted">·</span>
-                        <x-animated-word as="span" :text="__('Trusted results')" class="text-qs-primary" />
+                        <span class="text-qs-primary">{{ __('Trusted results') }}</span>
                     </p>
                     <p class="mt-4 max-w-xl text-base leading-relaxed text-qs-muted sm:text-lg">
                         {{ __('Plan assessments, verify learners, run proctored sessions, and review outcomes — with practice quizzes alongside formal exams.') }}

@@ -109,32 +109,50 @@
     }
 
     .animated-word {
-        color: var(--qs-text);
+        display: inline-flex;
+        flex-wrap: nowrap;
+        align-items: baseline;
+        gap: 0;
+        color: inherit;
     }
 
     .animated-word__char {
         display: inline-block;
+        flex: 0 0 auto;
         transition:
-            color 0.2s ease,
-            transform 0.2s ease;
+            color 0.18s ease,
+            transform 0.18s ease;
+    }
+
+    .animated-word__space {
+        flex: 0 0 auto;
+        white-space: pre;
+    }
+
+    .animated-word--hero {
+        white-space: nowrap;
+    }
+
+    .animated-word--hero .animated-word__char {
+        color: var(--qs-primary);
     }
 
     @media (hover: hover) and (pointer: fine) {
-        .animated-word:hover .animated-word__char {
-            animation: qs-word-pop 0.42s ease forwards;
-            animation-delay: calc(var(--aw-i, 0) * 38ms);
+        .animated-word--hero:hover .animated-word__char {
+            animation: qs-hero-letter-hover 0.52s ease forwards;
+            animation-delay: calc(var(--aw-i, 0) * 20ms);
         }
     }
 
     @media (prefers-reduced-motion: reduce) {
         .brand-logo--interactive:hover .brand-logo__char,
-        .animated-word:hover .animated-word__char {
+        .animated-word--hero:hover .animated-word__char {
             animation: none !important;
         }
 
         @media (hover: hover) {
             .brand-logo--interactive:hover .brand-logo__char--quiz,
-            .animated-word:hover .animated-word__char {
+            .animated-word--hero:hover .animated-word__char {
                 color: var(--qs-primary);
             }
 
@@ -157,14 +175,20 @@
     }
 }
 
-@keyframes qs-word-pop {
+@keyframes qs-hero-letter-hover {
     0%,
     100% {
         transform: translateY(0);
+        color: var(--qs-primary);
     }
 
-    40% {
-        transform: translateY(-2px) scale(1.03);
-        color: var(--qs-primary);
+    35% {
+        transform: translateY(-1px);
+        color: #1e5a3a;
+    }
+
+    70% {
+        transform: translateY(0);
+        color: var(--qs-muted);
     }
 }
