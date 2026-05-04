@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Exceptions\StudentSmsVerificationUnavailable;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\StudentFirstLoginOtpNotifier;
@@ -82,6 +83,10 @@ class StudentPasswordResetController extends Controller
 
         try {
             $this->otpNotifier->notify($user, $otp, $phone);
+        } catch (StudentSmsVerificationUnavailable $e) {
+            return back()->withErrors([
+                'identifier' => $e->getMessage(),
+            ]);
         } catch (\Throwable $e) {
             Log::warning('student_password_reset_otp_failed', [
                 'user_id' => $user->id,

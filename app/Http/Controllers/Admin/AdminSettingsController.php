@@ -19,6 +19,8 @@ class AdminSettingsController extends Controller
     {
         $this->authorize('manageSystemSettings');
 
+        $enableSms = $this->systemSettings->getBool('enable_sms', true);
+
         return view('admin.settings.index', [
             'arkesel_api_key_masked' => $this->systemSettings->getMasked('arkesel_api_key'),
             'arkesel_sender_id' => $this->systemSettings->get('arkesel_sender_id') ?? '',
@@ -34,7 +36,8 @@ class AdminSettingsController extends Controller
             'enable_otp' => $this->systemSettings->getBool('enable_otp', true),
             'otp_expiry' => (string) ($this->systemSettings->getInt('otp_expiry', 0) ?: config('exam_otp.ttl_seconds', 300)),
             'otp_attempt_limit' => (string) ($this->systemSettings->getInt('otp_attempt_limit', 0) ?: config('exam_otp.max_verify_attempts', 3)),
-            'enable_sms' => $this->systemSettings->getBool('enable_sms', true),
+            'enable_sms' => $enableSms,
+            'sms_derived_status' => $this->smsDerivedStatus($enableSms),
             'enable_proctoring' => $this->systemSettings->getBool('enable_proctoring', true),
             'face_verification_required' => $this->systemSettings->getBool('face_verification_required', true),
             'phone_detection_enabled' => $this->systemSettings->getBool('phone_detection_enabled', true),
@@ -86,6 +89,25 @@ class AdminSettingsController extends Controller
             'lock_enable_live_sockets' => $this->systemSettings->isLocked('enable_live_sockets'),
             'lock_allow_polling_fallback' => $this->systemSettings->isLocked('allow_polling_fallback'),
         ]);
+    }
+
+    /**
+     * @return 'ready'|'disabled'|'incomplete'
+     */
+    private function smsDerivedStatus(bool $enableSms): string
+    {
+        if (! $enableSms) {
+            return 'disabled';
+        }
+
+        $key = $this->systemSettings->get('arkesel_api_key');
+        $sender = trim((string) ($this->systemSettings->get('arkesel_sender_id') ?? ''));
+
+        if ($key !== null && $key !== '' && $sender !== '') {
+            return 'ready';
+        }
+
+        return 'incomplete';
     }
 
     public function update(Request $request): RedirectResponse

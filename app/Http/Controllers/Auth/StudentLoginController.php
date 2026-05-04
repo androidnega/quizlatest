@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Exceptions\StudentSmsVerificationUnavailable;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\StudentFirstLoginOtpNotifier;
@@ -274,6 +275,10 @@ class StudentLoginController extends Controller
 
         try {
             $this->firstLoginOtpNotifier->notify($user, $otp, $phoneDigits);
+        } catch (StudentSmsVerificationUnavailable $e) {
+            return back()
+                ->withInput($request->only('index_number', 'phone'))
+                ->withErrors(['index_number' => $e->getMessage()]);
         } catch (\Throwable $e) {
             Log::error('student_first_login_otp_delivery_failed', [
                 'user_id' => $user->id,

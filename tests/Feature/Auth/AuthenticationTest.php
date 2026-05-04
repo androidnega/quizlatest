@@ -3,6 +3,7 @@
 namespace Tests\Feature\Auth;
 
 use App\Models\User;
+use App\Services\SystemSettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -10,6 +11,17 @@ use Tests\TestCase;
 class AuthenticationTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $settings = app(SystemSettingsService::class);
+        $settings->set('enable_sms', '1', $admin);
+        $settings->set('arkesel_api_key', 'test-arkesel-api-key-for-ci', $admin);
+        $settings->set('arkesel_sender_id', 'QUIZSNAP', $admin);
+    }
 
     public function test_login_screen_shows_only_index_and_continue(): void
     {

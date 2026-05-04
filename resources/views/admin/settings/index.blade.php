@@ -95,6 +95,21 @@
 
         <section class="qs-surface rounded-xl p-6 space-y-4">
             <h3 class="text-base font-semibold text-qs-text">SMS (Arkesel)</h3>
+            @php
+                $smsStatusLine = match ($sms_derived_status) {
+                    'ready' => __('SMS Ready: enabled and credentials configured'),
+                    'disabled' => __('SMS Disabled: enable_sms is off'),
+                    default => __('SMS Incomplete: enabled but API key or sender ID missing'),
+                };
+                $smsStatusClass = match ($sms_derived_status) {
+                    'ready' => 'border border-qs-accent/30 bg-qs-accent/10 text-qs-text',
+                    'disabled' => 'border border-qs-soft bg-qs-card text-qs-muted',
+                    default => 'border border-qs-danger/25 bg-qs-danger-soft text-qs-text',
+                };
+            @endphp
+            <p class="rounded-lg px-4 py-3 text-sm font-medium {{ $smsStatusClass }}">
+                {{ $smsStatusLine }}
+            </p>
             <label class="flex items-center gap-3 text-sm text-qs-text">
                 <input type="checkbox" name="enable_sms" value="1" class="rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
                     @checked(old('enable_sms', $enable_sms)) @disabled($lock_enable_sms) />
