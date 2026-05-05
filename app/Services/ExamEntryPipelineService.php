@@ -26,8 +26,6 @@ class ExamEntryPipelineService
     /**
      * @param  array{
      *     exam_id:int,
-     *     face_embedding?:array|null,
-     *     face_retry_attempt?:int|null,
      *     hardware_concurrency?:int|null,
      *     device_memory_gb?:float|null,
      *     network_effective_type?:string|null,
