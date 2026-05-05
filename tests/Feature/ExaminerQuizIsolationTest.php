@@ -25,6 +25,7 @@ class ExaminerQuizIsolationTest extends TestCase
      *   examinerB: User,
      *   admin: User,
      *   courseId: int,
+     *   classroomId: int,
      *   quizA: Quiz,
      *   quizB: Quiz,
      *   sessionB: ExamSession,
@@ -116,6 +117,12 @@ class ExaminerQuizIsolationTest extends TestCase
             'academic_year' => '2026',
             'is_active' => true,
         ]);
+        DB::table('class_course')->insert([
+            'class_id' => $classroom->id,
+            'course_id' => $courseId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         $student = User::query()->where('role', 'student')->firstOrFail();
         $student->update(['class_id' => $classroom->id]);
 
@@ -166,11 +173,28 @@ class ExaminerQuizIsolationTest extends TestCase
             'client_revision' => 1,
         ]);
 
+        DB::table('results')->updateOrInsert(
+            [
+                'user_id' => $student->id,
+                'quiz_id' => $quizB->id,
+            ],
+            [
+                'score' => 0,
+                'status' => 'held',
+                'time_taken' => 0,
+                'exam_status' => 'submitted_held',
+                'submitted_at' => now(),
+                'updated_at' => now(),
+                'created_at' => now(),
+            ],
+        );
+
         return [
             'examinerA' => $examinerA,
             'examinerB' => $examinerB,
             'admin' => $admin,
             'courseId' => $courseId,
+            'classroomId' => $classroom->id,
             'quizA' => $quizA,
             'quizB' => $quizB,
             'sessionB' => $sessionB,
@@ -186,6 +210,19 @@ class ExaminerQuizIsolationTest extends TestCase
             ->get(route('examiner.exams.index'))
             ->assertOk()
             ->assertSee('Exam A Ownership', false)
+            ->assertDontSee('Exam B Ownership', false);
+    }
+
+    public function test_examiner_dashboard_shows_assigned_course_and_linked_class_context_only(): void
+    {
+        $ctx = $this->seedTwoExaminerContext();
+
+        $this->actingAs($ctx['examinerA'])
+            ->get(route('examiner.dashboard'))
+            ->assertOk()
+            ->assertSee('ISO101', false)
+            ->assertSee('Isolation Course', false)
+            ->assertSee('ISO-CLASS', false)
             ->assertDontSee('Exam B Ownership', false);
     }
 
@@ -222,6 +259,17 @@ class ExaminerQuizIsolationTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_examiner_grading_queue_excludes_other_examiner_pending_essays(): void
+    {
+        $ctx = $this->seedTwoExaminerContext();
+
+        $this->actingAs($ctx['examinerA'])
+            ->get(route('examiner.grading.pending'))
+            ->assertOk()
+            ->assertSee('No pending essay answers.', false)
+            ->assertDontSee('Exam B Ownership', false);
+    }
+
     public function test_examiner_cannot_review_other_examiner_sessions_or_evidence(): void
     {
         $ctx = $this->seedTwoExaminerContext();
@@ -237,6 +285,18 @@ class ExaminerQuizIsolationTest extends TestCase
         $this->actingAs($ctx['examinerA'])
             ->get(route('examiner.exam-sessions.evidence.verification', $ctx['sessionB']))
             ->assertForbidden();
+    }
+
+    public function test_examiner_dashboard_held_and_manual_counts_exclude_other_examiner_data(): void
+    {
+        $ctx = $this->seedTwoExaminerContext();
+
+        $this->actingAs($ctx['examinerA'])
+            ->get(route('examiner.dashboard'))
+            ->assertOk()
+            ->assertSee('Held results', false)
+            ->assertSee('Pending manual grading', false)
+            ->assertDontSee('Exam B Ownership', false);
     }
 
     public function test_admin_policy_allows_exam_owner_overrides(): void

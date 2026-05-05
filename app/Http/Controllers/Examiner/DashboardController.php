@@ -28,6 +28,7 @@ class DashboardController extends Controller
                 ->where('examiner_user_id', $user->id)
                 ->where('is_active', true)
                 ->pluck('course_id'))
+            ->with(['classrooms' => fn ($query) => $query->orderBy('name')])
             ->orderBy('title')
             ->get(['id', 'title', 'code']);
 

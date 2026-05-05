@@ -146,7 +146,9 @@
                         :title="$title ?? __('Examiner')"
                         :subtitle="isset($subtitle) ? $subtitle : null"
                         :period-badge="$staffAcademicPeriodBadge ?? null"
-                    />
+                    >
+                        <x-slot name="actions">{{ $headingActions ?? '' }}</x-slot>
+                    </x-ui.shell-page-heading>
 
                     {{ $slot }}
                 </main>
