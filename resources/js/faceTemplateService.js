@@ -1,27 +1,32 @@
-import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
-
 export class FaceTemplateService {
     constructor() {
         this.landmarker = null;
+        this.runningMode = 'IMAGE';
     }
 
-    async init() {
+    async init({ runningMode = 'IMAGE' } = {}) {
         if (this.landmarker) {
+            if (this.runningMode !== runningMode) {
+                this.landmarker.setOptions({ runningMode });
+                this.runningMode = runningMode;
+            }
             return;
         }
 
+        const { FilesetResolver, FaceLandmarker } = await import('@mediapipe/tasks-vision');
         const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
         this.landmarker = await FaceLandmarker.createFromOptions(vision, {
             baseOptions: {
                 modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
             },
-            runningMode: 'IMAGE',
-            numFaces: 1,
+            runningMode,
+            numFaces: 2,
         });
+        this.runningMode = runningMode;
     }
 
     async extractEmbeddingFromVideo(videoElement) {
-        await this.init();
+        await this.init({ runningMode: 'IMAGE' });
 
         const canvas = document.createElement('canvas');
         canvas.width = videoElement.videoWidth || 640;
@@ -38,6 +43,21 @@ export class FaceTemplateService {
         return this.buildEmbedding(landmarks);
     }
 
+    async detectFromVideo(videoElement) {
+        await this.init({ runningMode: 'VIDEO' });
+        const ts = performance.now();
+        const result = this.landmarker.detectForVideo(videoElement, ts);
+        const faces = Array.isArray(result?.faceLandmarks) ? result.faceLandmarks : [];
+        const primary = faces[0] ?? null;
+
+        return {
+            faceCount: faces.length,
+            landmarks: primary,
+            embedding: primary ? this.buildEmbedding(primary) : null,
+            metrics: primary ? this.computeMetrics(primary) : null,
+        };
+    }
+
     buildEmbedding(landmarks) {
         const points = [1, 33, 61, 199, 263, 291];
         const vector = points.flatMap((index) => {
@@ -46,6 +66,23 @@ export class FaceTemplateService {
         });
         const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + (value * value), 0)) || 1;
         return vector.map((value) => Number((value / magnitude).toFixed(6)));
+    }
+
+    computeMetrics(landmarks) {
+        const nose = landmarks[1] || { x: 0.5, y: 0.5 };
+        const leftEye = landmarks[33] || { x: 0.4, y: 0.5 };
+        const rightEye = landmarks[263] || { x: 0.6, y: 0.5 };
+        const eyeDistance = Math.abs(rightEye.x - leftEye.x);
+        const centered = Math.abs(nose.x - 0.5) < 0.22 && Math.abs(nose.y - 0.5) < 0.26;
+        const tooFar = eyeDistance < 0.08;
+        const tooClose = eyeDistance > 0.4;
+
+        return {
+            noseX: nose.x,
+            centered,
+            tooFar,
+            tooClose,
+        };
     }
 
     similarityPercent(template, probe) {

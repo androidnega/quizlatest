@@ -10,6 +10,37 @@ class StudentOnboardingTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_onboarding_page_loads_for_student_session(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'student',
+            'is_active' => true,
+            'student_onboarded_at' => null,
+        ]);
+
+        $this->withSession(['student_onboarding_user_id' => $user->id])
+            ->get('/student/onboarding')
+            ->assertOk()
+            ->assertSee('Finish enrolling your account');
+    }
+
+    public function test_onboarding_rejects_missing_face_payload(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'student',
+            'is_active' => true,
+            'student_onboarded_at' => null,
+        ]);
+
+        $this->withSession(['student_onboarding_user_id' => $user->id])
+            ->post('/student/onboarding', [
+                'name' => 'Student Name',
+                'password' => 'NewSecurePass9!',
+                'password_confirmation' => 'NewSecurePass9!',
+            ])
+            ->assertSessionHasErrors(['face_embedding_json', 'face_liveness_embedding_json']);
+    }
+
     public function test_student_can_complete_onboarding_and_reach_dashboard(): void
     {
         $user = User::factory()->create([
