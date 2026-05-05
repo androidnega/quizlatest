@@ -13,6 +13,8 @@ use Illuminate\View\View;
 
 class StudentOnboardingController extends Controller
 {
+    private const ONBOARDING_SESSION_TTL_MINUTES = 30;
+
     public function create(Request $request): View|RedirectResponse
     {
         $user = $this->resolveOnboardingUser($request);
@@ -23,7 +25,41 @@ class StudentOnboardingController extends Controller
 
         return view('student.onboarding', [
             'user' => $user,
+            'draft' => $this->onboardingDraft($request),
         ]);
+    }
+
+    public function saveDraft(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $user = $this->resolveOnboardingUser($request);
+        if ($user === null) {
+            return response()->json(['message' => __('Session expired.')], 401);
+        }
+
+        $validated = $request->validate([
+            'step' => ['nullable', 'integer', 'min:1', 'max:3'],
+            'name' => ['nullable', 'string', 'max:255'],
+            'face_embedding_json' => ['nullable', 'string', 'max:8000'],
+            'face_liveness_embedding_json' => ['nullable', 'string', 'max:8000'],
+        ]);
+
+        $draft = $this->onboardingDraft($request);
+        if (isset($validated['step'])) {
+            $draft['step'] = $validated['step'];
+        }
+        if (array_key_exists('name', $validated)) {
+            $draft['name'] = trim((string) ($validated['name'] ?? ''));
+        }
+        if (array_key_exists('face_embedding_json', $validated)) {
+            $draft['face_embedding_json'] = (string) ($validated['face_embedding_json'] ?? '');
+        }
+        if (array_key_exists('face_liveness_embedding_json', $validated)) {
+            $draft['face_liveness_embedding_json'] = (string) ($validated['face_liveness_embedding_json'] ?? '');
+        }
+
+        $request->session()->put('student_onboarding_draft', $draft);
+
+        return response()->json(['saved' => true]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -82,6 +118,7 @@ class StudentOnboardingController extends Controller
         ])->save();
 
         $request->session()->forget('student_onboarding_user_id');
+        $request->session()->forget('student_onboarding_draft');
         $this->clearLoginOtpSession($request);
 
         Auth::login($user->fresh(), remember: false);
@@ -92,6 +129,14 @@ class StudentOnboardingController extends Controller
 
     private function resolveOnboardingUser(Request $request): ?User
     {
+        $verifiedAt = $request->session()->get('student_onboarding_verified_at');
+        if (! is_int($verifiedAt) && ! is_numeric($verifiedAt)) {
+            return null;
+        }
+        if (now()->timestamp > ((int) $verifiedAt + (self::ONBOARDING_SESSION_TTL_MINUTES * 60))) {
+            return null;
+        }
+
         $id = $request->session()->get('student_onboarding_user_id');
         if (! is_int($id) && ! is_numeric($id)) {
             return null;
@@ -107,6 +152,19 @@ class StudentOnboardingController extends Controller
         }
 
         return $user;
+    }
+
+    /**
+     * @return array{step?:int,name?:string,face_embedding_json?:string,face_liveness_embedding_json?:string}
+     */
+    private function onboardingDraft(Request $request): array
+    {
+        $draft = $request->session()->get('student_onboarding_draft');
+        if (! is_array($draft)) {
+            return [];
+        }
+
+        return $draft;
     }
 
     /**
@@ -169,6 +227,7 @@ class StudentOnboardingController extends Controller
             'student_login_otp_attempts',
             'student_login_pending_phone_digits',
             'student_first_login_needs_phone',
+            'student_onboarding_verified_at',
         ]);
     }
 }

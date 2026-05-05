@@ -18,10 +18,16 @@ class StudentOnboardingTest extends TestCase
             'student_onboarded_at' => null,
         ]);
 
-        $this->withSession(['student_onboarding_user_id' => $user->id])
+        $this->withSession([
+            'student_onboarding_user_id' => $user->id,
+            'student_onboarding_verified_at' => now()->timestamp,
+        ])
             ->get('/student/onboarding')
             ->assertOk()
-            ->assertSee('Finish enrolling your account');
+            ->assertSee('Finish enrolling your account')
+            ->assertSee('ob-start')
+            ->assertSee('ob-capture')
+            ->assertSee('ob-retry');
     }
 
     public function test_onboarding_rejects_missing_face_payload(): void
@@ -32,7 +38,10 @@ class StudentOnboardingTest extends TestCase
             'student_onboarded_at' => null,
         ]);
 
-        $this->withSession(['student_onboarding_user_id' => $user->id])
+        $this->withSession([
+            'student_onboarding_user_id' => $user->id,
+            'student_onboarding_verified_at' => now()->timestamp,
+        ])
             ->post('/student/onboarding', [
                 'name' => 'Student Name',
                 'password' => 'NewSecurePass9!',
@@ -63,7 +72,10 @@ class StudentOnboardingTest extends TestCase
             $embeddingB[] = $v + cos($i) * 0.05;
         }
 
-        $response = $this->withSession(['student_onboarding_user_id' => $user->id])
+        $response = $this->withSession([
+            'student_onboarding_user_id' => $user->id,
+            'student_onboarding_verified_at' => now()->timestamp,
+        ])
             ->post('/student/onboarding', [
                 'name' => 'Updated Name',
                 'password' => 'NewSecurePass9!',

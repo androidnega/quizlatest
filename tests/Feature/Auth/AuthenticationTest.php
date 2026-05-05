@@ -5,6 +5,7 @@ namespace Tests\Feature\Auth;
 use App\Models\User;
 use App\Services\SystemSettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -218,6 +219,31 @@ class AuthenticationTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_first_time_login_issues_fresh_otp_each_restart(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'student',
+            'index_number' => 'BCS/2099/044',
+            'phone' => '+233241112233',
+            'is_active' => true,
+            'student_onboarded_at' => null,
+        ]);
+        $cacheKey = 'student_first_login_otp:'.$user->id;
+        Cache::store('file')->forget($cacheKey);
+
+        $this->post('/login', ['index_number' => 'BCS/2099/044'])
+            ->assertRedirect(route('login.otp', absolute: false));
+        $this->assertIsString((string) session('student_login_otp_hash'));
+        $this->assertNull(Cache::store('file')->get($cacheKey));
+
+        $this->get('/login?restart=1')->assertRedirect(route('login', absolute: false));
+
+        $this->post('/login', ['index_number' => 'BCS/2099/044'])
+            ->assertRedirect(route('login.otp', absolute: false));
+        $this->assertIsString((string) session('student_login_otp_hash'));
+        $this->assertNull(Cache::store('file')->get($cacheKey));
+    }
+
     public function test_onboarded_student_cannot_skip_to_password_without_index_session(): void
     {
         User::factory()->create([
@@ -306,7 +332,7 @@ class AuthenticationTest extends TestCase
         $response = $this->get('/admin_login');
 
         $response->assertOk();
-        $response->assertSee(__('Staff portal'), false);
+        $response->assertSee(__('Staff sign in'), false);
         $response->assertSee(__('Email or username'), false);
     }
 
@@ -315,17 +341,19 @@ class AuthenticationTest extends TestCase
         $this->get('/staff/login')->assertRedirect('/admin_login');
     }
 
-    public function test_dashboard_redirects_admin_to_admin_dashboard_route(): void
+    public function test_dashboard_renders_admin_workspace_for_admin(): void
     {
         $user = User::factory()->create([
             'role' => 'admin',
             'email' => 'admin-dash@example.com',
             'is_active' => true,
+            'email_verified_at' => now(),
         ]);
 
         $this->actingAs($user)
             ->get(route('dashboard'))
-            ->assertRedirect(route('admin.dashboard', absolute: false));
+            ->assertOk()
+            ->assertSee(__('Platform status overview'), false);
     }
 
     public function test_dashboard_renders_coordinator_workspace_for_coordinator(): void
@@ -339,7 +367,7 @@ class AuthenticationTest extends TestCase
         $this->actingAs($user)
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('Coordinator Dashboard', false);
+            ->assertSee(__('Overview'), false);
     }
 
     public function test_dashboard_redirects_examiner_to_examiner_dashboard_route(): void
@@ -357,6 +385,6 @@ class AuthenticationTest extends TestCase
 
     public function test_legacy_admin_path_redirects_to_dashboard_admin(): void
     {
-        $this->get('/admin/universities')->assertRedirect('/dashboard/admin/universities');
+        $this->get('/admin/universities')->assertRedirect('/dashboard/universities');
     }
 }

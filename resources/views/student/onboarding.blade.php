@@ -6,7 +6,54 @@
     :heading="__('Finish enrolling your account')"
     :description="__('Complete the 3 quick steps below.')"
 >
-    <form id="onboarding-form" method="POST" action="{{ route('student.onboarding.store') }}" class="space-y-8" enctype="multipart/form-data" x-data="{ step: 1, maxStep: 3 }">
+    <form
+        id="onboarding-form"
+        method="POST"
+        action="{{ route('student.onboarding.store') }}"
+        class="space-y-8"
+        enctype="multipart/form-data"
+        x-data="{
+            step: {{ (int) old('step', (int) ($draft['step'] ?? 1)) }},
+            maxStep: 3,
+            stepError: '',
+            nextStep() {
+                this.stepError = '';
+                if (this.step === 1) {
+                    const name = document.getElementById('name');
+                    if (name?.hasAttribute('required') && !String(name.value || '').trim()) {
+                        this.stepError = '{{ __('Please enter your full name to continue.') }}';
+                        return;
+                    }
+                }
+                if (this.step === 2) {
+                    const p1 = document.getElementById('password');
+                    const p2 = document.getElementById('password_confirmation');
+                    const v1 = String(p1?.value || '');
+                    const v2 = String(p2?.value || '');
+                    if (!v1 || !v2) {
+                        this.stepError = '{{ __('Enter and confirm your password to continue.') }}';
+                        return;
+                    }
+                    if (v1 !== v2) {
+                        this.stepError = '{{ __('Passwords do not match.') }}';
+                        return;
+                    }
+                    if (v1.length < 8) {
+                        this.stepError = '{{ __('Use at least 8 characters for your password.') }}';
+                        return;
+                    }
+                }
+                this.step = Math.min(this.maxStep, this.step + 1);
+                window.__onboardingSaveStep?.(this.step);
+            },
+            prevStep() {
+                this.stepError = '';
+                this.step = Math.max(1, this.step - 1);
+                window.__onboardingSaveStep?.(this.step);
+            }
+        }"
+        data-onboarding-user-id="{{ $user->id }}"
+    >
         @csrf
 
         <div class="mb-3 sm:hidden">
@@ -28,7 +75,7 @@
         <section x-show="step === 1" x-cloak class="grid gap-6 sm:grid-cols-2">
             <div class="sm:col-span-2">
                 <x-input-label for="name" :value="__('Full name')" />
-                <input id="name" name="name" type="text" value="{{ old('name', $user->name) }}" class="qs-input" placeholder="{{ __('Full name') }}" @if (trim((string) $user->name) === '') required @endif />
+                <input id="name" name="name" type="text" value="{{ old('name', $draft['name'] ?? $user->name) }}" class="qs-input" placeholder="{{ __('Full name') }}" @if (trim((string) $user->name) === '') required @endif />
                 <x-input-error :messages="$errors->get('name')" class="mt-2" />
             </div>
         </section>
@@ -47,37 +94,33 @@
 
         <section x-show="step === 3" x-cloak class="qs-surface space-y-4 p-6">
             <h2 class="text-lg font-semibold text-qs-text">{{ __('Face enrollment') }}</h2>
-            <p class="text-sm text-qs-muted">{{ __('Follow the guidance below. This takes a few seconds and helps exam face verification.') }}</p>
-            <ol class="grid gap-1 text-xs text-qs-muted sm:grid-cols-2">
-                <li id="ob-step-center">1. {{ __('Center your face') }}</li>
-                <li id="ob-step-left">2. {{ __('Move slightly left') }}</li>
-                <li id="ob-step-right">3. {{ __('Move slightly right') }}</li>
-                <li id="ob-step-still">4. {{ __('Blink or hold still') }}</li>
-                <li id="ob-step-done" class="sm:col-span-2">5. {{ __('Capture complete') }}</li>
-            </ol>
+            <p class="text-sm text-qs-muted">{{ __('Start camera, then capture two clear face samples.') }}</p>
             <video id="ob-video" class="mt-2 hidden w-full max-w-md rounded-lg border border-qs-soft bg-black" autoplay muted playsinline></video>
             <div class="flex flex-wrap gap-2">
                 <button type="button" id="ob-start" class="qs-btn-secondary text-sm">{{ __('Start camera') }}</button>
+                <button type="button" id="ob-capture" class="qs-btn-secondary text-sm" disabled>{{ __('Capture sample 1') }}</button>
                 <button type="button" id="ob-retry" class="qs-btn-secondary text-sm" disabled>{{ __('Retry') }}</button>
             </div>
-            <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                <div id="ob-progress" class="h-2 w-0 rounded-full bg-emerald-600 transition-all duration-200"></div>
-            </div>
             <p id="ob-status" class="text-sm text-qs-muted" role="status"></p>
+            <p id="ob-error" class="hidden rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700"></p>
             <x-input-error :messages="$errors->get('face')" class="mt-2" />
-            <input type="hidden" name="face_embedding_json" id="face_embedding_json" value="{{ old('face_embedding_json') }}" />
-            <input type="hidden" name="face_liveness_embedding_json" id="face_liveness_embedding_json" value="{{ old('face_liveness_embedding_json') }}" />
+            <input type="hidden" name="face_embedding_json" id="face_embedding_json" value="{{ old('face_embedding_json', $draft['face_embedding_json'] ?? '') }}" />
+            <input type="hidden" name="face_liveness_embedding_json" id="face_liveness_embedding_json" value="{{ old('face_liveness_embedding_json', $draft['face_liveness_embedding_json'] ?? '') }}" />
+            <input type="hidden" name="step" id="onboarding_step" value="{{ (int) old('step', (int) ($draft['step'] ?? 1)) }}" />
             <div>
-                <x-input-label for="face_snapshot" :value="__('Portrait photo (optional)')" />
+                <x-input-label for="face_snapshot" :value="__('Portrait photo (required)')" />
                 <input id="face_snapshot" name="face_snapshot" type="file" accept="image/jpeg,image/png" class="mt-1 block w-full text-sm text-qs-text file:mr-4 file:rounded-lg file:border-0 file:bg-qs-card file:px-4 file:py-2 file:text-sm file:font-semibold file:text-qs-text" />
+                <x-input-error :messages="$errors->get('face_snapshot')" class="mt-2" />
             </div>
         </section>
 
+        <p x-show="stepError" x-text="stepError" class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
+
         <div class="flex flex-wrap gap-3">
-            <button type="button" x-show="step > 1" @click="step = Math.max(1, step - 1)" class="qs-btn-secondary">
+            <button type="button" x-show="step > 1" @click="prevStep()" class="qs-btn-secondary">
                 {{ __('Back') }}
             </button>
-            <button type="button" x-show="step < maxStep" @click="step = Math.min(maxStep, step + 1)" class="qs-btn-secondary">
+            <button type="button" x-show="step < maxStep" @click="nextStep()" class="qs-btn-secondary">
                 {{ __('Next') }}
             </button>
             <button type="submit" x-show="step === maxStep" class="qs-btn-primary">
@@ -92,59 +135,175 @@
         const statusEl = document.getElementById('ob-status');
         const video = document.getElementById('ob-video');
         const btnStart = document.getElementById('ob-start');
+        const btnCapture = document.getElementById('ob-capture');
         const btnRetry = document.getElementById('ob-retry');
-        const progressBar = document.getElementById('ob-progress');
         const hid1 = document.getElementById('face_embedding_json');
         const hid2 = document.getElementById('face_liveness_embedding_json');
         const form = document.getElementById('onboarding-form');
-        const stepEls = {
-            center: document.getElementById('ob-step-center'),
-            left: document.getElementById('ob-step-left'),
-            right: document.getElementById('ob-step-right'),
-            still: document.getElementById('ob-step-still'),
-            done: document.getElementById('ob-step-done'),
-        };
+        const errorEl = document.getElementById('ob-error');
+        const nameInput = document.getElementById('name');
+        const pwdInput = document.getElementById('password');
+        const pwdConfInput = document.getElementById('password_confirmation');
+        const faceSnapshotInput = document.getElementById('face_snapshot');
+        const stepInput = document.getElementById('onboarding_step');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
         let stream = null;
-        let detector = null;
-        let detectTimer = null;
-        let lastNoseX = null;
-        let stableCount = 0;
-        let checking = false;
-        let state = {
-            center: false,
-            left: false,
-            right: false,
-            still: false,
-            done: false,
-        };
-        let samples = [];
+        let service = null;
+        let firstSample = null;
+        let faceGuidanceAvailable = false;
 
         function setStatus(t) {
             statusEl.textContent = t || '';
         }
 
-        function updateStepUI() {
-            const order = ['center', 'left', 'right', 'still', 'done'];
-            let completed = 0;
-            order.forEach((key) => {
-                const el = stepEls[key];
-                if (!el) return;
-                if (state[key]) {
-                    completed += 1;
-                    el.classList.add('font-semibold', 'text-emerald-700');
-                } else {
-                    el.classList.remove('font-semibold', 'text-emerald-700');
-                }
-            });
-            progressBar.style.width = `${(completed / order.length) * 100}%`;
+        function clearError() {
+            if (!errorEl) return;
+            errorEl.textContent = '';
+            errorEl.classList.add('hidden');
         }
 
-        async function stopCamera() {
-            if (detectTimer) {
-                clearInterval(detectTimer);
-                detectTimer = null;
+        function showError(context, error) {
+            const name = String(error?.name || 'Error');
+            const msg = String(error?.message || error || 'Unknown error');
+            const lower = `${name} ${msg}`.toLowerCase();
+            let composed = `${context}: ${name} — ${msg}`;
+            if (lower.includes('notallowederror') || lower.includes('permission denied') || lower.includes('permission dismissed')) {
+                composed = '{{ __('Camera permission denied. Please allow camera access and try again.') }}';
+            } else if (lower.includes('notfounderror') || lower.includes('devicesnotfounderror') || lower.includes('requested device not found')) {
+                composed = '{{ __('No camera was found on this device.') }}';
+            } else if (lower.includes('notreadableerror') || lower.includes('track start') || lower.includes('device in use')) {
+                composed = '{{ __('Camera could not start because another app may be using it.') }}';
+            } else if (lower.includes('securityerror') || lower.includes('insecure context')) {
+                composed = '{{ __('Camera requires HTTPS on live servers. Use HTTPS or localhost.') }}';
+            } else if (lower.includes('mediad evices unavailable') || lower.includes('media devices unavailable') || lower.includes('getusermedia')) {
+                composed = '{{ __('Browser does not support camera access. Use a modern browser.') }}';
             }
+            setStatus(composed);
+            if (errorEl) {
+                errorEl.textContent = composed;
+                errorEl.classList.remove('hidden');
+            }
+            console.error('[onboarding-camera]', context, error);
+        }
+
+        async function resolveFaceTemplateService() {
+            const loader = window.loadFaceTemplateService;
+            if (typeof loader === 'function') {
+                return await loader();
+            }
+            const mod = await import(@json(\Illuminate\Support\Facades\Vite::asset('resources/js/faceTemplateService.js')));
+            return mod.FaceTemplateService;
+        }
+
+        async function saveDraft(patch) {
+            if (!form || !csrfToken) return;
+            try {
+                await fetch(@json(route('student.onboarding.draft')), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        step: Number(patch?.step),
+                        name: typeof patch?.name === 'string' ? patch.name : undefined,
+                        face_embedding_json: typeof patch?.face_embedding_json === 'string' ? patch.face_embedding_json : undefined,
+                        face_liveness_embedding_json: typeof patch?.face_liveness_embedding_json === 'string' ? patch.face_liveness_embedding_json : undefined,
+                    }),
+                });
+            } catch (_) {
+                // Non-blocking draft save.
+            }
+        }
+
+        function captureFrameData(videoElement) {
+            const canvas = document.createElement('canvas');
+            canvas.width = videoElement.videoWidth || 640;
+            canvas.height = videoElement.videoHeight || 480;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return null;
+            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+            return { canvas, ctx };
+        }
+
+        function buildFallbackEmbedding(videoElement) {
+            const frame = captureFrameData(videoElement);
+            if (!frame) return null;
+            const { canvas, ctx } = frame;
+            const gridW = 6;
+            const gridH = 3;
+            const cellW = Math.floor(canvas.width / gridW);
+            const cellH = Math.floor(canvas.height / gridH);
+            const vector = [];
+            for (let gy = 0; gy < gridH; gy++) {
+                for (let gx = 0; gx < gridW; gx++) {
+                    const x = gx * cellW;
+                    const y = gy * cellH;
+                    const img = ctx.getImageData(x, y, Math.max(1, cellW), Math.max(1, cellH)).data;
+                    let sum = 0;
+                    let px = 0;
+                    for (let i = 0; i < img.length; i += 4) {
+                        sum += (img[i] + img[i + 1] + img[i + 2]) / 3;
+                        px++;
+                    }
+                    vector.push(px > 0 ? (sum / px) / 255 : 0);
+                }
+            }
+            const mag = Math.sqrt(vector.reduce((acc, v) => acc + (v * v), 0)) || 1;
+            return vector.map((v) => Number((v / mag).toFixed(6)));
+        }
+
+        function computeSimilarity(a, b) {
+            if (service && typeof service.similarityPercent === 'function') {
+                return service.similarityPercent(a, b);
+            }
+            const length = Math.min(a.length, b.length);
+            if (length === 0) return 0;
+            let dot = 0;
+            let normA = 0;
+            let normB = 0;
+            for (let i = 0; i < length; i++) {
+                dot += a[i] * b[i];
+                normA += a[i] * a[i];
+                normB += b[i] * b[i];
+            }
+            if (normA <= 0 || normB <= 0) return 0;
+            const cosine = dot / (Math.sqrt(normA) * Math.sqrt(normB));
+            return Number((((Math.max(-1, Math.min(1, cosine)) + 1) / 2) * 100).toFixed(2));
+        }
+
+        async function extractSample(videoElement) {
+            if (service && typeof service.extractEmbeddingFromVideo === 'function') {
+                try {
+                    const sample = await service.extractEmbeddingFromVideo(videoElement);
+                    if (sample) return sample;
+                } catch (_) {
+                    faceGuidanceAvailable = false;
+                    setStatus('{{ __('Face guidance is unavailable, but camera capture can continue.') }}');
+                }
+            }
+            return buildFallbackEmbedding(videoElement);
+        }
+
+        function restoreDraft() {
+            if (hid1.value && hid2.value) {
+                btnCapture.textContent = '{{ __('Capture complete') }}';
+                btnCapture.disabled = true;
+                setStatus('{{ __('Saved face samples restored. You can submit or tap Retry.') }}');
+                btnRetry.disabled = false;
+            }
+        }
+
+        window.__onboardingSaveStep = function(step) {
+            const normalizedStep = Number(step) || 1;
+            if (stepInput) stepInput.value = String(normalizedStep);
+            saveDraft({ step: normalizedStep, name: nameInput?.value || '' });
+        };
+
+        async function stopCamera() {
             if (stream) {
                 stream.getTracks().forEach((t) => t.stop());
                 stream = null;
@@ -152,177 +311,158 @@
         }
 
         function resetCaptureState() {
-            state = { center: false, left: false, right: false, still: false, done: false };
-            samples = [];
-            lastNoseX = null;
-            stableCount = 0;
+            firstSample = null;
             hid1.value = '';
             hid2.value = '';
-            updateStepUI();
-        }
-
-        async function captureSample() {
-            if (!detector) return null;
-            const result = await detector.detectFromVideo(video);
-            return result.embedding || null;
-        }
-
-        function averageEmbedding(vectors) {
-            if (!Array.isArray(vectors) || vectors.length === 0) return null;
-            const len = vectors[0].length;
-            const out = new Array(len).fill(0);
-            vectors.forEach((v) => {
-                for (let i = 0; i < len; i += 1) out[i] += Number(v[i] || 0);
-            });
-            for (let i = 0; i < len; i += 1) out[i] /= vectors.length;
-            const magnitude = Math.sqrt(out.reduce((sum, n) => sum + (n * n), 0)) || 1;
-            return out.map((n) => Number((n / magnitude).toFixed(6)));
-        }
-
-        async function finalizeCapture() {
-            const first = await captureSample();
-            await new Promise((resolve) => setTimeout(resolve, 350));
-            const second = await captureSample();
-            await new Promise((resolve) => setTimeout(resolve, 350));
-            const third = await captureSample();
-            const valid = [first, second, third].filter(Boolean);
-            if (valid.length < 2) {
-                setStatus('{{ __('Could not capture enough clear samples. Tap Retry.') }}');
-                return;
-            }
-            const base = valid[0];
-            const consistencyOk = valid.slice(1).every((v) => detector.similarityPercent(base, v) >= 72);
-            if (!consistencyOk) {
-                setStatus('{{ __('Face samples were inconsistent. Keep still and tap Retry.') }}');
-                return;
-            }
-            const finalTemplate = averageEmbedding(valid);
-            hid1.value = JSON.stringify(finalTemplate);
-            hid2.value = JSON.stringify(valid[valid.length - 1]);
-            state.done = true;
-            updateStepUI();
-            setStatus('{{ __('Capture complete. You can now submit.') }}');
-            btnRetry.disabled = false;
-            await stopCamera();
-        }
-
-        async function evaluateFrame() {
-            if (checking || document.hidden || !detector || !video.srcObject || state.done) return;
-            checking = true;
-            try {
-                const result = await detector.detectFromVideo(video);
-                if (!result || result.faceCount < 1) {
-                    setStatus('{{ __('Face not found. Center your face in the camera.') }}');
-                    checking = false;
-                    return;
-                }
-                if (result.faceCount > 1) {
-                    setStatus('{{ __('One face only. Ask others to move out of frame.') }}');
-                    checking = false;
-                    return;
-                }
-                const m = result.metrics || {};
-                if (m.tooFar) {
-                    setStatus('{{ __('Move closer to the camera.') }}');
-                    checking = false;
-                    return;
-                }
-                if (m.tooClose) {
-                    setStatus('{{ __('Move slightly back from the camera.') }}');
-                    checking = false;
-                    return;
-                }
-                if (!m.centered) {
-                    setStatus('{{ __('Center your face in the frame.') }}');
-                    checking = false;
-                    return;
-                }
-                state.center = true;
-                if (!state.left) {
-                    setStatus('{{ __('Good. Now move your head slightly left.') }}');
-                    if (m.noseX < 0.44) state.left = true;
-                    updateStepUI();
-                    checking = false;
-                    return;
-                }
-                if (!state.right) {
-                    setStatus('{{ __('Great. Now move your head slightly right.') }}');
-                    if (m.noseX > 0.56) state.right = true;
-                    updateStepUI();
-                    checking = false;
-                    return;
-                }
-                if (!state.still) {
-                    if (lastNoseX !== null && Math.abs(m.noseX - lastNoseX) < 0.012) {
-                        stableCount += 1;
-                    } else {
-                        stableCount = 0;
-                    }
-                    lastNoseX = m.noseX;
-                    setStatus('{{ __('Almost done. Blink once or hold still briefly.') }}');
-                    if (stableCount >= 2) {
-                        state.still = true;
-                        updateStepUI();
-                        await finalizeCapture();
-                    }
-                }
-            } catch (e) {
-                setStatus('{{ __('Camera check failed. Tap Retry.') }}');
-            } finally {
-                checking = false;
-            }
+            btnCapture.disabled = true;
+            btnCapture.textContent = '{{ __('Capture sample 1') }}';
         }
 
         btnStart.addEventListener('click', async () => {
             try {
+                clearError();
+                setStatus('{{ __('Starting camera…') }}');
+                btnStart.disabled = true;
                 resetCaptureState();
-                const module = await import(@json(\Illuminate\Support\Facades\Vite::asset('resources/js/faceTemplateService.js')));
-                detector = new module.FaceTemplateService();
-                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+                service = null;
+                faceGuidanceAvailable = false;
+                try {
+                    const FaceTemplateService = await resolveFaceTemplateService();
+                    service = new FaceTemplateService();
+                    faceGuidanceAvailable = true;
+                } catch (_) {
+                    setStatus('{{ __('Face guidance is unavailable, but camera capture can continue.') }}');
+                }
+                if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+                    throw new Error('media devices unavailable');
+                }
+                if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                    throw new Error('insecure context');
+                }
+                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                 video.srcObject = stream;
                 video.classList.remove('hidden');
                 await video.play();
+                btnStart.disabled = true;
+                btnStart.textContent = '{{ __('Camera ready') }}';
                 btnRetry.disabled = false;
-                setStatus('{{ __('Camera ready. Follow the guidance steps.') }}');
-                detectTimer = setInterval(evaluateFrame, 450);
+                btnCapture.disabled = false;
+                setStatus('{{ __('Camera started. Please capture two clear face samples.') }}');
             } catch (e) {
-                setStatus('{{ __('Could not access the camera. Allow camera permission and tap Retry.') }}');
+                showError('Start camera failed', e);
+                btnStart.disabled = false;
+                btnStart.textContent = '{{ __('Start camera') }}';
+            } finally {
+                if (!stream) {
+                    btnStart.disabled = false;
+                }
             }
         });
 
         btnRetry.addEventListener('click', async () => {
             await stopCamera();
             resetCaptureState();
-            btnStart.click();
+            btnStart.disabled = false;
+            btnStart.textContent = '{{ __('Start camera') }}';
+            setStatus('{{ __('Camera reset. Start camera again.') }}');
         });
 
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden && detectTimer) {
-                clearInterval(detectTimer);
-                detectTimer = null;
-            } else if (!document.hidden && !detectTimer && stream && !state.done) {
-                detectTimer = setInterval(evaluateFrame, 450);
+        btnCapture.addEventListener('click', async () => {
+            try {
+                clearError();
+                if (!video.srcObject) return;
+                const sample = await extractSample(video);
+                if (!sample) {
+                    setStatus('{{ __('No clear face detected. Keep your face visible and try again.') }}');
+                    return;
+                }
+                if (!firstSample) {
+                    firstSample = sample;
+                    hid1.value = JSON.stringify(sample);
+                    saveDraft({ face_embedding_json: hid1.value });
+                    btnCapture.textContent = '{{ __('Capture sample 2') }}';
+                    setStatus('{{ __('Sample 1 captured. Slightly adjust and capture sample 2.') }}');
+                    return;
+                }
+                hid2.value = JSON.stringify(sample);
+                saveDraft({ face_liveness_embedding_json: hid2.value });
+                const sim = computeSimilarity(firstSample, sample);
+                if (sim < 68) {
+                    setStatus('{{ __('Samples are too different. Tap Retry and capture again.') }}');
+                    return;
+                }
+                const snapshotCanvas = document.createElement('canvas');
+                snapshotCanvas.width = video.videoWidth || 640;
+                snapshotCanvas.height = video.videoHeight || 480;
+                const ctx = snapshotCanvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(video, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
+                    const blob = await new Promise((resolve) => snapshotCanvas.toBlob(resolve, 'image/jpeg', 0.9));
+                    if (blob) {
+                        const file = new File([blob], 'onboarding-portrait.jpg', { type: 'image/jpeg' });
+                        const dt = new DataTransfer();
+                        dt.items.add(file);
+                        faceSnapshotInput.files = dt.files;
+                    }
+                }
+                setStatus('{{ __('Sample 2 captured. Face enrollment ready.') }}');
+                btnCapture.disabled = true;
+                await stopCamera();
+            } catch (e) {
+                showError('Capture failed', e);
             }
         });
 
         form.addEventListener('submit', (e) => {
+            clearError();
+            const p1 = String(pwdInput?.value || '');
+            const p2 = String(pwdConfInput?.value || '');
+            if (!p1 || !p2) {
+                e.preventDefault();
+                setStatus('{{ __('Password is required before completing onboarding.') }}');
+                return;
+            }
+            if (p1 !== p2) {
+                e.preventDefault();
+                setStatus('{{ __('Passwords do not match.') }}');
+                return;
+            }
             if (!hid1.value || !hid2.value) {
                 e.preventDefault();
                 setStatus('{{ __('Complete face capture before submitting.') }}');
                 return;
             }
-            if (!detector) return;
             const a = JSON.parse(hid1.value);
             const b = JSON.parse(hid2.value);
-            const sim = detector.similarityPercent(a, b);
+            const sim = computeSimilarity(a, b);
             if (sim < 78 || sim > 99.95) {
                 e.preventDefault();
                 setStatus('{{ __('The two samples did not match enough for a live check. Wait a second between captures and try again.') }}');
             }
         });
 
+        [nameInput, pwdInput, pwdConfInput].forEach((el) => {
+            if (!el) return;
+            el.addEventListener('input', () => {
+                saveDraft({ name: nameInput?.value || '' });
+            });
+        });
+
+        restoreDraft();
+
         window.addEventListener('beforeunload', () => {
             stopCamera();
+        });
+
+        if (!window.navigator || !window.navigator.mediaDevices) {
+            showError('Camera unavailable', new Error('media devices unavailable'));
+        }
+
+        window.addEventListener('unhandledrejection', (event) => {
+            showError('Unhandled promise rejection', event?.reason);
+        });
+        window.addEventListener('error', (event) => {
+            if (event?.error) showError('Runtime error', event.error);
         });
     </script>
 @endpush

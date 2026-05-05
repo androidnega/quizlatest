@@ -166,7 +166,7 @@ class StudentLoginController extends Controller
 
         $request->session()->put('student_login_pending_phone_digits', $digits);
 
-        return $this->issueOtpAndRedirect($request, $user, $digits);
+        return $this->reuseOrIssueOtpAndRedirect($request, $user, $digits);
     }
 
     public function showOtp(Request $request): View|RedirectResponse
@@ -242,6 +242,7 @@ class StudentLoginController extends Controller
 
         $request->session()->forget('student_first_login_needs_phone');
         $request->session()->put('student_onboarding_user_id', $user->id);
+        $request->session()->put('student_onboarding_verified_at', now()->timestamp);
 
         return redirect()->route('student.onboarding');
     }
@@ -259,12 +260,17 @@ class StudentLoginController extends Controller
 
         $existingPhone = StudentPhone::normalize($user->phone);
         if ($existingPhone !== null) {
-            return $this->issueOtpAndRedirect($request, $user, $existingPhone);
+            return $this->reuseOrIssueOtpAndRedirect($request, $user, $existingPhone);
         }
 
         $request->session()->put('student_first_login_needs_phone', true);
 
         return redirect()->route('login.first-time.phone');
+    }
+
+    private function reuseOrIssueOtpAndRedirect(Request $request, User $user, string $phoneDigits): RedirectResponse
+    {
+        return $this->issueOtpAndRedirect($request, $user, $phoneDigits);
     }
 
     private function issueOtpAndRedirect(Request $request, User $user, string $phoneDigits): RedirectResponse
@@ -290,10 +296,12 @@ class StudentLoginController extends Controller
                 ->withErrors(['index_number' => __('We could not send a verification code. Contact your coordinator.')]);
         }
 
+        $expiresAt = now()->addMinutes(self::OTP_TTL_MINUTES)->timestamp;
+        $hash = hash('sha256', $otp);
         $request->session()->put([
             'student_login_user_id' => $user->id,
-            'student_login_otp_hash' => hash('sha256', $otp),
-            'student_login_otp_expires_at' => now()->addMinutes(self::OTP_TTL_MINUTES)->timestamp,
+            'student_login_otp_hash' => $hash,
+            'student_login_otp_expires_at' => $expiresAt,
             'student_login_otp_attempts' => 0,
         ]);
 
@@ -318,6 +326,7 @@ class StudentLoginController extends Controller
             'student_login_otp_attempts',
             'student_login_pending_phone_digits',
             'student_first_login_needs_phone',
+            'student_onboarding_verified_at',
         ]);
     }
 
