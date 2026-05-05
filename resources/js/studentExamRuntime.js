@@ -120,6 +120,7 @@ async function main() {
     const studentId = Number(meta('student-id'));
     const enableLiveSockets = meta('qs-enable-live-sockets') === '1';
     const allowPollingFallback = meta('qs-allow-polling-fallback') === '1';
+    const requireCameraMonitoring = meta('qs-require-camera-monitoring') === '1';
     if (!sessionId || !examId) {
         return;
     }
@@ -916,12 +917,6 @@ async function main() {
 
     try {
         const perf = await fetchProctoringCapability(axios);
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        if (els.video) {
-            els.video.srcObject = stream;
-            await els.video.play().catch(() => {});
-        }
-
         const runtime = new ProctoringRuntimeEngine({
             videoElement: els.video,
             sessionId,
@@ -931,9 +926,18 @@ async function main() {
             performanceProfile: perf,
             eventBatcher: proctoringBatcher,
         });
-        await runtime.init();
 
-        await postVerificationImageOnce(els.video, sessionId);
+        if (requireCameraMonitoring) {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            if (els.video) {
+                els.video.srcObject = stream;
+                await els.video.play().catch(() => {});
+            }
+            await runtime.init();
+            await postVerificationImageOnce(els.video, sessionId);
+        } else {
+            await runtime.init({ browserOnly: true });
+        }
 
         runtime.start();
     } catch (e) {

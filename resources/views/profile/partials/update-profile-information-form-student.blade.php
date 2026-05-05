@@ -41,12 +41,6 @@
                 <dd class="font-mono">{{ $user->index_number ?? '—' }}</dd>
             </div>
         </dl>
-        @if ($user->face_image_path)
-            <div class="mt-4">
-                <p class="text-qs-muted">{{ __('Portrait on file') }}</p>
-                <img src="{{ route('profile.face-image') }}" alt="" class="mt-2 h-24 w-24 rounded-lg border border-qs-soft object-cover" />
-            </div>
-        @endif
     </div>
 
     <form method="post" action="{{ route('profile.update') }}" class="mt-6 space-y-6">
@@ -64,12 +58,6 @@
             <x-text-input id="phone" name="phone" type="tel" class="mt-1 block w-full" :value="old('phone', $user->phone)" autocomplete="tel" />
             <p class="mt-1 text-xs text-qs-muted">{{ __('Used for SMS verification when your school enables it.') }}</p>
             <x-input-error class="mt-2" :messages="$errors->get('phone')" />
-        </div>
-
-        <div>
-            <x-input-label for="email" :value="__('Email (optional)')" />
-            <x-text-input id="email" name="email" type="email" class="mt-1 block w-full" :value="old('email', $user->email)" autocomplete="email" />
-            <x-input-error class="mt-2" :messages="$errors->get('email')" />
         </div>
 
         <div class="flex items-center gap-4">

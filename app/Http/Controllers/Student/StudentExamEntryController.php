@@ -60,7 +60,7 @@ class StudentExamEntryController extends Controller
             'quiz' => $quiz,
             'otpEnabled' => $this->examPolicy->isOtpEnabled(),
             'smsEnabled' => $this->examPolicy->isSmsEnabled(),
-            'faceRequired' => $this->examPolicy->isProctoringEnabled() && $this->examPolicy->isFaceVerificationRequired(),
+            'snapshotRequired' => $this->examPolicy->isExamStartSnapshotRequired(),
             'otpExpirySeconds' => $this->examPolicy->getOtpExpirySeconds(),
             'entryBlocked' => $this->globalControl->blocksExamStarts(),
         ]);

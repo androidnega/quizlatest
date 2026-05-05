@@ -6,6 +6,7 @@ use App\Models\ExamSection;
 use App\Models\Question;
 use App\Models\Quiz;
 use App\Models\User;
+use App\Services\SystemSettingsService;
 use Database\Seeders\InitialSetupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -412,5 +413,41 @@ class ExamLifecycleTest extends TestCase
             $response->json('message'),
             'Active student should not be rejected for inactivity at API start.',
         );
+    }
+
+    public function test_exam_start_does_not_require_stored_face_template(): void
+    {
+        $ctx = $this->seedExaminerAndStudentContext();
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
+        $this->addSectionAndMcq($exam);
+        $this->setDeliveryForExaminer($ctx['examiner'], $exam->fresh());
+        $this->actingAs($ctx['examiner']);
+        $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
+
+        $exam->refresh();
+        DB::table('users')->where('id', $ctx['student']->id)->update([
+            'face_embedding' => null,
+            'face_image_path' => null,
+        ]);
+        app(SystemSettingsService::class)->set('enable_otp', '0', $ctx['examiner']);
+
+        $png = base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2YfV0AAAAASUVORK5CYII=',
+            true,
+        );
+        $tmp = tempnam(sys_get_temp_dir(), 'qsnap_');
+        file_put_contents($tmp, $png ?: '');
+        $upload = new \Illuminate\Http\UploadedFile($tmp, 'verification.png', 'image/png', null, true);
+
+        $response = $this->actingAs(User::query()->findOrFail($ctx['student']->id))
+            ->post(route('exam-sessions.start'), [
+                'exam_id' => $exam->id,
+                'verification_snapshot' => $upload,
+            ]);
+
+        $response->assertOk()->assertJsonStructure(['session_id']);
+
+        $session = \App\Models\ExamSession::query()->where('session_id', $response->json('session_id'))->firstOrFail();
+        $this->assertNotNull($session->verification_image_path);
     }
 }

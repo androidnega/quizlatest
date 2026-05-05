@@ -1,12 +1,8 @@
-<x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl qs-heading leading-tight">
-            {{ __('Exam entry') }} — {{ $quiz->title }}
-        </h2>
-    </x-slot>
+<x-layouts.student>
+    <x-slot name="title">{{ __('Exam entry') }}</x-slot>
+    <x-slot name="subtitle">{{ $quiz->title }}</x-slot>
 
-    <div class="py-10">
-        <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-3xl py-2">
             @if ($entryBlocked)
                 <div class="mb-6 rounded-xl border border-qs-danger/35 bg-qs-danger-soft px-4 py-3 text-sm text-qs-danger">
                     {{ __('Exam entry is temporarily unavailable. Please try again later or contact support.') }}
@@ -18,8 +14,8 @@
                 @if ($otpEnabled)
                     <span id="step-pill-2" class="rounded-full border border-qs-soft px-3 py-1">{{ __('2 OTP') }}</span>
                 @endif
-                @if ($faceRequired)
-                    <span id="step-pill-3" class="rounded-full border border-qs-soft px-3 py-1">{{ __('Face') }}</span>
+                @if ($snapshotRequired)
+                    <span id="step-pill-3" class="rounded-full border border-qs-soft px-3 py-1">{{ __('Camera') }}</span>
                 @endif
                 <span id="step-pill-start" class="rounded-full border border-qs-soft px-3 py-1">{{ __('Start') }}</span>
             </div>
@@ -55,8 +51,8 @@
                             @endif
                         </p>
                     @endif
-                    @if ($faceRequired)
-                        <p class="mt-2 text-sm text-qs-muted">{{ __('You will verify your face against your enrolled portrait before the timer starts.') }}</p>
+                    @if ($snapshotRequired)
+                        <p class="mt-2 text-sm text-qs-muted">{{ __('Before starting, we will take a verification photo and keep camera monitoring active during the exam, according to your school’s proctoring settings.') }}</p>
                     @endif
                     <button type="button" id="btn-overview-next" class="qs-btn-primary mt-6" @if ($entryBlocked) disabled @endif>
                         {{ __('Continue') }}
@@ -84,19 +80,21 @@
                     </section>
                 @endif
 
-                @if ($faceRequired)
-                    <section id="panel-face" class="hidden">
-                        <h3 class="text-lg font-semibold text-qs-text">{{ __('Face verification') }}</h3>
-                        <p class="mt-2 text-sm text-qs-muted">{{ __('Align your face in the frame, then capture. You may retry once if the check does not pass.') }}</p>
-                        <video id="face-video" class="mt-4 hidden w-full rounded-lg border border-qs-soft bg-black" autoplay muted playsinline></video>
-                        <canvas id="face-canvas" class="hidden"></canvas>
-                        <div class="mt-4 flex flex-wrap gap-2">
-                            <button type="button" id="face-start-camera" class="qs-btn-secondary text-sm">{{ __('Start camera') }}</button>
-                            <button type="button" id="face-capture" class="qs-btn-primary text-sm">{{ __('Capture face') }}</button>
+                @if ($snapshotRequired)
+                    <section id="panel-snapshot" class="hidden">
+                        <h3 class="text-lg font-semibold text-qs-text">{{ __('Exam verification photo') }}</h3>
+                        <p class="mt-2 text-sm text-qs-muted">{{ __('Allow camera access, align yourself in the frame, then capture one clear photo. This is session evidence only — not automated face matching.') }}</p>
+                        <div id="snap-preview-wrap" class="relative mt-4 hidden max-w-md overflow-hidden rounded-lg border border-qs-soft bg-black">
+                            <video id="snap-video" class="block w-full" autoplay muted playsinline></video>
                         </div>
-                        <p id="face-status" class="mt-3 text-sm text-qs-muted" role="status"></p>
-                        <button type="button" id="btn-face-back" class="qs-btn-secondary mt-6 text-sm">{{ __('Back') }}</button>
-                        <button type="button" id="btn-face-next" class="qs-btn-primary mt-3 ms-0 text-sm sm:ms-3" disabled>{{ __('Continue') }}</button>
+                        <canvas id="snap-canvas" class="hidden"></canvas>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            <button type="button" id="snap-open-camera" class="qs-btn-secondary text-sm">{{ __('Open camera') }}</button>
+                            <button type="button" id="snap-capture" class="qs-btn-primary text-sm hidden">{{ __('Capture photo') }}</button>
+                            <button type="button" id="snap-retake" class="qs-btn-secondary text-sm hidden">{{ __('Retake') }}</button>
+                        </div>
+                        <p id="snap-status" class="mt-3 text-sm text-qs-muted" role="status"></p>
+                        <button type="button" id="btn-snapshot-back" class="qs-btn-secondary mt-6 text-sm">{{ __('Back') }}</button>
                     </section>
                 @endif
 
@@ -109,28 +107,28 @@
                     </button>
                 </section>
             </div>
-        </div>
     </div>
 
     @push('scripts')
         <script type="module">
-            import { FilesetResolver, FaceLandmarker } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
-
             const examId = {{ (int) $quiz->id }};
             const otpEnabled = @json($otpEnabled);
-            const faceRequired = @json($faceRequired);
+            const snapshotRequired = @json($snapshotRequired);
             const entryBlocked = @json($entryBlocked);
             const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
             const panelOverview = document.getElementById('panel-overview');
             const panelOtp = document.getElementById('panel-otp');
-            const panelFace = document.getElementById('panel-face');
+            const panelSnapshot = document.getElementById('panel-snapshot');
             const panelStart = document.getElementById('panel-start');
+
+            let verificationBlob = null;
+            let snapStream = null;
 
             function showPanel(name) {
                 if (panelOverview) panelOverview.classList.toggle('hidden', name !== 'overview');
                 if (panelOtp) panelOtp.classList.toggle('hidden', name !== 'otp');
-                if (panelFace) panelFace.classList.toggle('hidden', name !== 'face');
+                if (panelSnapshot) panelSnapshot.classList.toggle('hidden', name !== 'snapshot');
                 if (panelStart) panelStart.classList.toggle('hidden', name !== 'start');
             }
 
@@ -150,7 +148,7 @@
                 ['step-pill-1', 'step-pill-2', 'step-pill-3', 'step-pill-start'].forEach(reset);
                 if (step === 'overview') on('step-pill-1');
                 if (step === 'otp') on('step-pill-2');
-                if (step === 'face') on('step-pill-3');
+                if (step === 'snapshot') on('step-pill-3');
                 if (step === 'start') on('step-pill-start');
             }
 
@@ -162,7 +160,7 @@
                 }
             }
 
-            function friendlyStartError(status, body, rawText) {
+            function friendlyStartError(status, body) {
                 if (status === 503 || body?.status === 'service_unavailable') {
                     return '{{ __('Verification is temporarily unavailable. Please try again shortly.') }}';
                 }
@@ -176,11 +174,11 @@
                 if (typeof msg === 'string' && msg.includes('OTP')) {
                     return msg;
                 }
-                if (typeof msg === 'string' && msg.includes('Face')) {
+                if (typeof msg === 'string' && (msg.includes('verification photo') || msg.includes('Camera'))) {
                     return msg;
                 }
                 if (status === 422) {
-                    return '{{ __('We could not start the exam with the details provided. Review the steps or contact support.') }}';
+                    return typeof msg === 'string' && msg ? msg : '{{ __('We could not start the exam with the details provided. Review the steps or contact support.') }}';
                 }
                 return '{{ __('Something went wrong. Please try again.') }}';
             }
@@ -218,18 +216,39 @@
                 return { res, body };
             }
 
+            async function postStartMultipart(extraFields) {
+                const fd = new FormData();
+                fd.append('exam_id', String(examId));
+                if (verificationBlob) {
+                    fd.append('verification_snapshot', verificationBlob, 'verification.jpg');
+                }
+                if (extraFields?.hardware_concurrency != null) {
+                    fd.append('hardware_concurrency', String(extraFields.hardware_concurrency));
+                }
+                const res = await fetch(@json(route('exam-sessions.start')), {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': csrf,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                    body: fd,
+                });
+                const body = await parseJsonSafe(res);
+                return { res, body };
+            }
+
             let otpVerified = !otpEnabled;
-            let faceEmbedding = null;
-            let faceRetryAttempt = 0;
 
             document.getElementById('btn-overview-next')?.addEventListener('click', () => {
                 if (entryBlocked) return;
                 if (otpEnabled) {
                     showPanel('otp');
                     setPillActive('otp');
-                } else if (faceRequired) {
-                    showPanel('face');
-                    setPillActive('face');
+                } else if (snapshotRequired) {
+                    showPanel('snapshot');
+                    setPillActive('snapshot');
                 } else {
                     showPanel('start');
                     setPillActive('start');
@@ -241,7 +260,8 @@
                 setPillActive('overview');
             });
 
-            document.getElementById('btn-face-back')?.addEventListener('click', () => {
+            document.getElementById('btn-snapshot-back')?.addEventListener('click', () => {
+                void stopSnapCamera();
                 if (otpEnabled) {
                     showPanel('otp');
                     setPillActive('otp');
@@ -276,13 +296,13 @@
                     afterOtpOk();
                     return;
                 }
-                msgEl.textContent = friendlyStartError(res.status, body, '');
+                msgEl.textContent = friendlyStartError(res.status, body);
             });
 
             function afterOtpOk() {
-                if (faceRequired) {
-                    showPanel('face');
-                    setPillActive('face');
+                if (snapshotRequired) {
+                    showPanel('snapshot');
+                    setPillActive('snapshot');
                 } else {
                     showPanel('start');
                     setPillActive('start');
@@ -310,81 +330,69 @@
                 msgEl.textContent = friendlyOtpVerifyError(body);
             });
 
-            /** Face capture (same embedding shape as registration) */
-            let faceLandmarker = null;
-            let faceStream = null;
-            const video = document.getElementById('face-video');
-            const canvas = document.getElementById('face-canvas');
-            const faceStatus = document.getElementById('face-status');
-            const btnFaceNext = document.getElementById('btn-face-next');
+            const snapVideo = document.getElementById('snap-video');
+            const snapCanvas = document.getElementById('snap-canvas');
+            const snapWrap = document.getElementById('snap-preview-wrap');
+            const snapStatus = document.getElementById('snap-status');
+            const btnSnapOpen = document.getElementById('snap-open-camera');
+            const btnSnapCapture = document.getElementById('snap-capture');
+            const btnSnapRetake = document.getElementById('snap-retake');
 
-            async function initLandmarker() {
-                if (faceLandmarker) return faceLandmarker;
-                const vision = await FilesetResolver.forVisionTasks(
-                    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm',
-                );
-                faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-                    baseOptions: {
-                        modelAssetPath:
-                            'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-                    },
-                    runningMode: 'IMAGE',
-                    numFaces: 1,
-                });
-                return faceLandmarker;
+            async function stopSnapCamera() {
+                if (snapStream) {
+                    snapStream.getTracks().forEach((t) => t.stop());
+                    snapStream = null;
+                }
+                if (snapVideo) snapVideo.srcObject = null;
             }
 
-            function buildEmbedding(landmarks) {
-                const points = [1, 33, 61, 199, 263, 291];
-                const vector = points.flatMap((idx) => {
-                    const p = landmarks[idx] || { x: 0, y: 0, z: 0 };
-                    return [p.x, p.y, p.z];
-                });
-                const mag = Math.sqrt(vector.reduce((sum, v) => sum + v * v, 0)) || 1;
-                return vector.map((v) => Number((v / mag).toFixed(6)));
-            }
-
-            document.getElementById('face-start-camera')?.addEventListener('click', async () => {
+            btnSnapOpen?.addEventListener('click', async () => {
+                snapStatus.textContent = '';
                 try {
-                    faceStream = await navigator.mediaDevices.getUserMedia({ video: true });
-                    video.srcObject = faceStream;
-                    video.classList.remove('hidden');
-                    faceStatus.textContent = '{{ __('Camera active. Capture when ready.') }}';
+                    snapStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    snapVideo.srcObject = snapStream;
+                    snapWrap?.classList.remove('hidden');
+                    await snapVideo.play();
+                    btnSnapCapture?.classList.remove('hidden');
+                    snapStatus.textContent = '{{ __('Camera active. When you are ready, capture one clear photo.') }}';
                 } catch {
-                    faceStatus.textContent = '{{ __('Camera access was denied or is unavailable.') }}';
+                    snapStatus.textContent = '{{ __('Camera access was denied or is unavailable. Allow camera in your browser settings to continue, or ask your coordinator if this exam does not require a photo.') }}';
                 }
             });
 
-            document.getElementById('face-capture')?.addEventListener('click', async () => {
-                if (!video?.videoWidth || !video?.videoHeight) {
-                    faceStatus.textContent = '{{ __('Camera not ready yet.') }}';
-                    return;
-                }
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.82));
-                if (!blob) {
-                    faceStatus.textContent = '{{ __('Could not capture image.') }}';
-                    return;
-                }
-                const landmarker = await initLandmarker();
-                const bitmap = await createImageBitmap(blob);
-                const result = landmarker.detect(bitmap);
-                const landmarks = result?.faceLandmarks?.[0];
-                if (!landmarks) {
-                    faceStatus.textContent = '{{ __('No face detected. Try again.') }}';
-                    return;
-                }
-                faceEmbedding = buildEmbedding(landmarks);
-                faceStatus.textContent = '{{ __('Face sample captured.') }}';
-                btnFaceNext.disabled = false;
-            });
-
-            document.getElementById('btn-face-next')?.addEventListener('click', () => {
+            btnSnapCapture?.addEventListener('click', async () => {
+                if (!snapVideo || snapVideo.readyState < 2) return;
+                const w = snapVideo.videoWidth || 640;
+                const h = snapVideo.videoHeight || 480;
+                const tw = Math.min(720, w);
+                const scale = tw / w;
+                const th = Math.max(1, Math.floor(h * scale));
+                snapCanvas.width = tw;
+                snapCanvas.height = th;
+                const ctx = snapCanvas.getContext('2d');
+                if (!ctx) return;
+                ctx.drawImage(snapVideo, 0, 0, tw, th);
+                verificationBlob = await new Promise((resolve) => {
+                    snapCanvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85);
+                });
+                await stopSnapCamera();
+                btnSnapOpen?.classList.add('hidden');
+                btnSnapCapture?.classList.add('hidden');
+                btnSnapRetake?.classList.remove('hidden');
+                snapStatus.textContent = '{{ __('Photo captured. Continue to start the exam.') }}';
                 showPanel('start');
                 setPillActive('start');
+            });
+
+            btnSnapRetake?.addEventListener('click', async () => {
+                verificationBlob = null;
+                btnSnapOpen?.classList.remove('hidden');
+                btnSnapCapture?.classList.add('hidden');
+                btnSnapRetake?.classList.add('hidden');
+                snapWrap?.classList.add('hidden');
+                snapStatus.textContent = '';
+                showPanel('snapshot');
+                setPillActive('snapshot');
             });
 
             document.getElementById('btn-start-exam')?.addEventListener('click', async () => {
@@ -394,39 +402,43 @@
                     msgEl.textContent = '{{ __('Complete phone verification first.') }}';
                     return;
                 }
-                if (faceRequired && (!faceEmbedding || faceEmbedding.length < 3)) {
-                    msgEl.textContent = '{{ __('Capture your face before starting.') }}';
+                if (snapshotRequired && !verificationBlob) {
+                    msgEl.textContent = '{{ __('Capture your verification photo before starting.') }}';
+                    showPanel('snapshot');
+                    setPillActive('snapshot');
                     return;
                 }
                 msgEl.textContent = '{{ __('Starting…') }}';
-                const payload = {
-                    exam_id: examId,
-                    face_retry_attempt: faceRetryAttempt,
-                    hardware_concurrency: typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : null,
-                };
-                if (faceRequired && faceEmbedding) {
-                    payload.face_embedding = faceEmbedding;
+                const hw = typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : null;
+                let res;
+                let body;
+                if (snapshotRequired && verificationBlob) {
+                    ({ res, body } = await postStartMultipart({ hardware_concurrency: hw }));
+                } else {
+                    ({ res, body } = await postJson(@json(route('exam-sessions.start')), {
+                        exam_id: examId,
+                        hardware_concurrency: hw,
+                    }));
                 }
-                const { res, body } = await postJson(@json(route('exam-sessions.start')), payload);
                 if (res.ok && body?.session_id) {
                     window.location.href = `/student/exam/${encodeURIComponent(body.session_id)}`;
                     return;
                 }
-                if (res.status === 422) {
-                    const raw = body?.message || '';
-                    if (typeof raw === 'string' && raw.includes('Retry once') && faceRetryAttempt === 0) {
-                        faceRetryAttempt = 1;
-                        msgEl.textContent = '{{ __('Face check did not pass. Adjust lighting and try once more from the face step.') }}';
-                        showPanel('face');
-                        setPillActive('face');
-                        return;
-                    }
+                if (res.ok && (body?.status === 'otp_required' || body?.status === 'otp_pending')) {
+                    msgEl.textContent = body.message || '';
+                    showPanel('otp');
+                    setPillActive('otp');
+                    return;
                 }
-                msgEl.textContent = friendlyStartError(res.status, body, '');
+                msgEl.textContent = friendlyStartError(res.status, body);
             });
 
             showPanel('overview');
             setPillActive('overview');
+
+            window.addEventListener('beforeunload', () => {
+                void stopSnapCamera();
+            });
         </script>
     @endpush
-</x-app-layout>
+</x-layouts.student>

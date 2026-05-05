@@ -4,12 +4,11 @@ namespace App\Services;
 
 use App\Models\ExamSession;
 use App\Models\Quiz;
-use App\Support\FaceEmbeddingComparator;
 use App\Support\ProctoringCapabilityResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use RuntimeException;
 
 /**
  * Single gate for authenticated exam starts (ordering enforced here only).
@@ -21,7 +20,6 @@ class ExamEntryPipelineService
         private readonly SystemSettingsService $systemSettings,
         private readonly SystemExamPolicyService $examPolicy,
         private readonly ExamOtpService $examOtp,
-        private readonly ExamRuntimeInfraGate $infraGate,
         private readonly ExamRedisService $examRedis,
     ) {}
 
@@ -83,58 +81,36 @@ class ExamEntryPipelineService
                 ->exists();
             abort_unless(! $activeSessionExists, 422, 'Another active session already exists.');
 
-            // 4. OTP — backend must be reachable when OTP is enabled
+            // 4. OTP gate (SMS / phone verification)
             if ($this->examPolicy->isOtpEnabled()) {
-                if (! $this->infraGate->examOtpStorageOperational()) {
+                $gate = $this->examOtp->evaluateStartGate($student, $examId);
+                if ($gate === 'otp_required') {
                     return [
-                        'status' => 'service_unavailable',
-                        'message' => 'Verification service temporarily unavailable. Try again.',
+                        'status' => 'otp_required',
+                        'message' => __('Enter the code sent to your phone.'),
+                        'exam_id' => $examId,
                     ];
                 }
-
-                try {
-                    $otpGate = $this->examOtp->evaluateStartGate($student, $exam->id);
-                } catch (RuntimeException) {
-                    abort(503, 'SMS verification is temporarily unavailable. Please contact support.');
+                if ($gate === 'otp_pending') {
+                    return [
+                        'status' => 'otp_pending',
+                        'message' => __('A code is already on its way. Enter it below.'),
+                        'exam_id' => $examId,
+                    ];
                 }
-            } else {
-                $otpGate = 'continue';
             }
 
-            $otpTtl = $this->examPolicy->getOtpExpirySeconds();
-
-            if ($otpGate === 'otp_required') {
-                return [
-                    'status' => 'otp_required',
-                    'message' => 'Enter the verification code sent to your phone.',
-                    'exam_id' => $exam->id,
-                    'expires_in_seconds' => $otpTtl,
-                ];
-            }
-
-            if ($otpGate === 'otp_pending') {
-                return [
-                    'status' => 'otp_pending',
-                    'message' => 'Enter the verification code sent to your phone, or wait if you just requested it.',
-                    'exam_id' => $exam->id,
-                    'expires_in_seconds' => $otpTtl,
-                ];
-            }
-
-            $faceRequired = $this->examPolicy->isProctoringEnabled()
-                && $this->examPolicy->isFaceVerificationRequired();
-
-            // 5. Face verification (skipped when disabled by system policy)
-            $faceEmbedding = $validated['face_embedding'] ?? null;
-            if ($faceRequired) {
+            $snapshotRequired = $this->examPolicy->isExamStartSnapshotRequired();
+            $snapshotFile = $request->hasFile('verification_snapshot') ? $request->file('verification_snapshot') : null;
+            if ($snapshotRequired) {
                 abort_unless(
-                    is_array($faceEmbedding) && count($faceEmbedding) >= 3,
+                    $snapshotFile !== null && $snapshotFile->isValid(),
                     422,
-                    'Face verification required after OTP.',
+                    __('A clear verification photo is required before this exam can start. Allow camera access and capture again.'),
                 );
             }
 
-            // 6. Load exam.proctoring_settings (normalized canonical keys only)
+            // 5. Load exam.proctoring_settings (normalized canonical keys only)
             $defaultsRaw = $this->systemSettings->get('default_proctoring_settings');
             $defaults = [];
             if ($defaultsRaw !== null && $defaultsRaw !== '') {
@@ -155,7 +131,7 @@ class ExamEntryPipelineService
             );
             $normalizedSettings = $this->examPolicy->capNormalizedProctoringSettings($normalizedSettings);
 
-            // 7. Apply global orchestrator-facing overrides for visibility (merged copy)
+            // 6. Apply global orchestrator-facing overrides for visibility (merged copy)
             $effectiveForOrchestrator = $this->globalControl->mergeExamSettingsForOrchestrator(
                 ProctoringOrchestratorService::mergeInternalBandsWithNormalized($normalizedSettings),
             );
@@ -163,7 +139,7 @@ class ExamEntryPipelineService
 
             // Strip internal bands from client-facing payload — expose copy without INTERNAL_* leakage patterns
             $clientProctoringSettings = [
-                'face_match_threshold' => $effectiveForOrchestrator['face_match_threshold'],
+                'require_camera_monitoring' => $this->examPolicy->isCameraMonitoringRequired(),
                 'tab_switch_rules' => $effectiveForOrchestrator['tab_switch_rules'],
                 'phone_detection_enabled' => $effectiveForOrchestrator['phone_detection_enabled'],
                 'fullscreen_enforced' => $effectiveForOrchestrator['fullscreen_enforced'],
@@ -174,28 +150,7 @@ class ExamEntryPipelineService
             ];
             $clientProctoringSettings = $this->examPolicy->capClientProctoringPayload($clientProctoringSettings);
 
-            // 8. Face verification (threshold only adjusted by governance relax flag — same comparator)
-            if ($faceRequired) {
-                $threshold = (float) $normalizedSettings['face_match_threshold'];
-                if ($this->globalControl->relaxFaceVerification()) {
-                    $threshold = max(45.0, $threshold - 10.0);
-                }
-
-                $template = is_array($student->face_embedding) ? $student->face_embedding : [];
-                $similarity = FaceEmbeddingComparator::similarityPercent($template, $faceEmbedding);
-                $retryAttempt = (int) ($validated['face_retry_attempt'] ?? 0);
-                abort_unless(! empty($template), 422, 'Face template not enrolled.');
-                abort_unless(
-                    $similarity >= $threshold || $retryAttempt === 0,
-                    422,
-                    'Face verification failed. Retry once.',
-                );
-                abort_unless($similarity >= $threshold, 422, 'Face verification failed. Exam start blocked.');
-            } else {
-                $similarity = 100.0;
-            }
-
-            // 9. Device capability (heuristic; no AI)
+            // 7. Device capability (heuristic; no AI)
             $capabilityHints = [
                 'hardware_concurrency' => $validated['hardware_concurrency'] ?? null,
                 'device_memory_gb' => $validated['device_memory_gb'] ?? null,
@@ -204,8 +159,8 @@ class ExamEntryPipelineService
             ];
             $performanceProfile = ProctoringCapabilityResolver::resolve($capabilityHints);
 
-            // 10. Initialize exam session
-            $session = DB::transaction(function () use ($student, $exam) {
+            // 8. Initialize exam session (+ optional verification image in same transaction)
+            $session = DB::transaction(function () use ($student, $exam, $snapshotFile) {
                 $existingSubmitted = ExamSession::query()
                     ->where('student_id', $student->id)
                     ->where('exam_id', $exam->id)
@@ -221,7 +176,7 @@ class ExamEntryPipelineService
                     ->exists();
                 abort_unless(! $activeSessionExists, 422, 'Another active session already exists.');
 
-                return ExamSession::create([
+                $session = ExamSession::create([
                     'student_id' => $student->id,
                     'class_id' => $student->class_id,
                     'exam_id' => $exam->id,
@@ -236,18 +191,31 @@ class ExamEntryPipelineService
                     'risk_state' => 'normal',
                     'exam_status' => 'active',
                 ]);
+
+                if ($snapshotFile !== null && $snapshotFile->isValid()) {
+                    $dir = sprintf(
+                        'proctoring/user_%d/session_%d',
+                        (int) $session->student_id,
+                        (int) $session->id,
+                    );
+                    $path = $dir.'/verification.jpg';
+                    Storage::disk('local')->put($path, file_get_contents($snapshotFile->getRealPath()));
+                    $session->forceFill(['verification_image_path' => $path])->save();
+                }
+
+                return $session;
             });
 
             $this->examRedis->incrementActiveSessions((int) $exam->id);
 
             $this->examOtp->forgetVerifiedFlag((int) $student->id, (int) $exam->id);
 
-            // 11. Ready-to-start payload
+            // 9. Ready-to-start payload
             return [
                 'session_id' => $session->session_id,
                 'status' => $session->status,
                 'start_time' => $session->start_time?->toISOString(),
-                'face_similarity' => $similarity,
+                'verification_image_stored' => $session->verification_image_path !== null && $session->verification_image_path !== '',
                 'proctoring_settings_effective' => $clientProctoringSettings,
                 'performance_profile' => $performanceProfile,
                 'global_control_revision' => (int) ($this->globalControl->getControl()['revision'] ?? 0),

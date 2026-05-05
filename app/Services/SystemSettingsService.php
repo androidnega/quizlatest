@@ -90,10 +90,47 @@ class SystemSettingsService
         abort_unless($user->role === 'admin', 403);
 
         $row = SystemSetting::query()->where('key', $key)->first();
-        if ($row === null) {
+        if ($row !== null) {
+            $row->update(['is_locked' => true]);
+
             return;
         }
-        $row->update(['is_locked' => true]);
+
+        $persist = $this->materializeValueForPersist($key);
+        SystemSetting::query()->create([
+            'key' => $key,
+            'value' => Crypt::encryptString($persist),
+            'is_locked' => true,
+        ]);
+    }
+
+    /**
+     * Value to persist when locking a key that has no row yet (matches UI defaults).
+     */
+    private function materializeValueForPersist(string $key): string
+    {
+        $existing = $this->get($key);
+        if ($existing !== null && $existing !== '') {
+            return $existing;
+        }
+
+        return match ($key) {
+            'enable_otp', 'enable_sms', 'enable_proctoring', 'face_verification_required',
+            'require_exam_start_snapshot', 'require_camera_monitoring',
+            'phone_detection_enabled', 'fullscreen_required', 'auto_submit_enabled', 'enable_ai',
+            'enable_redis_runtime', 'allow_redis_fallback', 'enable_live_sockets', 'allow_polling_fallback' => '1',
+            'face_verification_threshold' => '60',
+            'enable_student_practice_quizzes', 'enable_course_material_uploads', 'enable_ai_summary',
+            'enable_ai_practice_quiz_generation', 'allow_examiner_practice_overview' => '0',
+            'otp_expiry' => (string) config('exam_otp.ttl_seconds', 300),
+            'otp_attempt_limit' => (string) config('exam_otp.max_verify_attempts', 3),
+            'practice_quiz_daily_limit' => '5',
+            'practice_quiz_monthly_limit' => '50',
+            'practice_ai_token_limit_per_student' => '100000',
+            'practice_ai_provider' => 'deepseek',
+            'deepseek_model' => 'deepseek-chat',
+            default => '',
+        };
     }
 
     public function unlockSetting(string $key, User $user): void

@@ -29,6 +29,8 @@ export class ProctoringRuntimeEngine {
         this.faceLandmarker = null;
         this.poseLandmarker = null;
         this.phoneModel = null;
+        /** When true, only tab/fullscreen/window listeners — no camera models or intervals. */
+        this.browserOnly = false;
 
         this.faceIntervalMs = this.performanceProfile?.face_interval_ms ?? 12000;
         this.phoneIntervalMs = this.performanceProfile?.phone_interval_ms ?? 25000;
@@ -41,7 +43,15 @@ export class ProctoringRuntimeEngine {
             });
     }
 
-    async init() {
+    /**
+     * @param {{ browserOnly?: boolean }} [options]
+     */
+    async init(options = {}) {
+        if (options.browserOnly) {
+            this.browserOnly = true;
+            return;
+        }
+
         const vision = await FilesetResolver.forVisionTasks(
             'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm',
         );
@@ -74,6 +84,11 @@ export class ProctoringRuntimeEngine {
     }
 
     start() {
+        if (this.browserOnly) {
+            this.bindBrowserEvents();
+            return;
+        }
+
         this.faceIntervalMs = this.performanceProfile?.face_interval_ms ?? this.faceIntervalMs;
         this.phoneIntervalMs = this.performanceProfile?.phone_interval_ms ?? this.phoneIntervalMs;
 

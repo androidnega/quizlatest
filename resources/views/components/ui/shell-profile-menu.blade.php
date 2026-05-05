@@ -1,6 +1,5 @@
 @props([
     'settingsHref' => null,
-    'showStudentPortal' => false,
 ])
 
 @php
@@ -11,8 +10,8 @@
     if ($initials === '') {
         $initials = '?';
     }
-    $hasFace = filled($user->face_image_path ?? null);
-    $avatarSrc = $hasFace && \Illuminate\Support\Facades\Route::has('profile.face-image') ? route('profile.face-image') : null;
+    $showPortraitAvatar = $user->role !== 'student' && filled($user->face_image_path ?? null);
+    $avatarSrc = $showPortraitAvatar && \Illuminate\Support\Facades\Route::has('profile.face-image') ? route('profile.face-image') : null;
     $profileHref = \Illuminate\Support\Facades\Route::has('profile.edit') ? route('profile.edit') : '#';
 @endphp
 
@@ -70,15 +69,6 @@
                 class="block px-4 py-2.5 text-sm text-qs-text hover:bg-qs-card"
                 @click="open = false"
             >{{ __('Settings') }}</a>
-        @endif
-
-        @if ($showStudentPortal)
-            <a
-                href="{{ route('dashboard') }}"
-                role="menuitem"
-                class="block px-4 py-2.5 text-sm text-qs-text hover:bg-qs-card"
-                @click="open = false"
-            >{{ __('Student portal') }}</a>
         @endif
 
         <div class="my-1 border-t border-qs-soft" role="separator"></div>

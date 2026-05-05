@@ -41,9 +41,48 @@ final class SystemExamPolicyService
         return $this->settings->getBool('enable_proctoring', true);
     }
 
+    /**
+     * Legacy setting — no longer used for face matching. Kept for admin migration / backward compat reads only.
+     *
+     * @deprecated Use {@see self::isExamStartSnapshotRequired()} and {@see self::isCameraMonitoringRequired()}.
+     */
     public function isFaceVerificationRequired(): bool
     {
         return $this->settings->getBool('face_verification_required', true);
+    }
+
+    /**
+     * When proctoring is enabled, require one exam-start verification photo (not identity matching).
+     */
+    public function isExamStartSnapshotRequired(): bool
+    {
+        if (! $this->isProctoringEnabled()) {
+            return false;
+        }
+
+        $explicit = $this->settings->get('require_exam_start_snapshot');
+        if ($explicit !== null && $explicit !== '') {
+            return $this->settings->getBool('require_exam_start_snapshot', true);
+        }
+
+        return $this->settings->getBool('face_verification_required', true);
+    }
+
+    /**
+     * When proctoring is enabled, keep camera/video monitoring active during the exam (runtime engine).
+     */
+    public function isCameraMonitoringRequired(): bool
+    {
+        if (! $this->isProctoringEnabled()) {
+            return false;
+        }
+
+        $explicit = $this->settings->get('require_camera_monitoring');
+        if ($explicit !== null && $explicit !== '') {
+            return $this->settings->getBool('require_camera_monitoring', true);
+        }
+
+        return true;
     }
 
     public function isPhoneDetectionEnabled(): bool
@@ -91,10 +130,6 @@ final class SystemExamPolicyService
     }
 
     /**
-     * @param  array<string, mixed>  $clientSlice
-     * @return array<string, mixed>
-     */
-    /**
      * @param  array<string, mixed>  $effective
      * @return array<string, mixed>
      */
@@ -121,12 +156,17 @@ final class SystemExamPolicyService
         return $effective;
     }
 
+    /**
+     * @param  array<string, mixed>  $clientSlice
+     * @return array<string, mixed>
+     */
     public function capClientProctoringPayload(array $clientSlice): array
     {
         if (! $this->isProctoringEnabled()) {
             $clientSlice['phone_detection_enabled'] = false;
             $clientSlice['fullscreen_enforced'] = false;
             $clientSlice['auto_submit_enabled'] = false;
+            $clientSlice['require_camera_monitoring'] = false;
 
             return $clientSlice;
         }
@@ -139,6 +179,9 @@ final class SystemExamPolicyService
         }
         if (! $this->isAutoSubmitEnabled()) {
             $clientSlice['auto_submit_enabled'] = false;
+        }
+        if (! $this->isCameraMonitoringRequired()) {
+            $clientSlice['require_camera_monitoring'] = false;
         }
 
         return $clientSlice;

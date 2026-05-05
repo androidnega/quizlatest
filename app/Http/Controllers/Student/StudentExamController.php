@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\ExamSession;
 use App\Services\ExamRuntimeInfraGate;
+use App\Services\SystemExamPolicyService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -30,11 +31,13 @@ class StudentExamController extends Controller
         }
 
         $gate = app(ExamRuntimeInfraGate::class);
+        $examPolicy = app(SystemExamPolicyService::class);
 
         return view('student.exam.take', [
             'examSession' => $examSession,
             'enableLiveSockets' => $gate->enableLiveSockets(),
             'allowPollingFallback' => $gate->allowPollingFallback(),
+            'requireCameraMonitoring' => $examPolicy->isCameraMonitoringRequired(),
         ]);
     }
 }

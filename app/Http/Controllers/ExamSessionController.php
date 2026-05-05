@@ -49,9 +49,7 @@ class ExamSessionController extends Controller
 
         $validated = $request->validate([
             'exam_id' => ['required', 'integer', 'exists:quizzes,id'],
-            'face_embedding' => ['nullable', 'array', 'min:3'],
-            'face_embedding.*' => ['numeric'],
-            'face_retry_attempt' => ['nullable', 'integer', 'min:0', 'max:1'],
+            'verification_snapshot' => ['nullable', 'file', 'mimes:jpg,jpeg,png', 'max:2048'],
             'hardware_concurrency' => ['nullable', 'integer', 'min:1', 'max:512'],
             'device_memory_gb' => ['nullable', 'numeric', 'min:1'],
             'network_effective_type' => ['nullable', 'string', 'max:32'],
@@ -59,9 +57,15 @@ class ExamSessionController extends Controller
         ]);
 
         $payload = $this->entryPipeline->execute($request, $validated);
-        $httpStatus = (($payload['status'] ?? '') === 'service_unavailable') ? 503 : 200;
+        $status = $payload['status'] ?? '';
+        if ($status === 'service_unavailable') {
+            return response()->json($payload, 503);
+        }
+        if (in_array($status, ['otp_required', 'otp_pending'], true)) {
+            return response()->json($payload, 200);
+        }
 
-        return response()->json($payload, $httpStatus);
+        return response()->json($payload, 200);
     }
 
     public function verifyOtp(Request $request): JsonResponse

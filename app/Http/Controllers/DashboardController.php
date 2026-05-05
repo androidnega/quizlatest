@@ -14,6 +14,7 @@ use App\Services\PracticeModuleSettings;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -23,7 +24,7 @@ class DashboardController extends Controller
         $user = auth()->user();
 
         if ($user->role === 'admin') {
-            return redirect()->route('admin.dashboard');
+            return app(Admin\DashboardController::class)->index();
         }
 
         if ($user->role === 'coordinator') {
@@ -50,6 +51,8 @@ class DashboardController extends Controller
     private function buildStudentDashboardData(User $user, PracticeModuleSettings $practiceSettings): array
     {
         $now = Carbon::now();
+
+        $user->loadMissing(['program', 'level', 'classroom', 'university']);
 
         $activeYearId = AcademicYear::activeForUniversity((int) $user->university_id)?->id;
 
@@ -88,6 +91,32 @@ class DashboardController extends Controller
             ->where('student_id', $user->id)
             ->where('status', 'submitted')
             ->pluck('exam_id');
+
+        $latestSessionsByExamId = collect();
+        if ($publishedExams->isNotEmpty()) {
+            $latestSessionsByExamId = ExamSession::query()
+                ->where('student_id', $user->id)
+                ->whereIn('exam_id', $publishedExams->pluck('id'))
+                ->orderByDesc('id')
+                ->get()
+                ->unique('exam_id')
+                ->keyBy('exam_id');
+        }
+
+        $examRows = $this->buildStudentExamRows(
+            $publishedExams,
+            $now,
+            $activeSession,
+            $submittedExamIds,
+            $latestSessionsByExamId,
+        );
+
+        $coursesWithExams = $examRows
+            ->groupBy('course_id')
+            ->map(fn (Collection $rows) => $rows->sortBy(fn (array $r) => [
+                $r['exam']->start_time?->timestamp ?? 0,
+                $r['exam']->title,
+            ])->values());
 
         $availableNow = collect();
         $upcoming = collect();
@@ -156,8 +185,6 @@ class DashboardController extends Controller
             ->limit(5)
             ->get();
 
-        $faceReady = is_array($user->face_embedding) && count($user->face_embedding) >= 3;
-
         $practiceEnabled = $practiceSettings->studentPracticeEnabled();
         $practiceQuizCount = 0;
         $recentPracticeScores = collect();
@@ -180,11 +207,114 @@ class DashboardController extends Controller
             'gradedResultsCount' => $gradedCount,
             'heldResults' => $heldResults,
             'pendingManualResults' => $pendingManual,
-            'faceProfileReady' => $faceReady,
             'hasClass' => $user->class_id !== null,
+            'studentProfileReady' => $user->student_onboarded_at !== null,
+            'classYearOk' => $classYearOk,
             'practiceEnabled' => $practiceEnabled,
             'practiceQuizCount' => $practiceQuizCount,
             'recentPracticeScores' => $recentPracticeScores,
+            'examRows' => $examRows,
+            'coursesWithExams' => $coursesWithExams,
+            'submittedExamsCount' => $submittedExamIds->unique()->count(),
         ];
+    }
+
+    /**
+     * @param  Collection<int, Quiz>  $publishedExams
+     * @param  Collection<int, mixed>  $submittedExamIds
+     * @param  Collection<int, ExamSession>  $latestSessionsByExamId
+     * @return Collection<int, array{exam: Quiz, course_id: int, state: string, progress: int, href: ?string, label: string}>
+     */
+    private function buildStudentExamRows(
+        Collection $publishedExams,
+        Carbon $now,
+        ?ExamSession $activeSession,
+        Collection $submittedExamIds,
+        Collection $latestSessionsByExamId,
+    ): Collection {
+        $rows = collect();
+
+        foreach ($publishedExams as $exam) {
+            $from = $exam->start_time;
+            $to = $exam->end_time;
+            $courseId = (int) $exam->course_id;
+            $session = $latestSessionsByExamId->get($exam->id);
+
+            if ($submittedExamIds->contains($exam->id)) {
+                $rows->push([
+                    'exam' => $exam,
+                    'course_id' => $courseId,
+                    'state' => 'completed',
+                    'progress' => 100,
+                    'href' => $session !== null ? route('student.results.show', $session, false) : route('student.results.index', [], false),
+                    'label' => __('Submitted'),
+                ]);
+
+                continue;
+            }
+
+            if ($activeSession !== null && (int) $activeSession->exam_id === (int) $exam->id) {
+                $rows->push([
+                    'exam' => $exam,
+                    'course_id' => $courseId,
+                    'state' => 'in_progress',
+                    'progress' => 62,
+                    'href' => route('student.exam.take', $activeSession, false),
+                    'label' => __('In progress'),
+                ]);
+
+                continue;
+            }
+
+            if ($activeSession !== null && (int) $activeSession->exam_id !== (int) $exam->id) {
+                $rows->push([
+                    'exam' => $exam,
+                    'course_id' => $courseId,
+                    'state' => 'blocked',
+                    'progress' => 0,
+                    'href' => null,
+                    'label' => __('Finish your current exam first'),
+                ]);
+
+                continue;
+            }
+
+            if ($from !== null && $now->lt($from)) {
+                $rows->push([
+                    'exam' => $exam,
+                    'course_id' => $courseId,
+                    'state' => 'upcoming',
+                    'progress' => 0,
+                    'href' => null,
+                    'label' => __('Not open yet'),
+                ]);
+
+                continue;
+            }
+
+            if ($to !== null && $now->gt($to)) {
+                $rows->push([
+                    'exam' => $exam,
+                    'course_id' => $courseId,
+                    'state' => 'closed',
+                    'progress' => 0,
+                    'href' => route('student.results.index', [], false),
+                    'label' => __('Window closed'),
+                ]);
+
+                continue;
+            }
+
+            $rows->push([
+                'exam' => $exam,
+                'course_id' => $courseId,
+                'state' => 'available',
+                'progress' => 12,
+                'href' => route('student.exam.prepare', $exam, false),
+                'label' => __('Ready to start'),
+            ]);
+        }
+
+        return $rows;
     }
 }

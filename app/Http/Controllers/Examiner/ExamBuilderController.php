@@ -15,6 +15,7 @@ use App\Services\ExamAiQuestionGenerator;
 use App\Services\ExamLifecycleService;
 use App\Services\ExamQuestionImportValidator;
 use App\Services\ExamRedisService;
+use App\Services\SystemExamPolicyService;
 use App\Services\SystemSettingsService;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
@@ -44,6 +45,16 @@ class ExamBuilderController extends Controller
     private function assertExamNotArchived(Quiz $exam): void
     {
         abort_if($exam->status === 'archived', 403, 'Archived exams are read-only.');
+    }
+
+    private function assertQuestionGenerationUnlocked(Quiz $exam, string $errorKey = 'import_json'): void
+    {
+        $hasSavedQuestions = Question::query()->where('quiz_id', $exam->id)->exists();
+        if ($hasSavedQuestions) {
+            throw ValidationException::withMessages([
+                $errorKey => ['Question generation is locked for this assessment. Create a new quiz to generate again.'],
+            ]);
+        }
     }
 
     public function index(Request $request): View
@@ -91,8 +102,18 @@ class ExamBuilderController extends Controller
 
         abort_if($courses->isEmpty(), 403, 'No courses available for exam creation in your scope.');
 
+        $examPolicy = app(SystemExamPolicyService::class);
+
         return view('examiner.exams.create', [
             'courses' => $courses,
+            'proctoringPolicy' => [
+                'enabled' => $examPolicy->isProctoringEnabled(),
+                'allow_exam_start_snapshot' => $examPolicy->isExamStartSnapshotRequired(),
+                'allow_camera_monitoring' => $examPolicy->isCameraMonitoringRequired(),
+                'allow_phone' => app(SystemSettingsService::class)->getBool('phone_detection_enabled', true),
+                'allow_fullscreen' => app(SystemSettingsService::class)->getBool('fullscreen_required', true),
+                'allow_auto_submit' => app(SystemSettingsService::class)->getBool('auto_submit_enabled', true),
+            ],
         ]);
     }
 
@@ -105,7 +126,10 @@ class ExamBuilderController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'duration_minutes' => ['required', 'integer', 'min:1', 'max:600'],
-            'assessment_type' => ['nullable', 'string', 'in:quiz,mid,exam,assignment'],
+            'assessment_type' => ['required', 'string', 'in:quiz,mid,exam,assignment'],
+            'enable_phone' => ['sometimes', 'boolean'],
+            'enable_fullscreen' => ['sometimes', 'boolean'],
+            'enable_auto_submit' => ['sometimes', 'boolean'],
         ]);
 
         $course = Course::query()->find((int) $validated['course_id']);
@@ -114,26 +138,39 @@ class ExamBuilderController extends Controller
 
         $user = $request->user();
 
-        $activeYear = AcademicYear::activeForUniversity((int) $user->university_id);
-        $activeTerm = $activeYear !== null ? Term::activeForAcademicYear($activeYear->id) : null;
+        $year = AcademicYear::activeForUniversity((int) $user->university_id);
+        abort_if($year === null, 422, 'No active academic year configured. Ask admin to activate an academic year first.');
+
+        $activeTerm = Term::activeForAcademicYear($year->id);
+        $systemSettings = app(SystemSettingsService::class);
+        $policyEnabled = $systemSettings->getBool('enable_proctoring', true);
+        $allowPhone = $policyEnabled && $systemSettings->getBool('phone_detection_enabled', true);
+        $allowFullscreen = $policyEnabled && $systemSettings->getBool('fullscreen_required', true);
+        $allowAutoSubmit = $policyEnabled && $systemSettings->getBool('auto_submit_enabled', true);
+
+        $initialProctoringSettings = \App\Services\ProctoringOrchestratorService::normalizeProctoringSettings([], null);
+        $initialProctoringSettings['phone_detection_enabled'] = $allowPhone ? $request->boolean('enable_phone') : false;
+        $initialProctoringSettings['fullscreen_enforced'] = $allowFullscreen ? $request->boolean('enable_fullscreen') : false;
+        $initialProctoringSettings['auto_submit_enabled'] = $allowAutoSubmit ? $request->boolean('enable_auto_submit') : false;
 
         $quiz = Quiz::create([
             'university_id' => $user->university_id,
-            'academic_year_id' => $activeYear?->id,
+            'academic_year_id' => $year->id,
             'term_id' => $activeTerm?->id,
             'course_id' => (int) $validated['course_id'],
             'created_by' => $user->id,
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
-            'assessment_type' => $validated['assessment_type'] ?? 'exam',
+            'assessment_type' => $validated['assessment_type'],
             'status' => 'draft',
             'duration_minutes' => (int) $validated['duration_minutes'],
             'total_marks' => 0,
+            'proctoring_settings' => $initialProctoringSettings,
         ]);
 
         return redirect()
             ->route('examiner.exams.builder', $quiz)
-            ->with('status', 'Exam created. Add sections and questions below.');
+            ->with('status', 'Assessment draft created. Continue setup in the builder.');
     }
 
     public function builder(Request $request, Quiz $exam, SystemSettingsService $systemSettings): View
@@ -161,6 +198,7 @@ class ExamBuilderController extends Controller
             'canEditPool' => $exam->status !== 'archived',
             'poolQuestionTotal' => $poolQuestionTotal,
             'poolApprovedCount' => $poolApprovedCount,
+            'generationLocked' => $poolQuestionTotal > 0,
         ]);
     }
 
@@ -169,16 +207,22 @@ class ExamBuilderController extends Controller
         $this->authorize('update', $exam);
         abort_unless($exam->status === 'draft', 403, 'Only draft exams can change delivery settings.');
 
+        $approved = Question::query()
+            ->where('quiz_id', $exam->id)
+            ->where('pool_status', 'approved')
+            ->count();
+
+        if ($approved < 1) {
+            throw ValidationException::withMessages([
+                'questions_per_student' => ['Approve at least one question in the pool before configuring delivery.'],
+            ]);
+        }
+
         $validated = $request->validate([
             'questions_per_student' => ['required', 'integer', 'min:1', 'max:500'],
             'randomize_questions' => ['sometimes', 'boolean'],
             'randomize_options' => ['sometimes', 'boolean'],
         ]);
-
-        $approved = Question::query()
-            ->where('quiz_id', $exam->id)
-            ->where('pool_status', 'approved')
-            ->count();
 
         if ((int) $validated['questions_per_student'] > $approved) {
             throw ValidationException::withMessages([
@@ -211,7 +255,46 @@ class ExamBuilderController extends Controller
 
         $this->bumpExamConfigCache($exam->fresh());
 
-        return back()->with('status', 'Question pool status updated.');
+        $total = Question::query()->where('quiz_id', $exam->id)->count();
+        $approved = Question::query()->where('quiz_id', $exam->id)->where('pool_status', 'approved')->count();
+        $nextStage = $total > 0 && $approved === $total ? 'settings' : 'pool';
+
+        return back()->with('status', 'Question pool status updated.')->with('builder_stage', $nextStage);
+    }
+
+    public function bulkUpdateQuestionPoolStatus(Request $request, Quiz $exam): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+        $this->assertExamNotArchived($exam);
+
+        $validated = $request->validate([
+            'pool_status' => ['required', 'string', 'in:draft,approved,archived'],
+            'mode' => ['required', 'string', 'in:selected,all'],
+            'question_ids' => ['nullable', 'array'],
+            'question_ids.*' => ['integer'],
+        ]);
+
+        $query = Question::query()->where('quiz_id', $exam->id);
+
+        if ($validated['mode'] === 'selected') {
+            $ids = collect($validated['question_ids'] ?? [])->map(fn ($id) => (int) $id)->filter()->values()->all();
+            if ($ids === []) {
+                return back()->withErrors(['pool_status' => 'Select at least one question for batch update.']);
+            }
+            $query->whereIn('id', $ids);
+        }
+
+        $updated = $query->update(['pool_status' => $validated['pool_status']]);
+
+        $this->bumpExamConfigCache($exam->fresh());
+
+        $total = Question::query()->where('quiz_id', $exam->id)->count();
+        $approved = Question::query()->where('quiz_id', $exam->id)->where('pool_status', 'approved')->count();
+        $nextStage = $total > 0 && $approved === $total ? 'settings' : 'pool';
+
+        return back()
+            ->with('status', $updated > 0 ? "Updated {$updated} question(s)." : 'No questions were updated.')
+            ->with('builder_stage', $nextStage);
     }
 
     public function publish(Request $request, Quiz $exam, ExamLifecycleService $lifecycle): RedirectResponse
@@ -374,6 +457,7 @@ class ExamBuilderController extends Controller
     {
         $this->authorize('update', $exam);
         $this->assertExamDraftForContentMutations($exam);
+        $this->assertQuestionGenerationUnlocked($exam, 'import_json');
 
         $validated = $request->validate([
             'import_json' => ['required', 'string', 'max:500000'],
@@ -398,6 +482,7 @@ class ExamBuilderController extends Controller
     {
         $this->authorize('update', $exam);
         $this->assertExamDraftForContentMutations($exam);
+        $this->assertQuestionGenerationUnlocked($exam, 'import_json');
         session()->forget('exam_question_import_'.$exam->id);
 
         return back()->with('status', 'Import preview cleared.');
@@ -407,6 +492,7 @@ class ExamBuilderController extends Controller
     {
         $this->authorize('update', $exam);
         $this->assertExamDraftForContentMutations($exam);
+        $this->assertQuestionGenerationUnlocked($exam, 'import_json');
 
         $bundle = session('exam_question_import_'.$exam->id);
         if (! is_array($bundle) || ! isset($bundle['sections']) || ! is_array($bundle['sections'])) {
@@ -418,13 +504,14 @@ class ExamBuilderController extends Controller
 
         $this->bumpExamConfigCache($exam->fresh());
 
-        return back()->with('status', 'Imported questions saved.');
+        return back()->with('status', 'Imported questions saved.')->with('builder_stage', 'pool');
     }
 
     public function buildAiPrompt(Request $request, Quiz $exam, ExamAiPromptBuilder $promptBuilder): RedirectResponse
     {
         $this->authorize('update', $exam);
         $this->assertExamDraftForContentMutations($exam);
+        $this->assertQuestionGenerationUnlocked($exam, 'ai');
 
         $validated = $request->validate([
             'ai_topic' => ['required', 'string', 'max:2000'],
@@ -450,6 +537,7 @@ class ExamBuilderController extends Controller
     {
         $this->authorize('update', $exam);
         $this->assertExamDraftForContentMutations($exam);
+        $this->assertQuestionGenerationUnlocked($exam, 'ai');
 
         if (! $systemSettings->getBool('enable_ai', true)) {
             return back()->withErrors(['ai' => 'AI generation is turned off in system settings.']);

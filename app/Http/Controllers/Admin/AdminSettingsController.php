@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\SystemExamPolicyService;
 use App\Services\SystemSettingsService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AdminSettingsController extends Controller
 {
@@ -20,8 +23,17 @@ class AdminSettingsController extends Controller
         $this->authorize('manageSystemSettings');
 
         $enableSms = $this->systemSettings->getBool('enable_sms', true);
+        $lockable = self::lockableDefinitions();
+        $lockStatesByKey = [];
+        foreach (array_keys($lockable) as $key) {
+            $lockStatesByKey[$key] = $this->systemSettings->isLocked($key);
+        }
+
+        $examPolicy = app(SystemExamPolicyService::class);
 
         return view('admin.settings.index', [
+            'lockable' => $lockable,
+            'lockStatesByKey' => $lockStatesByKey,
             'arkesel_api_key_masked' => $this->systemSettings->getMasked('arkesel_api_key'),
             'arkesel_sender_id' => $this->systemSettings->get('arkesel_sender_id') ?? '',
             'arkesel_sender_locked' => $this->systemSettings->isLocked('arkesel_sender_id'),
@@ -39,7 +51,8 @@ class AdminSettingsController extends Controller
             'enable_sms' => $enableSms,
             'sms_derived_status' => $this->smsDerivedStatus($enableSms),
             'enable_proctoring' => $this->systemSettings->getBool('enable_proctoring', true),
-            'face_verification_required' => $this->systemSettings->getBool('face_verification_required', true),
+            'require_exam_start_snapshot' => $examPolicy->isExamStartSnapshotRequired(),
+            'require_camera_monitoring' => $examPolicy->isCameraMonitoringRequired(),
             'phone_detection_enabled' => $this->systemSettings->getBool('phone_detection_enabled', true),
             'fullscreen_required' => $this->systemSettings->getBool('fullscreen_required', true),
             'auto_submit_enabled' => $this->systemSettings->getBool('auto_submit_enabled', true),
@@ -50,7 +63,8 @@ class AdminSettingsController extends Controller
             'lock_otp_attempt_limit' => $this->systemSettings->isLocked('otp_attempt_limit'),
             'lock_enable_sms' => $this->systemSettings->isLocked('enable_sms'),
             'lock_enable_proctoring' => $this->systemSettings->isLocked('enable_proctoring'),
-            'lock_face_verification_required' => $this->systemSettings->isLocked('face_verification_required'),
+            'lock_require_exam_start_snapshot' => $this->systemSettings->isLocked('require_exam_start_snapshot'),
+            'lock_require_camera_monitoring' => $this->systemSettings->isLocked('require_camera_monitoring'),
             'lock_phone_detection_enabled' => $this->systemSettings->isLocked('phone_detection_enabled'),
             'lock_fullscreen_required' => $this->systemSettings->isLocked('fullscreen_required'),
             'lock_auto_submit_enabled' => $this->systemSettings->isLocked('auto_submit_enabled'),
@@ -144,14 +158,27 @@ class AdminSettingsController extends Controller
         if (array_key_exists('ai_model_name', $validated) && $validated['ai_model_name'] !== null && ! $this->systemSettings->isLocked('ai_model_name')) {
             $this->systemSettings->set('ai_model_name', (string) $validated['ai_model_name'], $user);
         }
-        if (array_key_exists('default_proctoring_settings', $validated) && $validated['default_proctoring_settings'] !== null && ! $this->systemSettings->isLocked('default_proctoring_settings')) {
-            $this->systemSettings->set('default_proctoring_settings', (string) $validated['default_proctoring_settings'], $user);
+        if (array_key_exists('default_proctoring_settings', $validated) && ! $this->systemSettings->isLocked('default_proctoring_settings')) {
+            $rawDefaultProctoring = trim((string) ($validated['default_proctoring_settings'] ?? ''));
+            if ($rawDefaultProctoring === '') {
+                $this->systemSettings->set('default_proctoring_settings', '', $user);
+            } else {
+                try {
+                    json_decode($rawDefaultProctoring, true, 512, JSON_THROW_ON_ERROR);
+                } catch (\JsonException) {
+                    throw ValidationException::withMessages([
+                        'default_proctoring_settings' => ['Default proctoring JSON is invalid.'],
+                    ]);
+                }
+                $this->systemSettings->set('default_proctoring_settings', $rawDefaultProctoring, $user);
+            }
         }
 
         $this->setBoolIfUnlocked('enable_otp', $request->boolean('enable_otp'), $user);
         $this->setBoolIfUnlocked('enable_sms', $request->boolean('enable_sms'), $user);
         $this->setBoolIfUnlocked('enable_proctoring', $request->boolean('enable_proctoring'), $user);
-        $this->setBoolIfUnlocked('face_verification_required', $request->boolean('face_verification_required'), $user);
+        $this->setBoolIfUnlocked('require_exam_start_snapshot', $request->boolean('require_exam_start_snapshot'), $user);
+        $this->setBoolIfUnlocked('require_camera_monitoring', $request->boolean('require_camera_monitoring'), $user);
         $this->setBoolIfUnlocked('phone_detection_enabled', $request->boolean('phone_detection_enabled'), $user);
         $this->setBoolIfUnlocked('fullscreen_required', $request->boolean('fullscreen_required'), $user);
         $this->setBoolIfUnlocked('auto_submit_enabled', $request->boolean('auto_submit_enabled'), $user);
@@ -202,11 +229,16 @@ class AdminSettingsController extends Controller
         $this->authorize('manageSystemSettings');
 
         $validated = $request->validate([
-            'key' => ['required', 'string', 'max:100'],
+            'key' => ['required', 'string', Rule::in(array_keys(self::lockableDefinitions()))],
         ]);
         $this->systemSettings->lockSetting($validated['key'], $request->user());
 
-        return back()->with('status', 'Setting locked.');
+        return redirect()
+            ->route('admin.settings.index')
+            ->with([
+                'status' => __('Setting locked.'),
+                'scroll_to_setting_lock' => $validated['key'],
+            ]);
     }
 
     public function unlock(Request $request): RedirectResponse
@@ -214,11 +246,56 @@ class AdminSettingsController extends Controller
         $this->authorize('manageSystemSettings');
 
         $validated = $request->validate([
-            'key' => ['required', 'string', 'max:100'],
+            'key' => ['required', 'string', Rule::in(array_keys(self::lockableDefinitions()))],
         ]);
         $this->systemSettings->unlockSetting($validated['key'], $request->user());
 
-        return back()->with('status', 'Setting unlocked.');
+        return redirect()
+            ->route('admin.settings.index')
+            ->with([
+                'status' => __('Setting unlocked.'),
+                'scroll_to_setting_lock' => $validated['key'],
+            ]);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function lockableDefinitions(): array
+    {
+        return [
+            'enable_otp' => __('Enable OTP'),
+            'otp_expiry' => __('OTP expiry (seconds)'),
+            'otp_attempt_limit' => __('OTP attempt limit'),
+            'enable_sms' => __('Enable SMS'),
+            'arkesel_api_key' => __('Arkesel API key'),
+            'arkesel_sender_id' => __('Arkesel sender ID'),
+            'enable_proctoring' => __('Enable proctoring'),
+            'require_exam_start_snapshot' => __('Require exam start verification photo'),
+            'require_camera_monitoring' => __('Require proctoring camera during exam'),
+            'phone_detection_enabled' => __('Phone detection enabled'),
+            'fullscreen_required' => __('Fullscreen required'),
+            'auto_submit_enabled' => __('Auto-submit enabled'),
+            'default_proctoring_settings' => __('Default proctoring JSON'),
+            'enable_ai' => __('Enable AI'),
+            'ai_api_key' => __('AI API key'),
+            'ai_model_name' => __('AI model name'),
+            'enable_student_practice_quizzes' => __('Enable student practice module'),
+            'enable_course_material_uploads' => __('Enable course material uploads'),
+            'enable_ai_summary' => __('Enable AI study summaries (practice)'),
+            'enable_ai_practice_quiz_generation' => __('Enable AI practice quiz generation'),
+            'practice_quiz_daily_limit' => __('Practice AI quiz daily limit (per student)'),
+            'practice_quiz_monthly_limit' => __('Practice AI quiz monthly limit (per student)'),
+            'practice_ai_token_limit_per_student' => __('Practice AI tokens/month per student'),
+            'practice_ai_provider' => __('Practice AI provider slug'),
+            'deepseek_api_key' => __('DeepSeek API key'),
+            'deepseek_model' => __('DeepSeek model'),
+            'allow_examiner_practice_overview' => __('Allow examiner practice analytics'),
+            'enable_redis_runtime' => __('Enable Redis for exam runtime'),
+            'allow_redis_fallback' => __('Allow Redis fallbacks (cache / DB)'),
+            'enable_live_sockets' => __('Enable live WebSockets (Reverb)'),
+            'allow_polling_fallback' => __('Allow polling fallback for exam UI'),
+        ];
     }
 
     private function setBoolIfUnlocked(string $key, bool $value, User $user): void
