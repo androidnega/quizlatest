@@ -57,7 +57,8 @@ class ExamBuilderController extends Controller
         }
 
         $exams = Quiz::query()
-            ->whereIn('course_id', $this->manageableCourseIds($request))
+            ->when($user->role === 'examiner', fn ($q) => $q->where('created_by', $user->id))
+            ->when($user->role !== 'examiner', fn ($q) => $q->whereIn('course_id', $this->manageableCourseIds($request)))
             ->with(['course', 'academicYear'])
             ->when($yearFilter > 0, function ($q) use ($yearFilter) {
                 $q->where(function ($q2) use ($yearFilter) {
@@ -536,36 +537,13 @@ class ExamBuilderController extends Controller
     /**
      * @return array<int, int>
      */
-    private function coordinatorDepartmentIds(Request $request): array
-    {
-        return $request->user()
-            ->coordinatorAssignments()
-            ->where('is_active', true)
-            ->pluck('department_id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
-    }
-
-    /**
-     * Examiner-assigned courses plus any course in the coordinator's departments.
-     *
-     * @return array<int, int>
-     */
     private function manageableCourseIds(Request $request): array
     {
-        $fromAssignments = ExaminerCourseAssignment::query()
+        return ExaminerCourseAssignment::query()
             ->where('examiner_user_id', $request->user()->id)
             ->where('is_active', true)
             ->pluck('course_id')
             ->map(fn ($id) => (int) $id)
             ->all();
-
-        $fromDepartments = Course::query()
-            ->whereIn('department_id', $this->coordinatorDepartmentIds($request))
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
-
-        return array_values(array_unique(array_merge($fromAssignments, $fromDepartments)));
     }
 }

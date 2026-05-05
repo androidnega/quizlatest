@@ -2,7 +2,6 @@
 
 namespace App\Policies;
 
-use App\Models\Course;
 use App\Models\ExaminerCourseAssignment;
 use App\Models\Quiz;
 use App\Models\User;
@@ -22,22 +21,8 @@ class ExamPolicy
                 ->exists();
         }
 
-        if ($user->role !== 'coordinator') {
-            return false;
-        }
-
-        if ($user->coordinatorAssignments()->where('is_active', true)->exists()) {
-            return true;
-        }
-
-        if (ExaminerCourseAssignment::query()
-            ->where('examiner_user_id', $user->id)
-            ->where('is_active', true)
-            ->exists()) {
-            return true;
-        }
-
-        return $user->roles()->whereHas('permissions', fn ($q) => $q->where('slug', 'examiner'))->exists();
+        return $user->role === 'coordinator'
+            && $user->coordinatorAssignments()->where('is_active', true)->exists();
     }
 
     public function view(User $user, Quiz $exam): bool
@@ -47,7 +32,18 @@ class ExamPolicy
 
     public function create(User $user): bool
     {
-        return $this->viewAny($user);
+        if ($user->role === 'admin') {
+            return true;
+        }
+
+        if ($user->role !== 'examiner') {
+            return false;
+        }
+
+        return ExaminerCourseAssignment::query()
+            ->where('examiner_user_id', $user->id)
+            ->where('is_active', true)
+            ->exists();
     }
 
     public function update(User $user, Quiz $exam): bool
@@ -69,16 +65,16 @@ class ExamPolicy
             return true;
         }
 
-        $course = Course::query()->find($exam->course_id);
-        if ($course === null) {
+        if ($user->role !== 'examiner') {
             return false;
         }
 
-        return ExaminerCourseAssignment::query()
-            ->where('examiner_user_id', $user->id)
-            ->where('course_id', $course->id)
-            ->where('is_active', true)
-            ->exists();
+        return (int) $exam->created_by === (int) $user->id
+            && ExaminerCourseAssignment::query()
+                ->where('examiner_user_id', $user->id)
+                ->where('course_id', $exam->course_id)
+                ->where('is_active', true)
+                ->exists();
     }
 
     private function manageExam(User $user, Quiz $exam): bool
@@ -87,37 +83,15 @@ class ExamPolicy
             return true;
         }
 
-        $course = Course::query()->find($exam->course_id);
-        if ($course === null) {
-            return false;
-        }
-
         if ($user->role === 'examiner') {
-            return ExaminerCourseAssignment::query()
-                ->where('examiner_user_id', $user->id)
-                ->where('course_id', $course->id)
-                ->where('is_active', true)
-                ->exists();
+            return (int) $exam->created_by === (int) $user->id
+                && ExaminerCourseAssignment::query()
+                    ->where('examiner_user_id', $user->id)
+                    ->where('course_id', $exam->course_id)
+                    ->where('is_active', true)
+                    ->exists();
         }
 
-        if ($user->role !== 'coordinator') {
-            return false;
-        }
-
-        if (ExaminerCourseAssignment::query()
-            ->where('examiner_user_id', $user->id)
-            ->where('course_id', $course->id)
-            ->where('is_active', true)
-            ->exists()) {
-            return true;
-        }
-
-        $deptIds = $user->coordinatorAssignments()
-            ->where('is_active', true)
-            ->pluck('department_id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
-
-        return in_array((int) $course->department_id, $deptIds, true);
+        return false;
     }
 }

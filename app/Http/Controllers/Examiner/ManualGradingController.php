@@ -80,11 +80,14 @@ class ManualGradingController extends Controller
     private function pendingEssayQuery(Request $request)
     {
         $courseIds = $this->manageableCourseIds($request);
+        $examinerId = (int) $request->user()->id;
 
         return ExamSessionAnswer::query()
             ->where('evaluation_status', 'pending_manual')
             ->whereHas('question', fn ($q) => $q->where('type', 'essay'))
-            ->whereHas('examSession.exam', fn ($q) => $q->whereIn('course_id', $courseIds));
+            ->whereHas('examSession.exam', fn ($q) => $q
+                ->whereIn('course_id', $courseIds)
+                ->where('created_by', $examinerId));
     }
 
     /**

@@ -13,8 +13,14 @@ class ResultPolicy
             return true;
         }
 
-        if ((int) $result->user_id === (int) $user->id) {
+        if ($user->role === 'student' && (int) $result->user_id === (int) $user->id) {
             return true;
+        }
+
+        if ($user->role === 'examiner') {
+            $result->loadMissing('quiz');
+
+            return (int) ($result->quiz?->created_by ?? 0) === (int) $user->id;
         }
 
         if ($user->role !== 'coordinator') {
@@ -38,6 +44,16 @@ class ResultPolicy
 
     public function update(User $user, Result $result): bool
     {
-        return $this->view($user, $result);
+        if ($user->role === 'admin') {
+            return true;
+        }
+
+        if ($user->role !== 'examiner') {
+            return false;
+        }
+
+        $result->loadMissing('quiz');
+
+        return (int) ($result->quiz?->created_by ?? 0) === (int) $user->id;
     }
 }
