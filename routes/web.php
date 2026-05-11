@@ -321,8 +321,6 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
             Route::prefix('/exams')->group(function () {
                 Route::get('/', [ExamBuilderController::class, 'index'])->name('exams.index');
                 Route::get('/create', [ExamBuilderController::class, 'create'])->name('exams.create');
-                Route::post('/create/ai-prompt-preview', [ExamBuilderController::class, 'createAiPromptPreview'])->name('exams.create.ai-prompt-preview');
-                Route::post('/create/ai-outline-topics-suggest', [ExamBuilderController::class, 'suggestTopicsFromOutlineFile'])->name('exams.create.ai-outline-topics-suggest');
                 Route::post('/', [ExamBuilderController::class, 'store'])->name('exams.store');
                 Route::get('/{exam}/builder', function (Request $request, Quiz $exam) {
                     $to = route('examiner.quizzes.workspace', ['exam' => $exam]);

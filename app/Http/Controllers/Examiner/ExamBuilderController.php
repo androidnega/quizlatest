@@ -4,17 +4,21 @@ namespace App\Http\Controllers\Examiner;
 
 use App\Http\Controllers\Controller;
 use App\Models\AcademicYear;
+use App\Models\Classroom;
 use App\Models\Course;
 use App\Models\ExaminerCourseAssignment;
 use App\Models\ExamSection;
+use App\Models\ExamSession;
 use App\Models\Question;
 use App\Models\Quiz;
 use App\Models\Term;
+use App\Models\User;
 use App\Services\ExamAiPromptBuilder;
 use App\Services\ExamAiQuestionGenerator;
 use App\Services\ExamLifecycleService;
 use App\Services\ExamQuestionImportValidator;
 use App\Services\ExamRedisService;
+use App\Services\ProctoringOrchestratorService;
 use App\Services\SystemExamPolicyService;
 use App\Services\SystemSettingsService;
 use Carbon\Carbon;
@@ -67,22 +71,47 @@ class ExamBuilderController extends Controller
             $yearFilter = (int) (AcademicYear::activeForUniversity((int) $user->university_id)?->id ?? 0);
         }
 
-        $exams = Quiz::query()
+        $tab = $request->query('tab', 'active');
+        $tab = $tab === 'ended' ? 'ended' : 'active';
+
+        $manageableCourseIds = $this->manageableCourseIds($request);
+        $courseIdFilter = (int) $request->integer('course_id');
+        $filterCourse = null;
+        if ($courseIdFilter > 0 && in_array($courseIdFilter, $manageableCourseIds, true)) {
+            $filterCourse = Course::query()
+                ->whereKey($courseIdFilter)
+                ->where('university_id', $user->university_id)
+                ->first(['id', 'code', 'title']);
+            if ($filterCourse === null) {
+                $courseIdFilter = 0;
+            }
+        } else {
+            $courseIdFilter = 0;
+        }
+
+        $examQuery = Quiz::query()
             ->when($user->role === 'examiner', fn ($q) => $q->where('created_by', $user->id))
-            ->when($user->role !== 'examiner', fn ($q) => $q->whereIn('course_id', $this->manageableCourseIds($request)))
-            ->with(['course', 'academicYear'])
+            ->when($user->role !== 'examiner', fn ($q) => $q->whereIn('course_id', $manageableCourseIds))
+            ->when($courseIdFilter > 0, fn ($q) => $q->where('course_id', $courseIdFilter))
+            ->with(['course.classrooms' => fn ($q) => $q->with('level:id,name,code')->orderBy('name'), 'academicYear'])
+            ->withCount('questions')
             ->when($yearFilter > 0, function ($q) use ($yearFilter) {
                 $q->where(function ($q2) use ($yearFilter) {
                     $q2->whereNull('academic_year_id')
                         ->orWhere('academic_year_id', $yearFilter);
                 });
             })
-            ->orderByDesc('updated_at')
-            ->paginate(15)
-            ->withQueryString();
+            ->when($tab === 'active', fn ($q) => $q->whereIn('status', ['draft', 'published']))
+            ->when($tab === 'ended', fn ($q) => $q->where('status', 'archived'))
+            ->orderByDesc('updated_at');
+
+        $exams = $examQuery->paginate(15)->withQueryString();
 
         return view('examiner.exams.index', [
             'exams' => $exams,
+            'examsTab' => $tab,
+            'filterCourse' => $filterCourse,
+            'filterCourseId' => $courseIdFilter > 0 ? $courseIdFilter : null,
             'academicYears' => AcademicYear::query()
                 ->where('university_id', $user->university_id)
                 ->orderByDesc('start_date')
@@ -102,34 +131,40 @@ class ExamBuilderController extends Controller
 
         abort_if($courses->isEmpty(), 403, 'No courses available for exam creation in your scope.');
 
-        $examPolicy = app(SystemExamPolicyService::class);
+        $manageableCourseIds = $this->manageableCourseIds($request);
+        $classroomOptions = $this->classroomOptionsForCourses($request->user(), $manageableCourseIds);
 
         return view('examiner.exams.create', [
             'courses' => $courses,
-            'proctoringPolicy' => [
-                'enabled' => $examPolicy->isProctoringEnabled(),
-                'allow_exam_start_snapshot' => $examPolicy->isExamStartSnapshotRequired(),
-                'allow_camera_monitoring' => $examPolicy->isCameraMonitoringRequired(),
-                'allow_phone' => app(SystemSettingsService::class)->getBool('phone_detection_enabled', true),
-                'allow_fullscreen' => app(SystemSettingsService::class)->getBool('fullscreen_required', true),
-                'allow_auto_submit' => app(SystemSettingsService::class)->getBool('auto_submit_enabled', true),
-            ],
+            'classroomOptions' => $classroomOptions,
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
-    {
+    public function store(
+        Request $request,
+        ExamQuestionImportValidator $importValidator,
+        ExamLifecycleService $lifecycle,
+        SystemSettingsService $systemSettings,
+    ): RedirectResponse {
         $this->authorize('create', Quiz::class);
 
         $validated = $request->validate([
             'course_id' => ['required', 'integer'],
+            'classroom_ids' => ['required', 'array', 'min:1'],
+            'classroom_ids.*' => ['integer', 'distinct'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'duration_minutes' => ['required', 'integer', 'min:1', 'max:600'],
             'assessment_type' => ['required', 'string', 'in:quiz,mid,exam,assignment'],
-            'enable_phone' => ['sometimes', 'boolean'],
-            'enable_fullscreen' => ['sometimes', 'boolean'],
-            'enable_auto_submit' => ['sometimes', 'boolean'],
+            'questions_per_student' => ['nullable', 'integer', 'min:1', 'max:500'],
+            'randomize_questions' => ['sometimes', 'boolean'],
+            'randomize_options' => ['sometimes', 'boolean'],
+            'start_time' => ['nullable', 'date'],
+            'end_time' => ['nullable', 'date', 'after_or_equal:start_time'],
+            'question_source' => ['required', 'string', 'in:later,paste_json'],
+            'import_json' => ['nullable', 'string', 'max:500000'],
+            'activate_now' => ['sometimes', 'boolean'],
+            'show_correct_answers_in_results' => ['sometimes', 'boolean'],
         ]);
 
         $course = Course::query()->find((int) $validated['course_id']);
@@ -137,27 +172,63 @@ class ExamBuilderController extends Controller
         $this->authorize('update', $course);
 
         $user = $request->user();
+        $manageableCourseIds = $this->manageableCourseIds($request);
+        abort_unless(in_array((int) $course->id, $manageableCourseIds, true), 403);
+
+        $classIds = collect($validated['classroom_ids'])->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $allowedClassIds = collect($this->classroomOptionsForCourses($user, $manageableCourseIds))->pluck('id')->all();
+        foreach ($classIds as $cid) {
+            if (! in_array($cid, $allowedClassIds, true)) {
+                throw ValidationException::withMessages([
+                    'classroom_ids' => [__('One or more class groups are not in your teaching scope.')],
+                ]);
+            }
+        }
+
+        $courseId = (int) $course->id;
+        foreach ($classIds as $cid) {
+            $linked = DB::table('class_course')
+                ->where('class_id', $cid)
+                ->where('course_id', $courseId)
+                ->exists();
+            if (! $linked) {
+                throw ValidationException::withMessages([
+                    'classroom_ids' => [__('Each selected class group must be enrolled in the chosen course.')],
+                ]);
+            }
+        }
+
+        $source = $validated['question_source'];
+        if ($source === 'paste_json') {
+            $request->validate([
+                'import_json' => ['required', 'string', 'min:3', 'max:500000'],
+                'questions_per_student' => ['required', 'integer', 'min:1', 'max:500'],
+            ]);
+        }
 
         $year = AcademicYear::activeForUniversity((int) $user->university_id);
         abort_if($year === null, 422, 'No active academic year configured. Ask admin to activate an academic year first.');
 
         $activeTerm = Term::activeForAcademicYear($year->id);
-        $systemSettings = app(SystemSettingsService::class);
         $policyEnabled = $systemSettings->getBool('enable_proctoring', true);
         $allowPhone = $policyEnabled && $systemSettings->getBool('phone_detection_enabled', true);
         $allowFullscreen = $policyEnabled && $systemSettings->getBool('fullscreen_required', true);
         $allowAutoSubmit = $policyEnabled && $systemSettings->getBool('auto_submit_enabled', true);
 
-        $initialProctoringSettings = \App\Services\ProctoringOrchestratorService::normalizeProctoringSettings([], null);
-        $initialProctoringSettings['phone_detection_enabled'] = $allowPhone ? $request->boolean('enable_phone') : false;
-        $initialProctoringSettings['fullscreen_enforced'] = $allowFullscreen ? $request->boolean('enable_fullscreen') : false;
-        $initialProctoringSettings['auto_submit_enabled'] = $allowAutoSubmit ? $request->boolean('enable_auto_submit') : false;
+        $initialProctoringSettings = ProctoringOrchestratorService::normalizeProctoringSettings([], null);
+        $initialProctoringSettings['phone_detection_enabled'] = $allowPhone ? $request->boolean('enable_phone', true) : false;
+        $initialProctoringSettings['fullscreen_enforced'] = $allowFullscreen ? $request->boolean('enable_fullscreen', true) : false;
+        $initialProctoringSettings['auto_submit_enabled'] = $allowAutoSubmit ? $request->boolean('enable_auto_submit', true) : false;
+        $initialProctoringSettings['show_correct_answers_to_students'] = $request->boolean('show_correct_answers_in_results');
+
+        $start = isset($validated['start_time']) ? Carbon::parse($validated['start_time']) : null;
+        $end = isset($validated['end_time']) ? Carbon::parse($validated['end_time']) : null;
 
         $quiz = Quiz::create([
             'university_id' => $user->university_id,
             'academic_year_id' => $year->id,
             'term_id' => $activeTerm?->id,
-            'course_id' => (int) $validated['course_id'],
+            'course_id' => $courseId,
             'created_by' => $user->id,
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
@@ -165,12 +236,119 @@ class ExamBuilderController extends Controller
             'status' => 'draft',
             'duration_minutes' => (int) $validated['duration_minutes'],
             'total_marks' => 0,
+            'questions_per_student' => isset($validated['questions_per_student']) ? (int) $validated['questions_per_student'] : null,
+            'randomize_questions' => $request->boolean('randomize_questions'),
+            'randomize_options' => $request->boolean('randomize_options'),
             'proctoring_settings' => $initialProctoringSettings,
+            'start_time' => $start,
+            'end_time' => $end,
         ]);
 
+        $quiz->targetClassrooms()->sync($classIds);
+
+        $importErrors = null;
+        if ($source === 'paste_json') {
+            $result = $importValidator->validateJsonString((string) $request->input('import_json', ''));
+            if (! $result['ok']) {
+                $quiz->delete();
+
+                return back()
+                    ->withErrors(['import_json' => implode("\n", $result['errors'])])
+                    ->withInput();
+            }
+            $this->persistImportedSections($quiz, $result['sections']);
+            $this->approveAllPoolQuestions($quiz);
+            $importErrors = $this->validateQuestionsPerStudentAgainstPool($quiz, (int) $request->input('questions_per_student'));
+        }
+
+        if ($importErrors !== null) {
+            $quiz->delete();
+
+            return back()->withErrors(['questions_per_student' => $importErrors])->withInput();
+        }
+
+        $quiz->refresh();
+        $this->bumpExamConfigCache($quiz);
+
+        $status = __('Assessment saved. Continue in the builder.');
+        if ($request->boolean('activate_now')) {
+            try {
+                $lifecycle->publish($quiz->fresh());
+                $status = __('Assessment created and published for the selected class groups.');
+            } catch (ValidationException $e) {
+                return redirect()
+                    ->route('examiner.quizzes.workspace', $quiz)
+                    ->withErrors($e->errors())
+                    ->with('status', __('Saved as draft — fix the items below, then publish from the builder when ready.'));
+            }
+        }
+
         return redirect()
-            ->route('examiner.exams.builder', $quiz)
-            ->with('status', 'Assessment draft created. Continue setup in the builder.');
+            ->route('examiner.quizzes.workspace', $quiz)
+            ->with('status', $status);
+    }
+
+    /**
+     * @return list<array{id:int, label:string, course_ids:list<int>}>
+     */
+    private function classroomOptionsForCourses(User $user, array $manageableCourseIds): array
+    {
+        if ($manageableCourseIds === []) {
+            return [];
+        }
+
+        $links = DB::table('class_course')
+            ->whereIn('course_id', $manageableCourseIds)
+            ->select('class_id', 'course_id')
+            ->get();
+
+        $byClass = $links->groupBy('class_id');
+        $classes = Classroom::query()
+            ->whereIn('id', $byClass->keys())
+            ->where('university_id', (int) $user->university_id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'section']);
+
+        $out = [];
+        foreach ($classes as $c) {
+            $courseIds = $byClass->get($c->id, collect())->pluck('course_id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+            $label = trim((string) $c->name).($c->section ? ' · '.trim((string) $c->section) : '');
+            $out[] = [
+                'id' => (int) $c->id,
+                'label' => $label !== '' ? $label : (string) $c->id,
+                'course_ids' => $courseIds,
+            ];
+        }
+
+        return $out;
+    }
+
+    private function approveAllPoolQuestions(Quiz $exam): void
+    {
+        Question::query()->where('quiz_id', $exam->id)->update(['pool_status' => 'approved']);
+        $total = (float) Question::query()->where('quiz_id', $exam->id)->sum('marks');
+        $exam->update(['total_marks' => $total]);
+    }
+
+    /**
+     * @return list<string>|null error messages or null if ok
+     */
+    private function validateQuestionsPerStudentAgainstPool(Quiz $exam, int $perStudent): ?array
+    {
+        $approved = Question::query()
+            ->where('quiz_id', $exam->id)
+            ->where('pool_status', 'approved')
+            ->count();
+
+        if ($approved < 1) {
+            return [__('Add at least one question before setting delivery.')];
+        }
+
+        if ($perStudent > $approved) {
+            return [__('Questions per student cannot exceed the number of questions in the pool (:count).', ['count' => $approved])];
+        }
+
+        return null;
     }
 
     public function builder(Request $request, Quiz $exam, SystemSettingsService $systemSettings): View
@@ -178,6 +356,7 @@ class ExamBuilderController extends Controller
         $this->authorize('view', $exam);
 
         $exam->load([
+            'course:id,code,title',
             'sections' => fn ($q) => $q->orderBy('section_order'),
             'sections.questions' => fn ($q) => $q->orderBy('question_order'),
         ]);
@@ -186,6 +365,43 @@ class ExamBuilderController extends Controller
 
         $poolQuestionTotal = Question::query()->where('quiz_id', $exam->id)->count();
         $poolApprovedCount = Question::query()->where('quiz_id', $exam->id)->where('pool_status', 'approved')->count();
+
+        $sessionsCount = ExamSession::query()->where('exam_id', $exam->id)->count();
+
+        $shareUrl = route('student.exam.prepare', ['quiz' => $exam->id], absolute: true);
+        $tokenSeed = hash('sha256', (string) config('app.key').':'.$exam->id);
+        $displayToken = strtoupper(substr($tokenSeed, 0, 8)).'-'.strtoupper(substr($tokenSeed, 8, 8));
+
+        $mobileOnly = (bool) data_get($exam->proctoring_settings, 'mobile_only', false);
+
+        $overviewQuestions = $this->overviewQuestionRows($exam);
+
+        $questionAnalytics = Question::query()
+            ->where('quiz_id', $exam->id)
+            ->selectRaw('type, COUNT(*) as c')
+            ->groupBy('type')
+            ->pluck('c', 'type')
+            ->all();
+
+        $sessionsWorkspace = null;
+        if ($request->user()->can('manageResults', $exam)) {
+            $sessionsWorkspace = app(ExamSessionReviewController::class)->buildSessionsWorkspacePayload($request, $exam);
+        }
+
+        $examPolicy = app(SystemExamPolicyService::class);
+        $examProctoringControls = ProctoringOrchestratorService::normalizeProctoringSettings(
+            is_array($exam->proctoring_settings) ? $exam->proctoring_settings : [],
+            $exam->id
+        );
+
+        $allowedWorkspaceTabs = ['overview', 'sessions', 'scores', 'analytics'];
+        $workspaceTab = (string) $request->query('tab', 'overview');
+        if (! in_array($workspaceTab, $allowedWorkspaceTabs, true)) {
+            $workspaceTab = 'overview';
+        }
+        if ($workspaceTab === 'sessions' && $sessionsWorkspace === null) {
+            $workspaceTab = 'overview';
+        }
 
         return view('examiner.exams.builder', [
             'exam' => $exam,
@@ -199,7 +415,96 @@ class ExamBuilderController extends Controller
             'poolQuestionTotal' => $poolQuestionTotal,
             'poolApprovedCount' => $poolApprovedCount,
             'generationLocked' => $poolQuestionTotal > 0,
+            'sessionsCount' => $sessionsCount,
+            'shareUrl' => $shareUrl,
+            'displayToken' => $displayToken,
+            'mobileOnly' => $mobileOnly,
+            'overviewQuestions' => $overviewQuestions,
+            'questionAnalytics' => $questionAnalytics,
+            'sessionsWorkspace' => $sessionsWorkspace,
+            'workspaceTab' => $workspaceTab,
+            'proctoringPolicy' => [
+                'enabled' => $examPolicy->isProctoringEnabled(),
+                'allow_exam_start_snapshot' => $examPolicy->isExamStartSnapshotRequired(),
+                'allow_camera_monitoring' => $examPolicy->isCameraMonitoringRequired(),
+                'allow_phone' => $systemSettings->getBool('phone_detection_enabled', true),
+                'allow_fullscreen' => $systemSettings->getBool('fullscreen_required', true),
+                'allow_auto_submit' => $systemSettings->getBool('auto_submit_enabled', true),
+            ],
+            'examProctoringControls' => $examProctoringControls,
         ]);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function overviewQuestionRows(Quiz $exam): array
+    {
+        $rows = [];
+        $n = 0;
+        foreach ($exam->sections as $section) {
+            foreach ($section->questions as $q) {
+                $n++;
+                $topic = (string) data_get($q->metadata, 'topic', '');
+                $aiFlag = (bool) data_get($q->metadata, 'ai_generated')
+                    || (bool) data_get($q->metadata, 'ai');
+
+                $rows[] = [
+                    'id' => $q->id,
+                    'n' => $n,
+                    'text' => $q->question_text,
+                    'type' => $q->type,
+                    'typeLabel' => strtoupper(str_replace('_', ' ', $q->type)),
+                    'pool_status' => $q->pool_status,
+                    'topic' => $topic,
+                    'ai' => $aiFlag,
+                    'answer' => $this->questionAnswerPreviewLine($q),
+                    'section' => $section->title,
+                ];
+            }
+        }
+
+        return $rows;
+    }
+
+    private function questionAnswerPreviewLine(Question $q): string
+    {
+        if ($q->isMCQ() && is_array($q->options)) {
+            $ca = $q->correct_answer;
+            $indices = [];
+            if (is_array($ca)) {
+                foreach ($ca as $v) {
+                    if (is_int($v) || (is_string($v) && ctype_digit($v))) {
+                        $indices[] = (int) $v;
+                    }
+                }
+            } elseif (is_int($ca) || (is_string($ca) && ctype_digit($ca))) {
+                $indices[] = (int) $ca;
+            }
+            $labels = [];
+            foreach ($indices as $idx) {
+                $labels[] = ($q->options[$idx] ?? '') !== '' ? (string) $q->options[$idx] : '#'.$idx;
+            }
+
+            return $labels !== [] ? implode('; ', $labels) : '—';
+        }
+
+        if ($q->isTrueFalse()) {
+            if ($q->correct_answer === true) {
+                return 'True';
+            }
+            if ($q->correct_answer === false) {
+                return 'False';
+            }
+
+            return '—';
+        }
+
+        if ($q->isFillBlank() && is_array($q->correct_answer)) {
+            return implode(', ', array_map(fn ($v) => (string) $v, $q->correct_answer));
+        }
+
+        return '—';
     }
 
     public function updateDeliverySettings(Request $request, Quiz $exam): RedirectResponse
@@ -239,6 +544,39 @@ class ExamBuilderController extends Controller
         $this->bumpExamConfigCache($exam->fresh());
 
         return back()->with('status', 'Delivery settings updated.');
+    }
+
+    public function updateProctoringExaminerChoices(Request $request, Quiz $exam, SystemSettingsService $systemSettings): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+        abort_unless($exam->status === 'draft', 403, 'Only draft assessments can change proctoring options.');
+
+        $policyEnabled = $systemSettings->getBool('enable_proctoring', true);
+        $allowPhone = $policyEnabled && $systemSettings->getBool('phone_detection_enabled', true);
+        $allowFullscreen = $policyEnabled && $systemSettings->getBool('fullscreen_required', true);
+        $allowAutoSubmit = $policyEnabled && $systemSettings->getBool('auto_submit_enabled', true);
+
+        $request->validate([
+            'enable_phone' => ['sometimes', 'boolean'],
+            'enable_fullscreen' => ['sometimes', 'boolean'],
+            'enable_auto_submit' => ['sometimes', 'boolean'],
+        ]);
+
+        $current = is_array($exam->proctoring_settings) ? $exam->proctoring_settings : [];
+        $normalized = ProctoringOrchestratorService::normalizeProctoringSettings($current, $exam->id);
+
+        $normalized['phone_detection_enabled'] = $allowPhone ? $request->boolean('enable_phone', true) : false;
+        $normalized['fullscreen_enforced'] = $allowFullscreen ? $request->boolean('enable_fullscreen', true) : false;
+        $normalized['auto_submit_enabled'] = $allowAutoSubmit ? $request->boolean('enable_auto_submit', true) : false;
+
+        $extras = array_intersect_key($current, array_flip(['show_correct_answers_to_students', 'mobile_only']));
+        $merged = array_merge($normalized, $extras);
+
+        $exam->update(['proctoring_settings' => $merged]);
+
+        $this->bumpExamConfigCache($exam->fresh());
+
+        return back()->with('status', __('Proctoring options updated.'));
     }
 
     public function updateQuestionPoolStatus(Request $request, Quiz $exam, Question $question): RedirectResponse
@@ -332,7 +670,7 @@ class ExamBuilderController extends Controller
         $copy = $lifecycle->cloneToDraft($exam->fresh(), (int) $user->id, (int) $user->university_id);
 
         return redirect()
-            ->route('examiner.exams.builder', $copy)
+            ->route('examiner.quizzes.workspace', $copy)
             ->with('status', 'Exam duplicated as a new draft.');
     }
 

@@ -1,112 +1,191 @@
+@php($staffAcademicPeriodBadge = null)
 <x-layouts.examiner>
-    <x-slot name="title">{{ __('Create Assessment') }}</x-slot>
-    <x-slot name="subtitle">{{ __('Start with the basic assessment details. You will add sections, questions, rules, and publishing settings in the builder.') }}</x-slot>
+    <x-slot name="title">{{ __('Create assessment') }}</x-slot>
+    <x-slot name="subtitle">{{ __('Set up class groups, optional JSON import, and scheduling. You can refine everything later in the builder.') }}</x-slot>
 
     <div
-        x-data="{ step: 1, maxStep: 4 }"
-        class="w-full max-w-none rounded-xl border border-qs-soft bg-qs-bg p-6 shadow-sm"
+        class="w-full max-w-none space-y-6 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm sm:p-6 lg:p-8"
+        x-data='{
+            rows: @json($classroomOptions),
+            courseId: {{ (int) (old('course_id', request('course_id')) ?: ($courses->first()->id ?? 0)) }},
+            selectedClassIds: @json(array_values(array_map('intval', old('classroom_ids', [])))),
+            source: @json(old('question_source', 'later')),
+            filteredClassrooms() {
+                const cid = parseInt(this.courseId, 10) || 0;
+                if (!cid) return [];
+                return this.rows.filter((r) => (r.course_ids || []).includes(cid));
+            },
+            syncClassroomInputs() {
+                const mount = document.getElementById("classroom-ids-mount");
+                if (!mount) return;
+                mount.innerHTML = "";
+                this.selectedClassIds.forEach((id) => {
+                    const inp = document.createElement("input");
+                    inp.type = "hidden";
+                    inp.name = "classroom_ids[]";
+                    inp.value = String(id);
+                    mount.appendChild(inp);
+                });
+            }
+        }'
     >
-        <div class="mb-5">
-            <div class="mb-2 flex flex-wrap gap-2">
-                <span :class="step >= 1 ? 'bg-emerald-100 text-emerald-900 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'" class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold">{{ __('Step 1') }} · {{ __('Scope') }}</span>
-                <span :class="step >= 2 ? 'bg-emerald-100 text-emerald-900 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'" class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold">{{ __('Step 2') }} · {{ __('Type & title') }}</span>
-                <span :class="step >= 3 ? 'bg-emerald-100 text-emerald-900 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'" class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold">{{ __('Step 3') }} · {{ __('Timing') }}</span>
-                <span :class="step >= 4 ? 'bg-emerald-100 text-emerald-900 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'" class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold">{{ __('Step 4') }} · {{ __('Proctoring') }}</span>
+        @if ($errors->any())
+            <div class="rounded-xl border border-qs-danger/35 bg-qs-danger-soft px-4 py-3 text-sm text-qs-danger">
+                <ul class="list-disc ps-5">
+                    @foreach ($errors->all() as $e)
+                        <li>{{ $e }}</li>
+                    @endforeach
+                </ul>
             </div>
-            <p class="text-xs text-slate-500">{{ __('Use Next to complete the setup quickly, then continue in Builder.') }}</p>
-        </div>
+        @endif
 
-        <form method="post" action="{{ route('examiner.exams.store') }}" class="space-y-4">
+        @if (count($classroomOptions) === 0)
+            <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                {{ __('No class groups are linked to your courses yet. Ask a coordinator to assign classes to your courses, then return here.') }}
+            </div>
+        @endif
+
+        <form method="post" action="{{ route('examiner.exams.store') }}" class="space-y-8" @submit="syncClassroomInputs()">
             @csrf
-            <section x-show="step === 1" x-cloak class="space-y-4">
-                <div>
-                    <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Course') }}</label>
-                    <select name="course_id" required class="w-full rounded-lg border border-qs-soft px-3 py-2 text-sm">
-                        @foreach ($courses as $course)
-                            <option value="{{ $course->id }}" @selected((int) old('course_id') === (int) $course->id)>{{ $course->code }} — {{ $course->title }}</option>
-                        @endforeach
-                    </select>
-                    @error('course_id')
-                        <p class="mt-1 text-sm text-qs-danger">{{ $message }}</p>
-                    @enderror
-                </div>
-            </section>
 
-            <section x-show="step === 2" x-cloak class="space-y-4">
+            <section class="space-y-4" aria-labelledby="ec-general">
+                <h2 id="ec-general" class="text-sm font-semibold text-qs-text">{{ __('General') }}</h2>
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Assessment type') }}</label>
-                    <select name="assessment_type" required class="w-full rounded-lg border border-qs-soft px-3 py-2 text-sm">
-                        @foreach (['quiz' => 'Quiz', 'mid' => 'Mid', 'exam' => 'Exam', 'assignment' => 'Assignment'] as $value => $label)
-                            <option value="{{ $value }}" @selected(old('assessment_type', 'exam') === $value)>{{ $label }}</option>
+                    <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Title') }} <span class="text-qs-danger">*</span></label>
+                    <input type="text" name="title" value="{{ old('title') }}" required class="qs-input mt-1 w-full py-2.5" placeholder="{{ __('e.g. Midterm Exam — March') }}" />
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Assessment type') }} <span class="text-qs-danger">*</span></label>
+                    <select name="assessment_type" required class="qs-input mt-1 w-full py-2.5">
+                        @foreach (['quiz' => __('Quiz'), 'mid' => __('Midterm'), 'exam' => __('End of semester'), 'assignment' => __('Assignment')] as $value => $label)
+                            <option value="{{ $value }}" @selected(old('assessment_type', 'quiz') === $value)>{{ $label }}</option>
                         @endforeach
                     </select>
-                    @error('assessment_type')
-                        <p class="mt-1 text-sm text-qs-danger">{{ $message }}</p>
-                    @enderror
+                    <p class="mt-1 text-xs text-qs-muted">{{ __('Shown on reports and student-facing labels.') }}</p>
                 </div>
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Title') }}</label>
-                    <input type="text" name="title" value="{{ old('title') }}" required class="w-full rounded-lg border border-qs-soft px-3 py-2 text-sm" />
-                    @error('title')
-                        <p class="mt-1 text-sm text-qs-danger">{{ $message }}</p>
-                    @enderror
+                    <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Course') }} <span class="text-qs-danger">*</span></label>
+                    <select name="course_id" x-model="courseId" required class="qs-input mt-1 w-full py-2.5">
+                        @foreach ($courses as $course)
+                            <option value="{{ $course->id }}" @selected((int) old('course_id', request('course_id')) === (int) $course->id)>{{ $course->code }} — {{ $course->title }}</option>
+                        @endforeach
+                    </select>
                 </div>
+                <fieldset>
+                    <legend class="mb-2 block text-sm font-medium text-qs-muted">{{ __('Class groups') }} <span class="text-qs-danger">*</span></legend>
+                    <p class="mb-2 text-xs text-qs-muted">{{ __('Select all groups that should see this quiz when it is published. Each group must be enrolled in the course above.') }}</p>
+                    <div class="max-h-52 space-y-2 overflow-y-auto rounded-lg border border-qs-soft bg-white p-3">
+                        <template x-for="row in filteredClassrooms()" :key="row.id">
+                            <label class="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 hover:bg-slate-50">
+                                <input type="checkbox" :value="row.id" x-model="selectedClassIds" class="mt-1 size-4 rounded border-qs-soft text-qs-accent" />
+                                <span class="text-sm text-qs-text" x-text="row.label"></span>
+                            </label>
+                        </template>
+                        <p x-show="filteredClassrooms().length === 0" class="text-sm text-qs-muted">{{ __('No class groups for this course.') }}</p>
+                    </div>
+                    <div id="classroom-ids-mount"></div>
+                </fieldset>
                 <div>
                     <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Description (optional)') }}</label>
-                    <textarea name="description" rows="4" class="w-full rounded-lg border border-qs-soft px-3 py-2 text-sm" placeholder="{{ __('Any extra instructions or context for this assessment.') }}">{{ old('description') }}</textarea>
+                    <textarea name="description" rows="3" class="qs-input mt-1 w-full py-2.5">{{ old('description') }}</textarea>
                 </div>
             </section>
 
-            <section x-show="step === 3" x-cloak class="space-y-4">
-                <div>
-                    <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Duration (minutes)') }}</label>
-                    <input type="number" name="duration_minutes" value="{{ old('duration_minutes', 30) }}" min="1" max="600" required class="w-full max-w-sm rounded-lg border border-qs-soft px-3 py-2 text-sm" />
+            <section class="space-y-4" aria-labelledby="ec-pool">
+                <h2 id="ec-pool" class="text-sm font-semibold text-qs-text">{{ __('Question pool & delivery') }}</h2>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Duration (minutes)') }} <span class="text-qs-danger">*</span></label>
+                        <input type="number" name="duration_minutes" value="{{ old('duration_minutes', 30) }}" min="1" max="600" required class="qs-input mt-1 w-full py-2.5" />
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Questions per student') }}</label>
+                        <input type="number" name="questions_per_student" value="{{ old('questions_per_student', 10) }}" min="1" max="500" class="qs-input mt-1 w-full py-2.5" :required="source === 'paste_json'" />
+                        <p class="mt-1 text-xs text-qs-muted">{{ __('Required when importing JSON. Each student draws this many from the approved pool.') }}</p>
+                    </div>
                 </div>
-                <p class="text-xs text-slate-500">{{ __('You are creating a draft shell. Sections, questions, rules, and publish settings come next in Builder.') }}</p>
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <div class="rounded-lg border border-qs-soft bg-white px-4 py-3">
+                        <input type="hidden" name="randomize_questions" value="0" />
+                        <label class="flex cursor-pointer items-start gap-3">
+                            <input type="checkbox" name="randomize_questions" value="1" class="mt-0.5 size-4 shrink-0 rounded border-qs-soft text-qs-accent" @checked(old('randomize_questions', true)) />
+                            <span>
+                                <span class="block text-sm font-medium text-qs-text">{{ __('Randomize question order') }}</span>
+                                <span class="mt-0.5 block text-xs text-qs-muted">{{ __('Each student may see questions in a different sequence.') }}</span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="rounded-lg border border-qs-soft bg-white px-4 py-3">
+                        <input type="hidden" name="randomize_options" value="0" />
+                        <label class="flex cursor-pointer items-start gap-3">
+                            <input type="checkbox" name="randomize_options" value="1" class="mt-0.5 size-4 shrink-0 rounded border-qs-soft text-qs-accent" @checked(old('randomize_options', true)) />
+                            <span>
+                                <span class="block text-sm font-medium text-qs-text">{{ __('Randomize MCQ options') }}</span>
+                                <span class="mt-0.5 block text-xs text-qs-muted">{{ __('Shuffle answer choices for multiple-choice items.') }}</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
             </section>
 
-            <section x-show="step === 4" x-cloak class="space-y-4">
-                <p class="text-xs text-slate-500">{{ __('Choose allowed proctoring options for this assessment. These options are capped by super admin policy.') }}</p>
-                <label class="inline-flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-qs-soft px-3 py-2 text-sm text-qs-text">
-                    <input type="checkbox" class="size-4 rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
-                        @checked($proctoringPolicy['allow_exam_start_snapshot']) @disabled(true) />
-                    {{ __('Exam start verification photo') }}
-                    <span class="ml-auto text-[11px] text-qs-muted">{{ $proctoringPolicy['allow_exam_start_snapshot'] ? __('Required by admin') : __('Disabled by admin') }}</span>
+            <section class="space-y-4" aria-labelledby="ec-source">
+                <h2 id="ec-source" class="text-sm font-semibold text-qs-text">{{ __('Questions') }}</h2>
+                <p class="text-xs leading-snug text-qs-muted">{{ __('By default the assessment is saved as a draft with no questions yet—you add them in the workspace. Optionally paste builder JSON now.') }}</p>
+                <input type="hidden" name="question_source" :value="source" />
+                <div class="flex flex-wrap gap-3">
+                    <label class="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm" :class="source === 'later' ? 'border-qs-accent bg-qs-accent/10' : 'border-qs-soft bg-white'">
+                        <input type="radio" value="later" x-model="source" class="size-4 border-qs-soft text-qs-accent" />
+                        <span class="font-medium text-qs-text">{{ __('Later') }}</span>
+                    </label>
+                    <label class="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm" :class="source === 'paste_json' ? 'border-qs-accent bg-qs-accent/10' : 'border-qs-soft bg-white'">
+                        <input type="radio" value="paste_json" x-model="source" class="size-4 border-qs-soft text-qs-accent" />
+                        {{ __('Paste JSON') }}
+                    </label>
+                </div>
+
+                <div x-show="source === 'paste_json'" x-cloak class="space-y-3">
+                    <p class="text-xs leading-relaxed text-qs-muted">
+                        {{ __('Paste the same JSON shape used in the assessment builder (root object with a sections array). You can also paste a flat ChatGPT-style MCQ array; it is converted on save.') }}
+                    </p>
+                    <label class="mb-1 block text-sm font-medium text-qs-muted" for="import-json-field">{{ __('Question JSON') }}</label>
+                    <textarea
+                        id="import-json-field"
+                        name="import_json"
+                        rows="14"
+                        class="w-full rounded-lg border border-qs-soft bg-white px-3 py-2 font-mono text-xs text-qs-text placeholder:text-qs-muted"
+                        placeholder='{"sections":[{"title":"Section A","questions":[...]}]}'
+                    >{{ old('import_json') }}</textarea>
+                </div>
+            </section>
+
+            <section class="space-y-4" aria-labelledby="ec-schedule">
+                <h2 id="ec-schedule" class="text-sm font-semibold text-qs-text">{{ __('Scheduling') }}</h2>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Opens at (optional)') }}</label>
+                        <input type="datetime-local" name="start_time" value="{{ old('start_time') }}" class="qs-input mt-1 w-full py-2.5" />
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Closes at (optional)') }}</label>
+                        <input type="datetime-local" name="end_time" value="{{ old('end_time') }}" class="qs-input mt-1 w-full py-2.5" />
+                    </div>
+                </div>
+                <label class="inline-flex items-center gap-2 text-sm text-qs-text">
+                    <input type="checkbox" name="activate_now" value="1" class="size-4 rounded border-qs-soft text-qs-accent" @checked(old('activate_now')) />
+                    {{ __('Publish immediately if validation passes') }}
                 </label>
-                <label class="inline-flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-qs-soft px-3 py-2 text-sm text-qs-text">
-                    <input type="checkbox" class="size-4 rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
-                        @checked($proctoringPolicy['allow_camera_monitoring']) @disabled(true) />
-                    {{ __('Proctoring camera during exam') }}
-                    <span class="ml-auto text-[11px] text-qs-muted">{{ $proctoringPolicy['allow_camera_monitoring'] ? __('Required by admin') : __('Disabled by admin') }}</span>
-                </label>
-                <label class="inline-flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-qs-soft px-3 py-2 text-sm text-qs-text">
-                    <input type="checkbox" name="enable_phone" value="1" class="size-4 rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
-                        @checked(old('enable_phone', true)) @disabled(! $proctoringPolicy['allow_phone']) />
-                    {{ __('Phone detection') }}
-                </label>
-                <label class="inline-flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-qs-soft px-3 py-2 text-sm text-qs-text">
-                    <input type="checkbox" name="enable_fullscreen" value="1" class="size-4 rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
-                        @checked(old('enable_fullscreen', true)) @disabled(! $proctoringPolicy['allow_fullscreen']) />
-                    {{ __('Fullscreen enforcement') }}
-                </label>
-                <label class="inline-flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-qs-soft px-3 py-2 text-sm text-qs-text">
-                    <input type="checkbox" name="enable_auto_submit" value="1" class="size-4 rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40"
-                        @checked(old('enable_auto_submit', true)) @disabled(! $proctoringPolicy['allow_auto_submit']) />
-                    {{ __('Auto submit on severe violations') }}
+                <p class="text-xs text-qs-muted">{{ __('Requires an approved question pool and delivery settings. If anything is missing, the assessment is saved as a draft.') }}</p>
+                <label class="inline-flex items-center gap-2 text-sm text-qs-text">
+                    <input type="checkbox" name="show_correct_answers_in_results" value="1" class="size-4 rounded border-qs-soft text-qs-accent" @checked(old('show_correct_answers_in_results')) />
+                    {{ __('Allow students to see correct answers in results (when your school policy permits)') }}
                 </label>
             </section>
 
-            <div class="flex flex-wrap gap-3 pt-2">
-                <button type="button" x-show="step > 1" @click="step = Math.max(1, step - 1)" class="rounded-lg border border-qs-soft px-4 py-2 text-sm font-semibold text-qs-muted hover:bg-qs-card">
-                    {{ __('Back') }}
+            <div class="flex flex-wrap gap-3 border-t border-qs-soft pt-4">
+                <button type="submit" class="qs-btn-primary min-h-[44px] px-5 text-sm font-semibold" @if (count($classroomOptions) === 0) disabled @endif>
+                    {{ __('Create assessment') }}
                 </button>
-                <button type="button" x-show="step < maxStep" @click="step = Math.min(maxStep, step + 1)" class="rounded-lg border border-qs-soft bg-white px-4 py-2 text-sm font-semibold text-qs-text hover:bg-qs-card">
-                    {{ __('Next') }}
-                </button>
-                <button type="submit" x-show="step === maxStep" class="rounded-lg bg-qs-accent px-4 py-2 text-sm font-semibold text-white hover:opacity-95">
-                    {{ __('Save & Continue to Builder') }}
-                </button>
-                <a href="{{ route('examiner.exams.index') }}" class="rounded-lg border border-qs-soft px-4 py-2 text-sm font-semibold text-qs-muted hover:bg-qs-card">
+                <a href="{{ route('examiner.exams.index') }}" class="inline-flex min-h-[44px] items-center rounded-lg border border-qs-soft px-4 text-sm font-semibold text-qs-muted hover:bg-qs-card">
                     {{ __('Cancel') }}
                 </a>
             </div>
