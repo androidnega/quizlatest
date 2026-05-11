@@ -97,7 +97,7 @@ class ExaminerAssessmentCreateFlowTest extends TestCase
             ->assertOk()
             ->assertSee('Create assessment', false)
             ->assertSee('Class groups', false)
-            ->assertSee('ChatGPT JSON', false);
+            ->assertSee('Import JSON', false);
     }
 
     public function test_examiner_can_create_draft_assessment_and_redirect_to_workspace(): void

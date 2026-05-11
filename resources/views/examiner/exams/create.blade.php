@@ -1,7 +1,7 @@
 @php($staffAcademicPeriodBadge = null)
 <x-layouts.examiner>
     <x-slot name="title">{{ __('Create assessment') }}</x-slot>
-    <x-slot name="subtitle">{{ __('Choose class groups, optional ChatGPT JSON or in-app AI generation, then scheduling.') }}</x-slot>
+    <x-slot name="subtitle">{{ __('Choose class groups, optional JSON import with a prompt helper, in-app AI generation, then scheduling.') }}</x-slot>
 
     <div
         class="w-full max-w-none space-y-6 rounded-xl border border-qs-soft bg-qs-bg p-5 shadow-sm sm:p-6 lg:p-8"
@@ -108,7 +108,7 @@
 
             <section class="space-y-4" aria-labelledby="ec-source">
                 <h2 id="ec-source" class="text-sm font-semibold text-qs-text">{{ __('Questions') }}</h2>
-                <p class="text-xs leading-snug text-qs-muted">{{ __('Save as a draft and build later, paste ChatGPT JSON with a live prompt helper, or generate questions in-app when AI is enabled.') }}</p>
+                <p class="text-xs leading-snug text-qs-muted">{{ __('Save as a draft and build later, import JSON with a live prompt helper, or generate questions in-app when AI is enabled.') }}</p>
                 <input type="hidden" name="question_source" :value="source" />
                 <div class="flex flex-wrap gap-3">
                     <label class="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm" :class="source === 'later' ? 'border-qs-accent bg-qs-accent/10' : 'border-qs-soft bg-white'">
@@ -117,7 +117,7 @@
                     </label>
                     <label class="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm" :class="source === 'paste_json' ? 'border-qs-accent bg-qs-accent/10' : 'border-qs-soft bg-white'">
                         <input type="radio" value="paste_json" x-model="source" class="size-4 border-qs-soft text-qs-accent" />
-                        <span class="font-medium text-qs-text">{{ __('ChatGPT JSON') }}</span>
+                        <span class="font-medium text-qs-text">{{ __('Import JSON') }}</span>
                     </label>
                     <label class="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm" :class="source === 'ai_generate' ? 'border-qs-accent bg-qs-accent/10' : 'border-qs-soft bg-white'">
                         <input type="radio" value="ai_generate" x-model="source" class="size-4 border-qs-soft text-qs-accent" @disabled(! $aiEnabled) />
@@ -125,10 +125,10 @@
                     </label>
                 </div>
                 @if (! $aiEnabled)
-                    <p class="text-xs text-qs-muted">{{ __('In-app AI generation is turned off for your institution. You can still use ChatGPT JSON.') }}</p>
+                    <p class="text-xs text-qs-muted">{{ __('In-app AI generation is turned off for your institution. You can still import JSON.') }}</p>
                 @endif
 
-                {{-- ChatGPT path: prompt + paste JSON + validate --}}
+                {{-- JSON import path: prompt + paste + validate --}}
                 <div x-show="source === 'paste_json'" x-cloak class="space-y-6">
                     <div class="space-y-3 rounded-lg border border-qs-soft bg-white p-4">
                         <div>
@@ -155,7 +155,7 @@
                             />
                         </div>
                         <p class="text-xs leading-relaxed text-qs-muted">
-                            {{ __('Add topics and number of questions above. The box below updates automatically — click the box or “Copy prompt” to copy, then paste into ChatGPT. Paste the returned JSON in the next section.') }}
+                            {{ __('Add topics and number of questions above. The box below updates automatically — click the box or “Copy prompt” to copy, then run it in your own tool. Paste the returned JSON in the next section.') }}
                         </p>
                         <div>
                             <textarea
@@ -175,8 +175,8 @@
                     </div>
 
                     <div class="space-y-3">
-                        <h3 class="text-sm font-semibold text-qs-text">{{ __('Paste AI JSON') }}</h3>
-                        <p class="text-xs text-qs-muted">{{ __('Paste the JSON from ChatGPT here, then click Validate.') }}</p>
+                        <h3 class="text-sm font-semibold text-qs-text">{{ __('Paste JSON') }}</h3>
+                        <p class="text-xs text-qs-muted">{{ __('Paste the JSON from your generator here, then click Validate.') }}</p>
                         <textarea
                             id="import-json-field"
                             name="import_json"

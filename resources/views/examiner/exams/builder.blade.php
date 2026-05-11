@@ -327,7 +327,7 @@
                                 </span>
                             </template>
                         </div>
-                        <input type="text" x-model="input" @keydown.enter.prevent="addFromInput()" @blur="addFromInput()" placeholder="{{ __('Type a topic and press Enter to add (commas inside a topic are OK)') }}" class="w-full border-0 p-0 text-sm focus:outline-none focus:ring-0" />
+                        <input type="text" x-model="input" @keydown.enter.prevent="addFromInput()" @blur="addFromInput()" placeholder="{{ __('Separate topics with commas; use "quotes" if a topic contains a comma. Press Enter to add.') }}" class="w-full border-0 p-0 text-sm focus:outline-none focus:ring-0" />
                     </div>
                 </div>
                 <div>
@@ -352,7 +352,7 @@
             @enderror
             <form method="post" action="{{ route('examiner.exams.questions.import.preview', $exam) }}" class="mt-4 space-y-3">
                 @csrf
-                <label class="block text-xs text-qs-muted">Paste AI JSON result</label>
+                <label class="block text-xs text-qs-muted">{{ __('Paste JSON result') }}</label>
                 <textarea name="import_json" rows="8" class="w-full rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm font-mono text-qs-text" placeholder='{"sections":[{"title":"Section A","questions":[...]}]}'>{{ old('import_json') }}</textarea>
                 <button type="submit" class="qs-btn-secondary min-h-[44px] text-sm">Preview import</button>
             </form>
@@ -380,7 +380,7 @@
                                         </span>
                                     </template>
                                 </div>
-                                <input type="text" x-model="input" @keydown.enter.prevent="addFromInput()" @blur="addFromInput()" placeholder="{{ __('Type a topic and press Enter to add (commas inside a topic are OK)') }}" class="w-full border-0 p-0 text-sm focus:outline-none focus:ring-0" />
+                                <input type="text" x-model="input" @keydown.enter.prevent="addFromInput()" @blur="addFromInput()" placeholder="{{ __('Separate topics with commas; use "quotes" if a topic contains a comma. Press Enter to add.') }}" class="w-full border-0 p-0 text-sm focus:outline-none focus:ring-0" />
                             </div>
                         </div>
                         <div>
@@ -595,6 +595,57 @@
     </div>
 
     <script>
+        function splitCommaSeparatedRespectingQuotes(str) {
+            const s = String(str || '').trim();
+            if (!s) {
+                return [];
+            }
+            const parts = [];
+            let cur = '';
+            let inD = false;
+            let inS = false;
+            for (let i = 0; i < s.length; i++) {
+                const c = s[i];
+                const prev = i > 0 ? s[i - 1] : '';
+                if (inD) {
+                    if (c === '"' && prev !== '\\') {
+                        inD = false;
+                    } else {
+                        cur += c;
+                    }
+                    continue;
+                }
+                if (inS) {
+                    if (c === "'" && prev !== '\\') {
+                        inS = false;
+                    } else {
+                        cur += c;
+                    }
+                    continue;
+                }
+                if (c === '"') {
+                    inD = true;
+                    continue;
+                }
+                if (c === "'") {
+                    inS = true;
+                    continue;
+                }
+                if (c === ',') {
+                    if (cur.trim()) {
+                        parts.push(cur.trim());
+                    }
+                    cur = '';
+                    continue;
+                }
+                cur += c;
+            }
+            if (cur.trim()) {
+                parts.push(cur.trim());
+            }
+            return parts.filter((p) => p.length > 0);
+        }
+
         function topicTags(initial) {
             function parseInitial(raw) {
                 if (raw == null) {
@@ -616,7 +667,7 @@
                         }
                     } catch (e) {}
                 }
-                return [...new Set(s.split(',').map((t) => t.trim()).filter((t) => t.length > 0))];
+                return [...new Set(splitCommaSeparatedRespectingQuotes(s))];
             }
             return {
                 tags: parseInitial(initial),
@@ -649,9 +700,12 @@
                     if (v === '') {
                         return;
                     }
-                    if (!this.tags.includes(v)) {
-                        this.tags.push(v);
-                    }
+                    const parts = splitCommaSeparatedRespectingQuotes(v);
+                    parts.forEach((p) => {
+                        if (p && !this.tags.includes(p)) {
+                            this.tags.push(p);
+                        }
+                    });
                     this.input = '';
                 },
                 remove(idx) {

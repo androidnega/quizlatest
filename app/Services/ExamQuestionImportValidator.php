@@ -19,6 +19,12 @@ namespace App\Services;
  *     }
  *   ]
  * }
+ *
+ * External flat MCQ JSON shape (root JSON array):
+ * [
+ *   { "text": "…?", "options": { "A": "…", "B": "…", "C": "…", "D": "…" }, "correct": "A", "topic": "…" },
+ *   …
+ * ]
  */
 final class ExamQuestionImportValidator
 {
@@ -40,10 +46,139 @@ final class ExamQuestionImportValidator
         }
 
         if (! is_array($decoded)) {
-            return ['ok' => false, 'errors' => ['JSON root must be an object.']];
+            return ['ok' => false, 'errors' => ['JSON root must be an array or object.']];
+        }
+
+        if ($this->looksLikeChatGptMcqItemsArray($decoded)) {
+            /** @var list<array<string, mixed>> $decoded */
+            $convErrors = [];
+            $wrapped = $this->convertChatGptMcqItemsToSections($decoded, $convErrors);
+            if ($wrapped === null) {
+                return ['ok' => false, 'errors' => $convErrors !== [] ? $convErrors : ['Could not convert external MCQ JSON.']];
+            }
+
+            return $this->validateDecoded($wrapped);
         }
 
         return $this->validateDecoded($decoded);
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $decoded
+     */
+    private function looksLikeChatGptMcqItemsArray(array $decoded): bool
+    {
+        if ($decoded === [] || ! array_is_list($decoded)) {
+            return false;
+        }
+
+        $first = $decoded[0];
+        if (! is_array($first)) {
+            return false;
+        }
+
+        return isset($first['text'], $first['options'], $first['correct'])
+            && is_string($first['text'])
+            && is_array($first['options']);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $items
+     * @param  list<string>  $errors
+     * @return array{sections: list<array{title: string, questions: list<array<string, mixed>>}>}|null
+     */
+    private function convertChatGptMcqItemsToSections(array $items, array &$errors): ?array
+    {
+        $byTopic = [];
+
+        foreach ($items as $i => $item) {
+            $p = 'items['.$i.']';
+            if (! is_array($item)) {
+                $errors[] = "{$p}: each item must be an object.";
+
+                continue;
+            }
+
+            $text = $item['text'] ?? $item['question_text'] ?? null;
+            if (! is_string($text) || trim($text) === '') {
+                $errors[] = "{$p}.text: required non-empty string.";
+
+                continue;
+            }
+
+            $optsIn = $item['options'] ?? null;
+            if (! is_array($optsIn)) {
+                $errors[] = "{$p}.options: must be an object with A–D keys.";
+
+                continue;
+            }
+
+            $normKeys = [];
+            foreach ($optsIn as $k => $v) {
+                if (! is_string($k) || ! is_string($v) || trim($v) === '') {
+                    $errors[] = "{$p}.options: each key must be A–D and each value a non-empty string.";
+
+                    continue 2;
+                }
+                $normKeys[strtoupper(trim($k))] = trim($v);
+            }
+
+            $ordered = [];
+            foreach (['A', 'B', 'C', 'D'] as $L) {
+                if (! isset($normKeys[$L])) {
+                    $errors[] = "{$p}.options: missing key \"{$L}\".";
+
+                    continue 2;
+                }
+                $ordered[] = $normKeys[$L];
+            }
+
+            $correctRaw = $item['correct'] ?? null;
+            if (! is_string($correctRaw) || $correctRaw === '') {
+                $errors[] = "{$p}.correct: must be a single letter A–D.";
+
+                continue;
+            }
+            $letter = strtoupper(trim($correctRaw));
+            if (! preg_match('/^[ABCD]$/', $letter)) {
+                $errors[] = "{$p}.correct: must be exactly one of A, B, C, D.";
+
+                continue;
+            }
+            $idx = ord($letter) - ord('A');
+
+            $topic = $item['topic'] ?? null;
+            $topicTitle = is_string($topic) && trim($topic) !== '' ? trim($topic) : 'General';
+
+            $byTopic[$topicTitle] ??= [];
+            $byTopic[$topicTitle][] = [
+                'type' => 'mcq',
+                'question_text' => trim($text),
+                'marks' => 1,
+                'options' => $ordered,
+                'correct_answer' => $idx,
+            ];
+        }
+
+        if ($errors !== []) {
+            return null;
+        }
+
+        if ($byTopic === []) {
+            $errors[] = 'No questions were parsed from the array.';
+
+            return null;
+        }
+
+        $sections = [];
+        foreach ($byTopic as $title => $questions) {
+            $sections[] = [
+                'title' => $title,
+                'questions' => $questions,
+            ];
+        }
+
+        return ['sections' => $sections];
     }
 
     /**
