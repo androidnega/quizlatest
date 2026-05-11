@@ -327,7 +327,7 @@
                                 </span>
                             </template>
                         </div>
-                        <input type="text" x-model="input" @keydown.enter.prevent="addFromInput()" @blur="addFromInput()" placeholder="{{ __('Separate topics with commas; use "quotes" if a topic contains a comma. Press Enter to add.') }}" class="w-full border-0 p-0 text-sm focus:outline-none focus:ring-0" />
+                        <input type="text" x-model="input" @keydown.enter.prevent="addFromInput()" @keydown.comma.prevent="commitOneSegmentOnComma($event)" @blur="addFromInput()" placeholder="{{ __('Separate topics with commas; use "quotes" if a topic contains a comma. Comma or Enter adds.') }}" class="w-full border-0 p-0 text-sm focus:outline-none focus:ring-0" />
                     </div>
                 </div>
                 <div>
@@ -380,7 +380,7 @@
                                         </span>
                                     </template>
                                 </div>
-                                <input type="text" x-model="input" @keydown.enter.prevent="addFromInput()" @blur="addFromInput()" placeholder="{{ __('Separate topics with commas; use "quotes" if a topic contains a comma. Press Enter to add.') }}" class="w-full border-0 p-0 text-sm focus:outline-none focus:ring-0" />
+                                <input type="text" x-model="input" @keydown.enter.prevent="addFromInput()" @keydown.comma.prevent="commitOneSegmentOnComma($event)" @blur="addFromInput()" placeholder="{{ __('Separate topics with commas; use "quotes" if a topic contains a comma. Comma or Enter adds.') }}" class="w-full border-0 p-0 text-sm focus:outline-none focus:ring-0" />
                             </div>
                         </div>
                         <div>
@@ -646,6 +646,47 @@
             return parts.filter((p) => p.length > 0);
         }
 
+        /** First topic before an unquoted comma; rest is text after that comma (for live chip UX). */
+        function takeFirstCommaSegmentOutsideQuotes(str) {
+            const s = String(str);
+            let cur = '';
+            let inD = false;
+            let inS = false;
+            for (let i = 0; i < s.length; i++) {
+                const c = s[i];
+                const prev = i > 0 ? s[i - 1] : '';
+                if (inD) {
+                    if (c === '"' && prev !== '\\') {
+                        inD = false;
+                    } else {
+                        cur += c;
+                    }
+                    continue;
+                }
+                if (inS) {
+                    if (c === "'" && prev !== '\\') {
+                        inS = false;
+                    } else {
+                        cur += c;
+                    }
+                    continue;
+                }
+                if (c === '"') {
+                    inD = true;
+                    continue;
+                }
+                if (c === "'") {
+                    inS = true;
+                    continue;
+                }
+                if (c === ',') {
+                    return { first: cur.trim(), rest: s.slice(i + 1) };
+                }
+                cur += c;
+            }
+            return { first: null, rest: s };
+        }
+
         function topicTags(initial) {
             function parseInitial(raw) {
                 if (raw == null) {
@@ -694,6 +735,29 @@
                 },
                 get joined() {
                     return JSON.stringify(this.tags);
+                },
+                commitOneSegmentOnComma(e) {
+                    e.preventDefault();
+                    const el = e.target;
+                    const raw = String(this.input || '');
+                    const start = typeof el.selectionStart === 'number' ? el.selectionStart : raw.length;
+                    const end = typeof el.selectionEnd === 'number' ? el.selectionEnd : start;
+                    const synthetic = raw.slice(0, start) + ',' + raw.slice(end);
+                    const { first, rest } = takeFirstCommaSegmentOutsideQuotes(synthetic);
+                    if (first !== null) {
+                        if (first !== '' && !this.tags.includes(first)) {
+                            this.tags.push(first);
+                        }
+                        this.input = rest.replace(/^\s+/, '');
+                    } else {
+                        this.input = synthetic;
+                    }
+                    this.$nextTick(() => {
+                        try {
+                            const pos = this.input.length;
+                            el.setSelectionRange(pos, pos);
+                        } catch (_) {}
+                    });
                 },
                 addFromInput() {
                     const v = String(this.input || '').trim();
