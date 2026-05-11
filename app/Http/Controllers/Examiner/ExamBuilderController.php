@@ -19,6 +19,7 @@ use App\Services\ExamAssessmentDocumentTextExtractor;
 use App\Services\ExamLifecycleService;
 use App\Services\ExamQuestionImportValidator;
 use App\Services\ExamRedisService;
+use App\Services\OutlineTopicSuggester;
 use App\Services\ProctoringOrchestratorService;
 use App\Services\SystemExamPolicyService;
 use App\Services\SystemSettingsService;
@@ -27,6 +28,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -153,6 +155,8 @@ class ExamBuilderController extends Controller
             'pastePromptCount' => (int) $request->old('paste_prompt_count', 10),
             'importJsonDraft' => (string) $request->old('import_json', ''),
             'validateImportUrl' => route('examiner.exams.create.validate-import-json'),
+            'outlineSuggestTopicsUrl' => route('examiner.exams.create.outline-suggest-topics'),
+            'aiTopicsInitial' => (string) $request->old('ai_topics', ''),
             'csrfToken' => csrf_token(),
         ];
 
@@ -184,6 +188,37 @@ class ExamBuilderController extends Controller
         return response()->json([
             'ok' => true,
             'message' => __('JSON is valid and will be imported when you create the assessment.'),
+        ]);
+    }
+
+    public function suggestCreateOutlineTopics(
+        Request $request,
+        ExamAssessmentDocumentTextExtractor $extractor,
+        OutlineTopicSuggester $topicSuggester,
+    ): JsonResponse {
+        $this->authorize('create', Quiz::class);
+
+        $request->validate([
+            'ai_outline_file' => ['required', 'file', 'max:5120', 'mimes:txt,pdf,docx'],
+        ]);
+
+        try {
+            $text = $extractor->extractPlainText($request->file('ai_outline_file'));
+        } catch (ValidationException $e) {
+            $messages = Arr::flatten($e->errors());
+
+            return response()->json([
+                'ok' => false,
+                'topics' => [],
+                'message' => $messages[0] ?? __('Could not read that file.'),
+            ], 422);
+        }
+
+        $topics = $topicSuggester->suggestFromPlainText($text, max: 25);
+
+        return response()->json([
+            'ok' => true,
+            'topics' => $topics,
         ]);
     }
 

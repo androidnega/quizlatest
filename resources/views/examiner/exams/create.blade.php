@@ -211,19 +211,58 @@
 
                 {{-- In-app AI --}}
                 <div x-show="source === 'ai_generate'" x-cloak class="space-y-4 rounded-lg border border-qs-soft bg-white p-4">
-                    <p class="text-xs text-qs-muted">{{ __('Topics are sent to the configured model. You can optionally attach an outline (PDF, TXT, or DOCX). Defaults: 10 questions, MCQ, moderate difficulty, 1 mark each.') }}</p>
-                    <div>
-                        <label class="mb-1 block text-sm font-medium text-qs-muted" for="ai-topics-create">{{ __('Topics') }}</label>
-                        <textarea id="ai-topics-create" name="ai_topics" rows="4" class="qs-input mt-1 w-full py-2.5 text-sm" placeholder="{{ __('What should the questions cover?') }}">{{ old('ai_topics') }}</textarea>
-                    </div>
+                    <p class="text-xs text-qs-muted">{{ __('Upload an outline first to preview suggested topics (you can remove any). Topics are sent to the configured model with your assessment. Defaults: 10 questions, MCQ, moderate difficulty, 1 mark each.') }}</p>
                     <div class="grid gap-4 sm:grid-cols-2">
+                        <div class="sm:col-span-2">
+                            <label class="mb-1 block text-sm font-medium text-qs-muted" for="ai-outline-create">{{ __('Outline file (optional)') }}</label>
+                            <input
+                                id="ai-outline-create"
+                                type="file"
+                                name="ai_outline_file"
+                                accept=".pdf,.txt,.docx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                class="mt-1 block w-full text-sm text-qs-muted file:me-3 file:rounded-lg file:border-0 file:bg-qs-soft file:px-3 file:py-2 file:text-sm file:font-medium file:text-qs-text"
+                                @change="onAiOutlineFileSelected($event)"
+                            />
+                            <div x-show="aiOutlineUploadBusy || aiOutlineUploadProgress !== null" x-cloak class="mt-2 space-y-1">
+                                <div class="h-2 w-full overflow-hidden rounded-full bg-qs-soft">
+                                    <div
+                                        class="h-full rounded-full bg-qs-primary transition-all duration-150 ease-out"
+                                        :class="aiOutlineUploadProgress === null && aiOutlineUploadBusy ? 'w-1/3 max-w-[45%] animate-pulse' : ''"
+                                        :style="aiOutlineUploadProgress !== null ? 'width: ' + aiOutlineUploadProgress + '%' : ''"
+                                    ></div>
+                                </div>
+                                <p class="text-xs text-qs-muted" x-show="aiOutlineUploadBusy">{{ __('Uploading…') }}</p>
+                            </div>
+                            <p x-show="aiOutlineUploadMessage" x-cloak class="mt-2 text-xs text-qs-danger" x-text="aiOutlineUploadMessage"></p>
+                        </div>
                         <div>
                             <label class="mb-1 block text-sm font-medium text-qs-muted" for="ai-count-create">{{ __('Number of questions') }} <span class="text-qs-danger">*</span></label>
                             <input id="ai-count-create" type="number" name="ai_question_count" value="{{ old('ai_question_count', 10) }}" min="1" max="250" required class="qs-input mt-1 w-full py-2.5" />
                         </div>
-                        <div>
-                            <label class="mb-1 block text-sm font-medium text-qs-muted" for="ai-outline-create">{{ __('Outline file (optional)') }}</label>
-                            <input id="ai-outline-create" type="file" name="ai_outline_file" accept=".pdf,.txt,.docx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" class="mt-1 block w-full text-sm text-qs-muted file:me-3 file:rounded-lg file:border-0 file:bg-qs-soft file:px-3 file:py-2 file:text-sm file:font-medium file:text-qs-text" />
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-sm font-medium text-qs-muted" for="ai-topic-chip-input">{{ __('Topics') }}</label>
+                        <input type="hidden" name="ai_topics" :value="aiTopicsSerializedForForm" />
+                        <div class="w-full rounded-lg border border-qs-soft bg-white p-2">
+                            <p class="mb-1.5 text-xs text-qs-muted">{{ __('Suggested lines from your outline appear as chips. Comma or Enter adds more; use "quotes" if a topic contains a comma.') }}</p>
+                            <div class="mb-1.5 flex flex-wrap gap-1.5" x-show="aiTopicTags.length > 0">
+                                <template x-for="(tag, idx) in aiTopicTags" :key="'ai-' + idx + ':' + JSON.stringify(tag)">
+                                    <span class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium" :class="aiTopicChipClass(idx)">
+                                        <span x-text="tag"></span>
+                                        <button type="button" class="opacity-70 hover:opacity-100" :class="aiTopicChipCloseClass(idx)" @click="aiTopicRemove(idx)">×</button>
+                                    </span>
+                                </template>
+                            </div>
+                            <input
+                                id="ai-topic-chip-input"
+                                type="text"
+                                x-model="aiTopicInput"
+                                @keydown.enter.prevent="aiTopicsAddFromInput()"
+                                @keydown.comma.prevent="aiTopicsCommitComma($event)"
+                                @blur="aiTopicsAddFromInput()"
+                                placeholder="{{ __('Add or edit topics…') }}"
+                                class="w-full border-0 bg-transparent p-0 text-sm focus:outline-none focus:ring-0"
+                            />
                         </div>
                     </div>
                     <input type="hidden" name="ai_question_types[]" value="mcq" />
@@ -382,6 +421,34 @@
                 return [...new Set(splitCommaSeparatedRespectingQuotesCreate(s))];
             }
 
+            function parseInitialAiTopicTags(raw) {
+                if (raw == null || String(raw).trim() === '') {
+                    return [];
+                }
+                const s = String(raw).trim();
+                if (s.startsWith('[')) {
+                    try {
+                        const j = JSON.parse(s);
+                        if (Array.isArray(j) && j.every((x) => typeof x === 'string')) {
+                            return [...new Set(j.map((t) => t.trim()).filter((t) => t.length > 0))];
+                        }
+                    } catch (e) {}
+                }
+                const acc = [];
+                s.split(/\r?\n/).forEach((line) => {
+                    const t = line.trim();
+                    if (!t) {
+                        return;
+                    }
+                    splitCommaSeparatedRespectingQuotesCreate(t).forEach((p) => {
+                        if (p && !acc.includes(p)) {
+                            acc.push(p);
+                        }
+                    });
+                });
+                return acc;
+            }
+
             function qsExamCreateForm(cfg) {
                 return {
                     rows: cfg.rows,
@@ -393,6 +460,12 @@
                     pastePromptCount: cfg.pastePromptCount,
                     importJsonDraft: cfg.importJsonDraft,
                     validateImportUrl: cfg.validateImportUrl,
+                    outlineSuggestTopicsUrl: cfg.outlineSuggestTopicsUrl,
+                    aiTopicTags: parseInitialAiTopicTags(cfg.aiTopicsInitial),
+                    aiTopicInput: '',
+                    aiOutlineUploadProgress: null,
+                    aiOutlineUploadBusy: false,
+                    aiOutlineUploadMessage: '',
                     csrfToken: cfg.csrfToken,
                     importValidateBusy: false,
                     importValidateOk: false,
@@ -458,6 +531,118 @@
                     },
                     pasteTopicRemove(idx) {
                         this.pasteTopicTags.splice(idx, 1);
+                    },
+                    get aiTopicsSerializedForForm() {
+                        return this.aiTopicTags.join('\n');
+                    },
+                    aiTopicChipClass(idx) {
+                        const palettes = [
+                            'border-qs-primary/35 bg-qs-primary/10 text-qs-primary',
+                            'border-emerald-400/45 bg-emerald-50 text-emerald-900',
+                            'border-violet-400/45 bg-violet-50 text-violet-900',
+                            'border-amber-400/45 bg-amber-50 text-amber-950',
+                            'border-sky-400/45 bg-sky-50 text-sky-950',
+                        ];
+                        return palettes[idx % palettes.length];
+                    },
+                    aiTopicChipCloseClass(idx) {
+                        const muted = [
+                            'text-qs-primary/80',
+                            'text-emerald-900/70',
+                            'text-violet-900/70',
+                            'text-amber-950/70',
+                            'text-sky-950/70',
+                        ];
+                        return muted[idx % muted.length];
+                    },
+                    aiTopicsCommitComma(e) {
+                        e.preventDefault();
+                        const el = e.target;
+                        const raw = String(this.aiTopicInput || '');
+                        const start = typeof el.selectionStart === 'number' ? el.selectionStart : raw.length;
+                        const end = typeof el.selectionEnd === 'number' ? el.selectionEnd : start;
+                        const synthetic = raw.slice(0, start) + ',' + raw.slice(end);
+                        const { first, rest } = takeFirstCommaSegmentOutsideQuotesCreate(synthetic);
+                        if (first !== null) {
+                            if (first !== '' && !this.aiTopicTags.includes(first)) {
+                                this.aiTopicTags.push(first);
+                            }
+                            this.aiTopicInput = rest.replace(/^\s+/, '');
+                        } else {
+                            this.aiTopicInput = synthetic;
+                        }
+                        this.$nextTick(() => {
+                            try {
+                                const pos = this.aiTopicInput.length;
+                                el.setSelectionRange(pos, pos);
+                            } catch (_) {}
+                        });
+                    },
+                    aiTopicsAddFromInput() {
+                        const v = String(this.aiTopicInput || '').trim();
+                        if (v === '') {
+                            return;
+                        }
+                        splitCommaSeparatedRespectingQuotesCreate(v).forEach((p) => {
+                            if (p && !this.aiTopicTags.includes(p)) {
+                                this.aiTopicTags.push(p);
+                            }
+                        });
+                        this.aiTopicInput = '';
+                    },
+                    aiTopicRemove(idx) {
+                        this.aiTopicTags.splice(idx, 1);
+                    },
+                    onAiOutlineFileSelected(e) {
+                        const input = e.target;
+                        const file = input.files && input.files[0];
+                        this.aiOutlineUploadMessage = '';
+                        if (!file) {
+                            return;
+                        }
+                        this.aiOutlineUploadBusy = true;
+                        this.aiOutlineUploadProgress = 0;
+                        const xhr = new XMLHttpRequest();
+                        const fd = new FormData();
+                        fd.append('_token', this.csrfToken);
+                        fd.append('ai_outline_file', file);
+                        xhr.open('POST', this.outlineSuggestTopicsUrl);
+                        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                        xhr.setRequestHeader('Accept', 'application/json');
+                        xhr.upload.onprogress = (ev) => {
+                            if (ev.lengthComputable) {
+                                this.aiOutlineUploadProgress = Math.round((ev.loaded / ev.total) * 100);
+                            } else {
+                                this.aiOutlineUploadProgress = null;
+                            }
+                        };
+                        xhr.onload = () => {
+                            this.aiOutlineUploadBusy = false;
+                            let data = {};
+                            try {
+                                data = JSON.parse(xhr.responseText || '{}');
+                            } catch (_) {}
+                            if (xhr.status >= 200 && xhr.status < 300 && data.ok && Array.isArray(data.topics)) {
+                                this.aiOutlineUploadMessage = '';
+                                this.aiTopicTags = data.topics
+                                    .filter((t) => typeof t === 'string' && t.trim() !== '')
+                                    .filter((t, i, a) => a.indexOf(t) === i);
+                                this.aiOutlineUploadProgress = 100;
+                                window.setTimeout(() => {
+                                    this.aiOutlineUploadProgress = null;
+                                }, 500);
+                            } else {
+                                this.aiOutlineUploadMessage =
+                                    data.message || @json(__('Could not read topics from that file.'));
+                                this.aiOutlineUploadProgress = null;
+                            }
+                        };
+                        xhr.onerror = () => {
+                            this.aiOutlineUploadBusy = false;
+                            this.aiOutlineUploadMessage = @json(__('Upload failed. Try again.'));
+                            this.aiOutlineUploadProgress = null;
+                        };
+                        xhr.send(fd);
                     },
                     filteredClassrooms() {
                         const cid = parseInt(this.courseId, 10) || 0;

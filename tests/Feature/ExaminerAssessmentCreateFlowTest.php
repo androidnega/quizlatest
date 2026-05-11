@@ -8,6 +8,7 @@ use App\Models\Quiz;
 use App\Models\User;
 use Database\Seeders\InitialSetupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -171,5 +172,28 @@ class ExaminerAssessmentCreateFlowTest extends TestCase
         $this->assertFalse((bool) data_get($quiz->proctoring_settings, 'phone_detection_enabled'));
         $this->assertFalse((bool) data_get($quiz->proctoring_settings, 'fullscreen_enforced'));
         $this->assertFalse((bool) data_get($quiz->proctoring_settings, 'auto_submit_enabled'));
+    }
+
+    public function test_create_outline_suggest_topics_returns_topic_candidates(): void
+    {
+        $ctx = $this->seedExaminerWithCourse();
+
+        $body = "Course overview line here\n".
+            "- First learning objective written with enough length\n".
+            "- Second learning objective also written long enough\n";
+
+        $file = UploadedFile::fake()->createWithContent('outline.txt', $body);
+
+        $topics = $this->actingAs($ctx['examiner'])
+            ->postJson(route('examiner.exams.create.outline-suggest-topics'), [
+                'ai_outline_file' => $file,
+            ])
+            ->assertOk()
+            ->assertJson(['ok' => true])
+            ->assertJsonStructure(['topics'])
+            ->json('topics');
+
+        $this->assertIsArray($topics);
+        $this->assertGreaterThan(0, count($topics));
     }
 }
