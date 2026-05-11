@@ -962,7 +962,7 @@ class ExamBuilderController extends Controller
         $this->assertQuestionGenerationUnlocked($exam, 'ai');
 
         $validated = $request->validate([
-            'ai_topic' => ['required', 'string', 'max:2000'],
+            'ai_topic' => ['required', 'string', 'max:4000'],
             'ai_count' => ['required', 'integer', 'min:1', 'max:50'],
             'ai_question_types' => ['nullable', 'array'],
             'ai_question_types.*' => ['string', 'in:mcq,true_false,fill_blank,essay'],
@@ -971,7 +971,7 @@ class ExamBuilderController extends Controller
         ]);
 
         $prompt = $promptBuilder->build([
-            'topic' => $validated['ai_topic'],
+            'topic' => $this->normalizeAiTopicWireForPrompt((string) $validated['ai_topic']),
             'count' => (int) $validated['ai_count'],
             'types' => $validated['ai_question_types'] ?? ['mcq'],
             'difficulty' => $validated['ai_difficulty'] ?? 'mixed',
@@ -997,7 +997,7 @@ class ExamBuilderController extends Controller
 
         $validated = $request->validate([
             'ai_custom_prompt' => ['nullable', 'string', 'max:16000'],
-            'ai_topic' => ['required_without:ai_custom_prompt', 'nullable', 'string', 'max:2000'],
+            'ai_topic' => ['required_without:ai_custom_prompt', 'nullable', 'string', 'max:4000'],
             'ai_count' => ['required_without:ai_custom_prompt', 'nullable', 'integer', 'min:1', 'max:50'],
             'ai_question_types' => ['nullable', 'array'],
             'ai_question_types.*' => ['string', 'in:mcq,true_false,fill_blank,essay'],
@@ -1010,7 +1010,7 @@ class ExamBuilderController extends Controller
             $prompt = $custom;
         } else {
             $prompt = app(ExamAiPromptBuilder::class)->build([
-                'topic' => (string) ($validated['ai_topic'] ?? ''),
+                'topic' => $this->normalizeAiTopicWireForPrompt((string) ($validated['ai_topic'] ?? '')),
                 'count' => (int) ($validated['ai_count'] ?? 5),
                 'types' => $validated['ai_question_types'] ?? ['mcq'],
                 'difficulty' => $validated['ai_difficulty'] ?? 'mixed',
@@ -1068,6 +1068,32 @@ class ExamBuilderController extends Controller
             $total = (float) Question::query()->where('quiz_id', $exam->id)->sum('marks');
             $exam->update(['total_marks' => $total]);
         });
+    }
+
+    /**
+     * Topics from the builder may be JSON-encoded tag arrays (commas-safe) or a legacy plain string.
+     */
+    private function normalizeAiTopicWireForPrompt(string $wire): string
+    {
+        $wire = trim($wire);
+        if ($wire === '') {
+            return '';
+        }
+        if (str_starts_with($wire, '[')) {
+            $decoded = json_decode($wire, true);
+            if (is_array($decoded) && array_is_list($decoded)) {
+                $parts = [];
+                foreach ($decoded as $item) {
+                    if (is_string($item) && trim($item) !== '') {
+                        $parts[] = trim($item);
+                    }
+                }
+
+                return implode("\n", $parts);
+            }
+        }
+
+        return $wire;
     }
 
     /**
