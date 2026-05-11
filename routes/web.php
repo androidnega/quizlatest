@@ -321,6 +321,7 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
             Route::prefix('/exams')->group(function () {
                 Route::get('/', [ExamBuilderController::class, 'index'])->name('exams.index');
                 Route::get('/create', [ExamBuilderController::class, 'create'])->name('exams.create');
+                Route::post('/create/validate-import-json', [ExamBuilderController::class, 'validateCreateImportJson'])->name('exams.create.validate-import-json');
                 Route::post('/', [ExamBuilderController::class, 'store'])->name('exams.store');
                 Route::get('/{exam}/builder', function (Request $request, Quiz $exam) {
                     $to = route('examiner.quizzes.workspace', ['exam' => $exam]);

@@ -15,6 +15,7 @@ use App\Models\Term;
 use App\Models\User;
 use App\Services\ExamAiPromptBuilder;
 use App\Services\ExamAiQuestionGenerator;
+use App\Services\ExamAssessmentDocumentTextExtractor;
 use App\Services\ExamLifecycleService;
 use App\Services\ExamQuestionImportValidator;
 use App\Services\ExamRedisService;
@@ -23,6 +24,7 @@ use App\Services\SystemExamPolicyService;
 use App\Services\SystemSettingsService;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -134,15 +136,62 @@ class ExamBuilderController extends Controller
         $manageableCourseIds = $this->manageableCourseIds($request);
         $classroomOptions = $this->classroomOptionsForCourses($request->user(), $manageableCourseIds);
 
+        $systemSettings = app(SystemSettingsService::class);
+        $aiEnabled = $systemSettings->getBool('enable_ai', true);
+
+        $questionSourceOld = (string) $request->old('question_source', 'later');
+        if (! $aiEnabled && $questionSourceOld === 'ai_generate') {
+            $questionSourceOld = 'later';
+        }
+
+        $examCreateAlpine = [
+            'rows' => $classroomOptions,
+            'courseId' => (int) ($request->old('course_id', $request->query('course_id')) ?: ($courses->first()->id ?? 0)),
+            'selectedClassIds' => array_values(array_map('intval', $request->old('classroom_ids', []) ?: [])),
+            'source' => $questionSourceOld,
+            'pastePromptTopics' => (string) $request->old('paste_prompt_topics', ''),
+            'pastePromptCount' => (int) $request->old('paste_prompt_count', 10),
+            'importJsonDraft' => (string) $request->old('import_json', ''),
+            'validateImportUrl' => route('examiner.exams.create.validate-import-json'),
+            'csrfToken' => csrf_token(),
+        ];
+
         return view('examiner.exams.create', [
             'courses' => $courses,
             'classroomOptions' => $classroomOptions,
+            'aiEnabled' => $aiEnabled,
+            'examCreateAlpine' => $examCreateAlpine,
+        ]);
+    }
+
+    public function validateCreateImportJson(Request $request, ExamQuestionImportValidator $importValidator): JsonResponse
+    {
+        $this->authorize('create', Quiz::class);
+
+        $validated = $request->validate([
+            'import_json' => ['required', 'string', 'max:500000'],
+        ]);
+
+        $result = $importValidator->validateJsonString($validated['import_json']);
+
+        if (! $result['ok']) {
+            return response()->json([
+                'ok' => false,
+                'errors' => $result['errors'],
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => __('JSON is valid and will be imported when you create the assessment.'),
         ]);
     }
 
     public function store(
         Request $request,
         ExamQuestionImportValidator $importValidator,
+        ExamAiPromptBuilder $promptBuilder,
+        ExamAiQuestionGenerator $aiGenerator,
         ExamLifecycleService $lifecycle,
         SystemSettingsService $systemSettings,
     ): RedirectResponse {
@@ -161,8 +210,17 @@ class ExamBuilderController extends Controller
             'randomize_options' => ['sometimes', 'boolean'],
             'start_time' => ['nullable', 'date'],
             'end_time' => ['nullable', 'date', 'after_or_equal:start_time'],
-            'question_source' => ['required', 'string', 'in:later,paste_json'],
+            'question_source' => ['required', 'string', 'in:later,paste_json,ai_generate'],
             'import_json' => ['nullable', 'string', 'max:500000'],
+            'paste_prompt_topics' => ['nullable', 'string', 'max:4000'],
+            'paste_prompt_count' => ['nullable', 'integer', 'min:1', 'max:250'],
+            'ai_topics' => ['nullable', 'string', 'max:4000'],
+            'ai_question_count' => ['nullable', 'integer', 'min:1', 'max:250'],
+            'ai_question_types' => ['nullable', 'array'],
+            'ai_question_types.*' => ['string', 'in:mcq,true_false,fill_blank,essay'],
+            'ai_difficulty' => ['nullable', 'string', 'max:120'],
+            'ai_marks' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+            'ai_outline_file' => ['nullable', 'file', 'max:5120', 'mimes:txt,pdf,docx'],
             'activate_now' => ['sometimes', 'boolean'],
             'show_correct_answers_in_results' => ['sometimes', 'boolean'],
         ]);
@@ -204,6 +262,38 @@ class ExamBuilderController extends Controller
                 'import_json' => ['required', 'string', 'min:3', 'max:500000'],
                 'questions_per_student' => ['required', 'integer', 'min:1', 'max:500'],
             ]);
+        }
+
+        $combinedAiTopic = null;
+        if ($source === 'ai_generate') {
+            $request->validate([
+                'ai_topics' => ['nullable', 'string', 'max:4000'],
+                'ai_question_count' => ['required', 'integer', 'min:1', 'max:250'],
+                'questions_per_student' => ['required', 'integer', 'min:1', 'max:500'],
+            ]);
+            if (! $systemSettings->getBool('enable_ai', true)) {
+                throw ValidationException::withMessages([
+                    'question_source' => [__('AI generation is turned off for your institution.')],
+                ]);
+            }
+
+            $topicsPart = trim((string) $request->input('ai_topics', ''));
+            $outlineText = '';
+            if ($request->hasFile('ai_outline_file')) {
+                $outlineText = app(ExamAssessmentDocumentTextExtractor::class)->extractPlainText($request->file('ai_outline_file'));
+            }
+            if ($topicsPart === '' && $outlineText === '') {
+                throw ValidationException::withMessages([
+                    'ai_topics' => [__('Add topics or upload an outline (PDF, TXT, or DOCX).')],
+                ]);
+            }
+            if ($topicsPart !== '' && $outlineText !== '') {
+                $combinedAiTopic = "Instructor topics:\n".$topicsPart."\n\nCourse outline / uploaded document:\n".$outlineText;
+            } elseif ($topicsPart !== '') {
+                $combinedAiTopic = $topicsPart;
+            } else {
+                $combinedAiTopic = "Course outline / uploaded document:\n".$outlineText;
+            }
         }
 
         $year = AcademicYear::activeForUniversity((int) $user->university_id);
@@ -257,6 +347,26 @@ class ExamBuilderController extends Controller
                     ->withInput();
             }
             $this->persistImportedSections($quiz, $result['sections']);
+            $this->approveAllPoolQuestions($quiz);
+            $importErrors = $this->validateQuestionsPerStudentAgainstPool($quiz, (int) $request->input('questions_per_student'));
+        } elseif ($source === 'ai_generate') {
+            $topic = (string) $combinedAiTopic;
+            $prompt = $promptBuilder->build([
+                'topic' => $topic,
+                'count' => (int) $request->input('ai_question_count'),
+                'types' => $request->input('ai_question_types', ['mcq']) ?? ['mcq'],
+                'difficulty' => $request->input('ai_difficulty') ?? 'mixed',
+                'marks_per_question' => (float) ($request->input('ai_marks') ?? 1),
+            ]);
+            $gen = $aiGenerator->generateFromPrompt($prompt);
+            if (! $gen['ok']) {
+                $quiz->delete();
+
+                return back()
+                    ->withErrors(['ai_topics' => implode("\n", $gen['errors'])])
+                    ->withInput();
+            }
+            $this->persistImportedSections($quiz, $gen['sections']);
             $this->approveAllPoolQuestions($quiz);
             $importErrors = $this->validateQuestionsPerStudentAgainstPool($quiz, (int) $request->input('questions_per_student'));
         }
