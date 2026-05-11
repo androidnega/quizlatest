@@ -132,15 +132,29 @@
                 <div x-show="source === 'paste_json'" x-cloak class="space-y-6">
                     <div class="space-y-3 rounded-lg border border-qs-soft bg-white p-4">
                         <div>
-                            <label class="mb-1 block text-sm font-medium text-qs-muted" for="paste-prompt-topics">{{ __('Topics (one line or short list)') }}</label>
-                            <textarea
-                                id="paste-prompt-topics"
-                                name="paste_prompt_topics"
-                                rows="2"
-                                x-model="pastePromptTopics"
-                                class="qs-input mt-1 w-full py-2.5 text-sm"
-                                placeholder="{{ __('e.g. General knowledge; cell biology; week 3 readings') }}"
-                            ></textarea>
+                            <label class="mb-1 block text-sm font-medium text-qs-muted" for="paste-topic-chip-input">{{ __('Topics') }}</label>
+                            <input type="hidden" name="paste_prompt_topics" :value="pastePromptTopicsSerialized" />
+                            <div class="w-full rounded-lg border border-qs-soft bg-white p-2">
+                                <p class="mb-1.5 text-xs text-qs-muted">{{ __('Comma or Enter adds a chip; use "quotes" if one topic contains a comma.') }}</p>
+                                <div class="mb-1.5 flex flex-wrap gap-1.5" x-show="pasteTopicTags.length > 0">
+                                    <template x-for="(tag, idx) in pasteTopicTags" :key="idx + ':' + JSON.stringify(tag)">
+                                        <span class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium" :class="pasteTopicChipClass(idx)">
+                                            <span x-text="tag"></span>
+                                            <button type="button" class="opacity-70 hover:opacity-100" :class="pasteTopicChipCloseClass(idx)" @click="pasteTopicRemove(idx)">×</button>
+                                        </span>
+                                    </template>
+                                </div>
+                                <input
+                                    id="paste-topic-chip-input"
+                                    type="text"
+                                    x-model="pasteTopicInput"
+                                    @keydown.enter.prevent="pasteTopicsAddFromInput()"
+                                    @keydown.comma.prevent="pasteTopicsCommitComma($event)"
+                                    @blur="pasteTopicsAddFromInput()"
+                                    placeholder="{{ __('e.g. photography — then comma or Enter for the next') }}"
+                                    class="w-full border-0 bg-transparent p-0 text-sm focus:outline-none focus:ring-0"
+                                />
+                            </div>
                         </div>
                         <div class="max-w-xs">
                             <label class="mb-1 block text-sm font-medium text-qs-muted" for="paste-prompt-count">{{ __('Number of questions') }}</label>
@@ -254,13 +268,128 @@
 
     @push('scripts')
         <script>
+            function splitCommaSeparatedRespectingQuotesCreate(str) {
+                const s = String(str || '').trim();
+                if (!s) {
+                    return [];
+                }
+                const parts = [];
+                let cur = '';
+                let inD = false;
+                let inS = false;
+                for (let i = 0; i < s.length; i++) {
+                    const c = s[i];
+                    const prev = i > 0 ? s[i - 1] : '';
+                    if (inD) {
+                        if (c === '"' && prev !== '\\') {
+                            inD = false;
+                        } else {
+                            cur += c;
+                        }
+                        continue;
+                    }
+                    if (inS) {
+                        if (c === "'" && prev !== '\\') {
+                            inS = false;
+                        } else {
+                            cur += c;
+                        }
+                        continue;
+                    }
+                    if (c === '"') {
+                        inD = true;
+                        continue;
+                    }
+                    if (c === "'") {
+                        inS = true;
+                        continue;
+                    }
+                    if (c === ',') {
+                        if (cur.trim()) {
+                            parts.push(cur.trim());
+                        }
+                        cur = '';
+                        continue;
+                    }
+                    cur += c;
+                }
+                if (cur.trim()) {
+                    parts.push(cur.trim());
+                }
+                return parts.filter((p) => p.length > 0);
+            }
+
+            function takeFirstCommaSegmentOutsideQuotesCreate(str) {
+                const s = String(str);
+                let cur = '';
+                let inD = false;
+                let inS = false;
+                for (let i = 0; i < s.length; i++) {
+                    const c = s[i];
+                    const prev = i > 0 ? s[i - 1] : '';
+                    if (inD) {
+                        if (c === '"' && prev !== '\\') {
+                            inD = false;
+                        } else {
+                            cur += c;
+                        }
+                        continue;
+                    }
+                    if (inS) {
+                        if (c === "'" && prev !== '\\') {
+                            inS = false;
+                        } else {
+                            cur += c;
+                        }
+                        continue;
+                    }
+                    if (c === '"') {
+                        inD = true;
+                        continue;
+                    }
+                    if (c === "'") {
+                        inS = true;
+                        continue;
+                    }
+                    if (c === ',') {
+                        return { first: cur.trim(), rest: s.slice(i + 1) };
+                    }
+                    cur += c;
+                }
+                return { first: null, rest: s };
+            }
+
+            function parseInitialPasteTopicTags(raw) {
+                if (raw == null) {
+                    return [];
+                }
+                const s = String(raw).trim();
+                if (!s) {
+                    return [];
+                }
+                if (s.startsWith('[')) {
+                    try {
+                        const j = JSON.parse(s);
+                        if (Array.isArray(j)) {
+                            return [
+                                ...new Set(
+                                    j.filter((x) => typeof x === 'string').map((t) => t.trim()).filter((t) => t.length > 0),
+                                ),
+                            ];
+                        }
+                    } catch (e) {}
+                }
+                return [...new Set(splitCommaSeparatedRespectingQuotesCreate(s))];
+            }
+
             function qsExamCreateForm(cfg) {
                 return {
                     rows: cfg.rows,
                     courseId: cfg.courseId,
                     selectedClassIds: cfg.selectedClassIds,
                     source: cfg.source,
-                    pastePromptTopics: cfg.pastePromptTopics,
+                    pasteTopicTags: parseInitialPasteTopicTags(cfg.pastePromptTopics),
+                    pasteTopicInput: '',
                     pastePromptCount: cfg.pastePromptCount,
                     importJsonDraft: cfg.importJsonDraft,
                     validateImportUrl: cfg.validateImportUrl,
@@ -269,6 +398,67 @@
                     importValidateOk: false,
                     importValidateMessage: '',
                     copyPromptHint: '',
+                    get pastePromptTopicsSerialized() {
+                        return JSON.stringify(this.pasteTopicTags);
+                    },
+                    pasteTopicChipClass(idx) {
+                        const palettes = [
+                            'border-qs-primary/35 bg-qs-primary/10 text-qs-primary',
+                            'border-emerald-400/45 bg-emerald-50 text-emerald-900',
+                            'border-violet-400/45 bg-violet-50 text-violet-900',
+                            'border-amber-400/45 bg-amber-50 text-amber-950',
+                            'border-sky-400/45 bg-sky-50 text-sky-950',
+                        ];
+                        return palettes[idx % palettes.length];
+                    },
+                    pasteTopicChipCloseClass(idx) {
+                        const muted = [
+                            'text-qs-primary/80',
+                            'text-emerald-900/70',
+                            'text-violet-900/70',
+                            'text-amber-950/70',
+                            'text-sky-950/70',
+                        ];
+                        return muted[idx % muted.length];
+                    },
+                    pasteTopicsCommitComma(e) {
+                        e.preventDefault();
+                        const el = e.target;
+                        const raw = String(this.pasteTopicInput || '');
+                        const start = typeof el.selectionStart === 'number' ? el.selectionStart : raw.length;
+                        const end = typeof el.selectionEnd === 'number' ? el.selectionEnd : start;
+                        const synthetic = raw.slice(0, start) + ',' + raw.slice(end);
+                        const { first, rest } = takeFirstCommaSegmentOutsideQuotesCreate(synthetic);
+                        if (first !== null) {
+                            if (first !== '' && !this.pasteTopicTags.includes(first)) {
+                                this.pasteTopicTags.push(first);
+                            }
+                            this.pasteTopicInput = rest.replace(/^\s+/, '');
+                        } else {
+                            this.pasteTopicInput = synthetic;
+                        }
+                        this.$nextTick(() => {
+                            try {
+                                const pos = this.pasteTopicInput.length;
+                                el.setSelectionRange(pos, pos);
+                            } catch (_) {}
+                        });
+                    },
+                    pasteTopicsAddFromInput() {
+                        const v = String(this.pasteTopicInput || '').trim();
+                        if (v === '') {
+                            return;
+                        }
+                        splitCommaSeparatedRespectingQuotesCreate(v).forEach((p) => {
+                            if (p && !this.pasteTopicTags.includes(p)) {
+                                this.pasteTopicTags.push(p);
+                            }
+                        });
+                        this.pasteTopicInput = '';
+                    },
+                    pasteTopicRemove(idx) {
+                        this.pasteTopicTags.splice(idx, 1);
+                    },
                     filteredClassrooms() {
                         const cid = parseInt(this.courseId, 10) || 0;
                         if (!cid) {
@@ -291,7 +481,8 @@
                         });
                     },
                     buildExternalMcqPrompt() {
-                        const topics = String(this.pastePromptTopics || '').trim() || 'General knowledge';
+                        const topics =
+                            this.pasteTopicTags.length > 0 ? this.pasteTopicTags.join(', ') : 'General knowledge';
                         let n = parseInt(this.pastePromptCount, 10);
                         if (Number.isNaN(n) || n < 1) {
                             n = 10;
