@@ -18,7 +18,10 @@ class ProctoringGlobalControlService
     /** @return array<string, mixed> */
     public function getControl(): array
     {
-        return array_replace_recursive($this->defaults(), $this->readFromDisk());
+        $merged = array_replace_recursive($this->defaults(), $this->readFromDisk());
+        unset($merged['relax_face_verification']);
+
+        return $merged;
     }
 
     /**
@@ -95,11 +98,6 @@ class ProctoringGlobalControlService
         return empty($g['modules_enabled']) || ! empty($g['emergency_shutdown']);
     }
 
-    public function relaxFaceVerification(): bool
-    {
-        return ! empty($this->getControl()['relax_face_verification']);
-    }
-
     /** @param  array<string, mixed>  $snapshot */
     public function broadcastSnapshot(array $snapshot): void
     {
@@ -123,7 +121,6 @@ class ProctoringGlobalControlService
             'modules_enabled' => true,
             'emergency_shutdown' => false,
             'disable_phone_detection_globally' => false,
-            'relax_face_verification' => false,
             'auto_submit_score_override' => null,
         ];
     }

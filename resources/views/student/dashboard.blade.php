@@ -1,510 +1,607 @@
 <x-layouts.student>
-    <x-slot name="title">{{ __('Student dashboard') }}</x-slot>
-    <x-slot name="subtitle">{{ __('Your exams, results, practice tools, and profile — organized like a course hub.') }}</x-slot>
+    <x-slot name="title">{{ __('Home') }}</x-slot>
+    <x-slot name="subtitle">{{ __('Your quiz history and quick actions.') }}</x-slot>
 
-        @php
+    @php
         $parts = \Illuminate\Support\Str::of((string) ($user->name ?? ''))->trim()->explode(' ')->filter();
-        $initials = $parts->take(2)->map(fn ($p) => \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr((string) $p, 0, 1)))->implode('');
-        if ($initials === '') {
-            $initials = '?';
-        }
-        $showPortraitAvatar = $user->role !== 'student' && filled($user->face_image_path ?? null);
-        $faceImgSrc = $showPortraitAvatar && \Illuminate\Support\Facades\Route::has('profile.face-image') ? route('profile.face-image') : null;
-        $firstCourseKey = $coursesWithExams->keys()->first();
-        $openCourseId = $firstCourseKey !== null ? (string) $firstCourseKey : null;
         $firstName = $parts->first() ?: $user->name;
-        $availableCount = $availableExams->count();
-        $upcomingCount = $upcomingExams->count();
-        $reviewCount = $heldResults->count();
-        $awaitingCount = $pendingManualResults->count();
+        $sessionExam = $activeSession?->exam;
+        $highlightExam = $availableExams->first();
+        $nextUpcomingExam = $upcomingExams->first();
+        $examInProgressHere = $activeSession !== null && $sessionExam !== null;
+        $tz = config('app.timezone');
+        $prepareExam = $sessionExam ?? $highlightExam ?? $nextUpcomingExam;
+        $heroIdleNoClassWork = ! $examInProgressHere
+            && $highlightExam === null
+            && $nextUpcomingExam === null
+            && $heroAwaitingResult === null;
         $bestPracticeScore = $practiceEnabled && $recentPracticeScores->isNotEmpty()
             ? $recentPracticeScores->pluck('percentage')->filter(fn ($value) => $value !== null)->max()
             : null;
-        $overviewLinks = [
-            ['label' => __('Overview'), 'href' => '#student-overview', 'icon' => 'house'],
-            ['label' => __('Exams'), 'href' => '#student-exams', 'icon' => 'file-lines'],
-            ['label' => __('Calendar'), 'href' => '#student-agenda', 'icon' => 'calendar-days'],
-            ['label' => __('Materials'), 'href' => $practiceEnabled ? route('student.practice.materials.index') : '#student-practice', 'icon' => 'folder-open'],
-            ['label' => __('Profile'), 'href' => route('profile.edit'), 'icon' => 'user'],
-            ['label' => __('Results'), 'href' => route('student.results.index'), 'icon' => 'square-poll-vertical'],
-        ];
+        $upcomingCount = $upcomingExams->count();
+        $submitted = max(0, (int) $submittedExamsCount);
+        $graded = max(0, (int) $gradedResultsCount);
+        $progressPct = $submitted > 0
+            ? (int) round(min(100, ($graded / $submitted) * 100))
+            : ($graded > 0 ? 100 : 0);
+        $heroBadge = match (true) {
+            $examInProgressHere => __('In progress'),
+            $highlightExam !== null => __('Open now'),
+            $nextUpcomingExam !== null => __('Up next'),
+            $heroAwaitingResult !== null => $heroAwaitingResult->status === 'held'
+                ? __('Under review')
+                : __('Awaiting grading'),
+            default => null,
+        };
+        $activityTotal = max(1, $submitted + $graded + ($practiceEnabled ? $practiceQuizCount : 0));
+        $activityPct = (int) round(min(100, (($submitted + $graded) / $activityTotal) * 100));
+        $dashboardAssignments = $availableExams->concat($upcomingExams)->unique('id')->values()->take(3);
+        $dashboardCourseNewMaterials = $dashboard_course_new_materials ?? [];
+        $dashboardPracticeStreakDays = (int) ($dashboard_practice_streak_days ?? 0);
+        $dashboardPracticeWeekNudge = (bool) ($dashboard_practice_week_nudge ?? false);
+        $dashboardTip = (string) ($dashboard_tip ?? '');
+        $dashboardPolicyNotice = $dashboard_policy_notice ?? null;
     @endphp
 
-    <div class="qs-student-hub mx-auto max-w-7xl">
+    <div class="w-full min-w-0 space-y-5 pb-2 text-slate-950">
         @if ($errors->has('exam'))
-            <div class="mb-4 flex items-start gap-2.5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 shadow-sm">
+            <div class="flex items-start gap-2.5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
                 <i class="fa-solid fa-circle-exclamation mt-0.5 shrink-0" aria-hidden="true"></i>
                 <span>{{ $errors->first('exam') }}</span>
             </div>
         @endif
 
         @if (! $classYearOk)
-            <div class="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
+            <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                 <p class="font-semibold">{{ __('Class year notice') }}</p>
                 <p class="mt-1 text-xs leading-relaxed text-amber-900/90">{{ __('Your class may not match the active academic year. Some exams or results filters could look empty until your coordinator updates your enrollment.') }}</p>
             </div>
         @endif
 
-        <section id="student-overview" class="qs-student-shell mb-5 overflow-hidden">
-            <div class="qs-student-hero">
-                <div class="grid gap-6 p-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(18rem,0.9fr)] lg:p-7">
-                    <div class="min-w-0">
-                        <div class="mb-4 flex flex-wrap gap-2">
-                            @foreach ($overviewLinks as $link)
-                                <a href="{{ $link['href'] }}" class="qs-student-mini-tab">
-                                    <i class="fa-solid fa-{{ $link['icon'] }} text-[11px]" aria-hidden="true"></i>
-                                    <span>{{ $link['label'] }}</span>
-                                </a>
-                            @endforeach
-                        </div>
+        @if ($user->class_id === null)
+            <div class="rounded-2xl border border-qs-soft bg-qs-surface px-4 py-3 text-sm text-qs-text">
+                <p class="leading-relaxed text-qs-muted">
+                    <i class="fa-solid fa-circle-info me-1 text-[var(--qs-primary)]" aria-hidden="true"></i>
+                    {{ __('student_ui.class_group_not_assigned') }}
+                </p>
+            </div>
+        @endif
 
-                        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                            <div class="flex min-w-0 gap-4">
-                                @if ($faceImgSrc)
-                                    <span class="qs-student-hero__avatar !border-white/40 !bg-white !p-0">
-                                        <img src="{{ $faceImgSrc }}" alt="" class="h-full w-full object-cover" width="64" height="64" loading="lazy" decoding="async" />
-                                    </span>
-                                @else
-                                    <span class="qs-student-hero__avatar" aria-hidden="true">{{ $initials }}</span>
+        @if (! empty($dashboardCourseNewMaterials))
+            <div class="rounded-2xl border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-sky-950 shadow-sm">
+                <p class="text-xs font-bold uppercase tracking-wide text-sky-900/80">{{ __('Since your last visit') }}</p>
+                <ul class="mt-2 space-y-1">
+                    @foreach ($dashboardCourseNewMaterials as $row)
+                        @php
+                            $n = (int) $row['count'];
+                        @endphp
+                        <li class="leading-snug">
+                            @if ($n === 1)
+                                {{ __('1 new file in :course', ['course' => $row['name']]) }}
+                            @else
+                                {{ __(':count new files in :course', ['count' => number_format($n), 'course' => $row['name']]) }}
+                            @endif
+                        </li>
+                    @endforeach
+                </ul>
+                @if ($practiceEnabled)
+                    <a href="{{ route('student.practice.materials.index') }}" class="mt-2 inline-flex text-xs font-semibold text-sky-800 underline-offset-2 hover:underline">
+                        {{ __('Open course materials') }}
+                    </a>
+                @endif
+            </div>
+        @endif
+
+        @if ($practiceEnabled && ($dashboardPracticeStreakDays >= 2 || $dashboardPracticeWeekNudge))
+            <div class="rounded-2xl border border-teal-200 bg-teal-50/90 px-4 py-3 text-sm text-teal-950 shadow-sm">
+                @if ($dashboardPracticeStreakDays >= 2)
+                    <p>
+                        {{ __('You have practiced :days days in a row.', ['days' => number_format($dashboardPracticeStreakDays)]) }}
+                    </p>
+                @elseif ($dashboardPracticeWeekNudge)
+                    <p>{{ __('No practice this week yet — want a quick refresher?') }}</p>
+                    <a href="{{ route('student.practice.revision') }}" class="mt-2 inline-flex text-xs font-semibold text-teal-900 underline-offset-2 hover:underline">
+                        {{ __('Open practice hub') }}
+                    </a>
+                @endif
+            </div>
+        @endif
+
+        @if ($dashboardTip !== '')
+            <div class="flex gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
+                <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700" aria-hidden="true">
+                    <i class="fa-solid fa-lightbulb text-sm"></i>
+                </span>
+                <p class="min-w-0 leading-relaxed">{{ $dashboardTip }}</p>
+            </div>
+        @endif
+
+        @if ($heldResults->isNotEmpty() || $pendingManualResults->isNotEmpty())
+            <div class="rounded-2xl border border-orange-200 bg-orange-50/95 px-4 py-3 text-sm text-orange-950">
+                <p class="text-xs font-bold uppercase tracking-wider text-orange-900/80">{{ __('Feedback & status') }}</p>
+                @if ($heldResults->isNotEmpty())
+                    <p class="mt-2 text-sm font-semibold text-orange-900">{{ __('Results under review') }}: {{ $heldResults->count() }}</p>
+                @endif
+                @if ($pendingManualResults->isNotEmpty())
+                    <p class="mt-1 text-sm font-semibold text-orange-900">{{ __('Awaiting grading') }}: {{ $pendingManualResults->count() }}</p>
+                @endif
+                <a href="{{ route('student.results.index') }}" class="mt-3 inline-flex items-center rounded-xl bg-orange-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-orange-700">
+                    {{ __('View results') }}
+                </a>
+            </div>
+        @endif
+
+        {{-- Page header (greeting); shell already has global profile menu --}}
+        <header class="flex items-start justify-between gap-4">
+            <div>
+                <p class="text-sm text-slate-500">{{ __('Welcome back') }}</p>
+                <h1 class="mt-0.5 text-2xl font-semibold tracking-tight text-slate-900">{{ __('Hi, :name', ['name' => $firstName]) }}</h1>
+                <p class="mt-1 text-sm text-slate-500">{{ __('Track quizzes, results, and practice in one place.') }}</p>
+            </div>
+            <a
+                href="{{ route('profile.edit') }}"
+                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-[var(--qs-primary)]/35 hover:bg-qs-soft hover:text-[var(--qs-primary)] md:hidden"
+                aria-label="{{ __('Profile') }}"
+            >
+                <i class="fa-solid fa-user text-lg" aria-hidden="true"></i>
+            </a>
+        </header>
+
+        {{-- Hero --}}
+        <section class="overflow-hidden rounded-[2rem] bg-slate-950 text-white shadow-lg shadow-slate-900/10 ring-1 ring-slate-900/20">
+            <div class="p-5 sm:p-6">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-medium text-teal-300/95">{{ __('Current focus') }}</p>
+
+                        @if ($examInProgressHere && $sessionExam)
+                            <h2 class="mt-3 max-w-xl text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+                                {{ $sessionExam->title }}
+                            </h2>
+                            <p class="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
+                                {{ __('You have an exam in progress. Continue when you are ready.') }}
+                            </p>
+                        @elseif ($highlightExam)
+                            <h2 class="mt-3 max-w-xl text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+                                {{ $highlightExam->title }}
+                            </h2>
+                            <p class="mt-3 flex flex-wrap gap-x-2 gap-y-1 text-sm text-slate-300">
+                                @if ($highlightExam->course?->code)
+                                    <span class="font-semibold text-white">{{ $highlightExam->course->code }}</span>
                                 @endif
-                                <div class="min-w-0">
-                                    <p class="qs-student-hero__eyebrow">{{ __('Student workspace') }}</p>
-                                    <h2 class="qs-student-hero__title">{{ __('Good afternoon, :name', ['name' => $firstName]) }}</h2>
-                                    <p class="qs-student-hero__subtitle">{{ __('Track exams, results, practice activity, and your academic profile from one place.') }}</p>
-
-                                    <div class="mt-3 flex flex-wrap gap-2">
-                                        @if ($user->index_number)
-                                            <span class="qs-student-badge">
-                                                <i class="fa-solid fa-id-card" aria-hidden="true"></i>
-                                                {{ $user->index_number }}
-                                            </span>
-                                        @endif
-                                        @if ($user->classroom)
-                                            <span class="qs-student-badge">
-                                                <i class="fa-solid fa-users" aria-hidden="true"></i>
-                                                {{ $user->classroom->name }}@if ($user->classroom->section) · {{ $user->classroom->section }}@endif
-                                            </span>
-                                        @endif
-                                        <span class="qs-student-badge">
-                                            <i class="fa-solid fa-graduation-cap" aria-hidden="true"></i>
-                                            {{ $user->university?->name ?? __('University') }}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="flex flex-wrap gap-2 sm:justify-end">
-                                <a href="{{ route('profile.edit') }}" class="qs-student-cta qs-student-cta--soft">{{ __('Edit profile') }}</a>
-                                @if ($practiceEnabled)
-                                    <a href="{{ route('student.practice.index') }}" class="qs-student-cta">{{ __('Open practice') }}</a>
-                                @elseif ($availableCount > 0)
-                                    <a href="#student-exams" class="qs-student-cta">{{ __('Start an exam') }}</a>
+                                @if ($highlightExam->duration_minutes)
+                                    <span>{{ $highlightExam->duration_minutes }} {{ __('min') }}</span>
                                 @endif
-                            </div>
-                        </div>
-
-                        @if ($activeSession)
-                            <div class="qs-student-spotlight mt-5">
-                                <div class="flex min-w-0 gap-3">
-                                    <span class="qs-student-spotlight__icon">
-                                        <i class="fa-solid fa-bolt" aria-hidden="true"></i>
-                                    </span>
-                                    <div class="min-w-0">
-                                        <p class="qs-student-spotlight__eyebrow">{{ __('Exam in progress') }}</p>
-                                        <p class="qs-student-spotlight__title">{{ $activeSession->exam?->title }}</p>
-                                        <p class="qs-student-spotlight__meta">{{ $activeSession->exam?->course?->code }} — {{ $activeSession->exam?->course?->title }}</p>
-                                    </div>
-                                </div>
-                                <a href="{{ route('student.exam.take', $activeSession) }}" class="qs-student-cta shrink-0">
-                                    <i class="fa-solid fa-play text-xs" aria-hidden="true"></i>
-                                    {{ __('Continue') }}
-                                </a>
-                            </div>
+                                @if ($highlightExam->end_time)
+                                    <span>{{ __('Until') }} {{ $highlightExam->end_time->timezone($tz)->format('M j, H:i') }}</span>
+                                @endif
+                            </p>
+                            <p class="mt-3 max-w-md text-sm leading-relaxed text-slate-400">
+                                {{ __('This is the next quiz you can start from your class schedule.') }}
+                            </p>
+                        @elseif ($nextUpcomingExam)
+                            <h2 class="mt-3 max-w-xl text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+                                {{ $nextUpcomingExam->title }}
+                            </h2>
+                            @if ($nextUpcomingExam->start_time)
+                                <p class="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
+                                    {{ __('Opens') }} {{ $nextUpcomingExam->start_time->timezone($tz)->format('l, M j · H:i') }}
+                                </p>
+                            @endif
+                            <p class="mt-3 max-w-md text-sm leading-relaxed text-slate-400">
+                                {{ __('No quiz is open yet. A start button will appear when the window opens.') }}
+                            </p>
+                        @elseif ($heroAwaitingResult)
+                            <h2 class="mt-3 max-w-xl text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+                                {{ $heroAwaitingResult->quiz?->title ?? __('Your last quiz') }}
+                            </h2>
+                            <p class="mt-3 flex flex-wrap gap-x-2 gap-y-1 text-sm text-slate-300">
+                                @if ($heroAwaitingResult->quiz?->course?->code)
+                                    <span class="font-semibold text-white">{{ $heroAwaitingResult->quiz->course->code }}</span>
+                                @endif
+                            </p>
+                            @if ($heroAwaitingResult->status === 'held')
+                                <p class="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
+                                    {{ __('Your submission is under review. You will see a score when it is released.') }}
+                                </p>
+                            @else
+                                <p class="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
+                                    {{ __('This quiz is waiting to be graded. Check results for updates.') }}
+                                </p>
+                            @endif
+                        @elseif ($practiceEnabled && $heroIdleNoClassWork)
+                            <h2 class="mt-3 max-w-xl text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+                                {{ __('Ready to revise?') }}
+                            </h2>
+                            <p class="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
+                                {{ $bestPracticeScore !== null ? __('Best practice score: :score', ['score' => number_format((float) $bestPracticeScore, 1).'%' ]) : __('Open your course outline, review summaries, or start a practice quiz.') }}
+                            </p>
+                        @else
+                            <h2 class="mt-3 max-w-xl text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+                                {{ __('You are all caught up') }}
+                            </h2>
+                            <p class="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
+                                {{ __('Review your results for feedback and past scores.') }}
+                            </p>
                         @endif
                     </div>
 
-                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                        <article class="qs-student-highlight-card qs-student-highlight-card--mint">
-                            <span class="qs-student-highlight-card__icon"><i class="fa-solid fa-file-signature" aria-hidden="true"></i></span>
-                            <p class="qs-student-highlight-card__label">{{ __('Available now') }}</p>
-                            <p class="qs-student-highlight-card__value">{{ number_format($availableCount) }}</p>
-                            <p class="qs-student-highlight-card__meta">{{ $availableCount === 1 ? __('Exam ready to start') : __('Exams ready to start') }}</p>
-                        </article>
-                        <article class="qs-student-highlight-card qs-student-highlight-card--sky">
-                            <span class="qs-student-highlight-card__icon"><i class="fa-solid fa-calendar-week" aria-hidden="true"></i></span>
-                            <p class="qs-student-highlight-card__label">{{ __('Upcoming') }}</p>
-                            <p class="qs-student-highlight-card__value">{{ number_format($upcomingCount) }}</p>
-                            <p class="qs-student-highlight-card__meta">{{ __('Scheduled exam windows ahead') }}</p>
-                        </article>
-                        <article class="qs-student-highlight-card qs-student-highlight-card--amber">
-                            <span class="qs-student-highlight-card__icon"><i class="fa-solid fa-user-check" aria-hidden="true"></i></span>
-                            <p class="qs-student-highlight-card__label">{{ __('Profile status') }}</p>
-                            <p class="qs-student-highlight-card__value text-xl sm:text-2xl">{{ $studentProfileReady ? __('Ready') : __('Pending') }}</p>
-                            <p class="qs-student-highlight-card__meta">{{ $studentProfileReady ? __('Account setup complete') : __('Complete onboarding if prompted') }}</p>
-                        </article>
-                    </div>
+                    @if ($heroBadge)
+                        <div class="hidden shrink-0 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-slate-200 sm:block">
+                            {{ $heroBadge }}
+                        </div>
+                    @endif
                 </div>
 
-                <div class="qs-student-hero__stats">
-                    <div class="qs-student-hero__stat">
-                        <p class="qs-student-hero__stat-val">{{ number_format($submittedExamsCount) }}</p>
-                        <p class="qs-student-hero__stat-lab">{{ __('Exams done') }}</p>
-                    </div>
-                    <div class="qs-student-hero__stat">
-                        <p class="qs-student-hero__stat-val">{{ number_format($gradedResultsCount) }}</p>
-                        <p class="qs-student-hero__stat-lab">{{ __('Results graded') }}</p>
-                    </div>
-                    <div class="qs-student-hero__stat">
-                        <p class="qs-student-hero__stat-val">{{ $practiceEnabled ? number_format($practiceQuizCount) : number_format($availableCount) }}</p>
-                        <p class="qs-student-hero__stat-lab">{{ $practiceEnabled ? __('Practice quizzes') : __('Open exams') }}</p>
-                    </div>
-                    <div class="qs-student-hero__stat">
-                        <p class="qs-student-hero__stat-val">{{ number_format($reviewCount + $awaitingCount) }}</p>
-                        <p class="qs-student-hero__stat-lab">{{ __('Pending updates') }}</p>
-                    </div>
+                <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:mt-6">
+                    @if ($examInProgressHere && $activeSession)
+                        <a
+                            href="{{ route('student.exam.take', $activeSession) }}"
+                            class="inline-flex items-center justify-center rounded-2xl bg-[var(--qs-primary)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[var(--qs-primary)] focus:ring-offset-2 focus:ring-offset-slate-950"
+                        >
+                            {{ __('Continue exam') }}
+                        </a>
+                    @elseif ($highlightExam)
+                        <a
+                            href="{{ route('student.exam.prepare', $highlightExam) }}"
+                            class="inline-flex items-center justify-center rounded-2xl bg-[var(--qs-primary)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[var(--qs-primary)] focus:ring-offset-2 focus:ring-offset-slate-950"
+                        >
+                            {{ __('Start quiz') }}
+                        </a>
+                    @elseif ($nextUpcomingExam)
+                        <a
+                            href="{{ route('student.results.index') }}"
+                            class="inline-flex items-center justify-center rounded-2xl bg-[var(--qs-primary)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[var(--qs-primary)] focus:ring-offset-2 focus:ring-offset-slate-950"
+                        >
+                            {{ __('View results') }}
+                        </a>
+                        @if ($practiceEnabled)
+                            <a
+                                href="{{ route('student.practice.revision') }}"
+                                class="inline-flex items-center justify-center rounded-2xl bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white/25 focus:ring-offset-2 focus:ring-offset-slate-950"
+                            >
+                                {{ __('Open practice') }}
+                            </a>
+                        @endif
+                    @elseif ($heroAwaitingResult)
+                        <a
+                            href="{{ route('student.results.index') }}"
+                            class="inline-flex items-center justify-center rounded-2xl bg-[var(--qs-primary)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[var(--qs-primary)] focus:ring-offset-2 focus:ring-offset-slate-950"
+                        >
+                            {{ __('View results') }}
+                        </a>
+                        @if ($practiceEnabled)
+                            <a
+                                href="{{ route('student.practice.revision') }}"
+                                class="inline-flex items-center justify-center rounded-2xl bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white/25 focus:ring-offset-2 focus:ring-offset-slate-950"
+                            >
+                                {{ __('Open practice') }}
+                            </a>
+                        @endif
+                    @elseif ($practiceEnabled && $heroIdleNoClassWork)
+                        <a
+                            href="{{ route('student.practice.revision') }}"
+                            class="inline-flex items-center justify-center rounded-2xl bg-[var(--qs-primary)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[var(--qs-primary)] focus:ring-offset-2 focus:ring-offset-slate-950"
+                        >
+                            {{ __('Open practice') }}
+                        </a>
+                        <a
+                            href="{{ route('student.results.index') }}"
+                            class="inline-flex items-center justify-center rounded-2xl bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white/25 focus:ring-offset-2 focus:ring-offset-slate-950"
+                        >
+                            {{ __('View results') }}
+                        </a>
+                    @else
+                        <a
+                            href="{{ route('student.results.index') }}"
+                            class="inline-flex items-center justify-center rounded-2xl bg-[var(--qs-primary)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[var(--qs-primary)] focus:ring-offset-2 focus:ring-offset-slate-950"
+                        >
+                            {{ __('View results') }}
+                        </a>
+                    @endif
+
+                    @if ($prepareExam && ($examInProgressHere || $highlightExam))
+                        <a
+                            href="{{ route('student.exam.prepare', $prepareExam) }}"
+                            class="inline-flex items-center justify-center rounded-2xl bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white/25 focus:ring-offset-2 focus:ring-offset-slate-950"
+                        >
+                            {{ __('View instructions') }}
+                        </a>
+                    @endif
                 </div>
             </div>
         </section>
 
-        <section class="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <a href="{{ route('student.results.index') }}" class="qs-student-feature-card">
-                <span class="qs-student-feature-card__icon bg-emerald-100 text-emerald-800"><i class="fa-solid fa-square-poll-vertical" aria-hidden="true"></i></span>
+        {{-- Summary stats: always 3 columns; compact stack on small screens --}}
+        <div class="grid grid-cols-3 gap-2 sm:gap-4">
+            <article class="flex min-w-0 flex-col items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-3 text-center shadow-sm sm:flex-row sm:gap-4 sm:rounded-[1.75rem] sm:p-5 sm:text-left">
+                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-600 sm:h-12 sm:w-12 sm:rounded-2xl" aria-hidden="true">
+                    <i class="fa-solid fa-clipboard-check text-sm sm:text-lg"></i>
+                </div>
                 <div class="min-w-0">
-                    <p class="qs-student-feature-card__title">{{ __('Results') }}</p>
-                    <p class="qs-student-feature-card__meta">{{ __('Check official scores and released submissions.') }}</p>
+                    <p class="text-lg font-semibold tabular-nums tracking-tight text-slate-900 sm:text-2xl">{{ number_format($submittedExamsCount) }}</p>
+                    <p class="text-[10px] font-medium leading-tight text-slate-500 sm:mt-0.5 sm:text-xs">{{ __('Taken') }}</p>
                 </div>
-                <i class="fa-solid fa-chevron-right qs-student-feature-card__chev" aria-hidden="true"></i>
-            </a>
-
-            <a href="{{ route('profile.edit') }}" class="qs-student-feature-card">
-                <span class="qs-student-feature-card__icon bg-amber-100 text-amber-800"><i class="fa-solid fa-user-gear" aria-hidden="true"></i></span>
+            </article>
+            <article class="flex min-w-0 flex-col items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-3 text-center shadow-sm sm:flex-row sm:gap-4 sm:rounded-[1.75rem] sm:p-5 sm:text-left">
+                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600 sm:h-12 sm:w-12 sm:rounded-2xl" aria-hidden="true">
+                    <i class="fa-solid fa-square-poll-vertical text-sm sm:text-lg"></i>
+                </div>
                 <div class="min-w-0">
-                    <p class="qs-student-feature-card__title">{{ __('Profile') }}</p>
-                    <p class="qs-student-feature-card__meta">{{ __('Update your account, face setup, and identity details.') }}</p>
+                    <p class="text-lg font-semibold tabular-nums tracking-tight text-slate-900 sm:text-2xl">{{ number_format($gradedResultsCount) }}</p>
+                    <p class="text-[10px] font-medium leading-tight text-slate-500 sm:mt-0.5 sm:text-xs">{{ __('Results') }}</p>
                 </div>
-                <i class="fa-solid fa-chevron-right qs-student-feature-card__chev" aria-hidden="true"></i>
-            </a>
-
-            @if ($practiceEnabled)
-                <a href="{{ route('student.practice.materials.index') }}" class="qs-student-feature-card">
-                    <span class="qs-student-feature-card__icon bg-teal-100 text-teal-800"><i class="fa-solid fa-folder-open" aria-hidden="true"></i></span>
-                    <div class="min-w-0">
-                        <p class="qs-student-feature-card__title">{{ __('Materials') }}</p>
-                        <p class="qs-student-feature-card__meta">{{ __('Open study files and course resources quickly.') }}</p>
-                    </div>
-                    <i class="fa-solid fa-chevron-right qs-student-feature-card__chev" aria-hidden="true"></i>
-                </a>
-
-                <a href="{{ route('student.practice.index') }}" class="qs-student-feature-card">
-                    <span class="qs-student-feature-card__icon bg-violet-100 text-violet-800"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i></span>
-                    <div class="min-w-0">
-                        <p class="qs-student-feature-card__title">{{ __('Practice') }}</p>
-                        <p class="qs-student-feature-card__meta">{{ __('Generate quizzes, summaries, and self-study sessions.') }}</p>
-                    </div>
-                    <i class="fa-solid fa-chevron-right qs-student-feature-card__chev" aria-hidden="true"></i>
-                </a>
-            @else
-                <div class="qs-student-feature-card md:col-span-2 xl:col-span-2">
-                    <span class="qs-student-feature-card__icon bg-slate-100 text-slate-700"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span>
-                    <div class="min-w-0">
-                        <p class="qs-student-feature-card__title">{{ __('Practice module') }}</p>
-                        <p class="qs-student-feature-card__meta">{{ __('When enabled by your institution, study materials, AI summaries, and practice quizzes will appear here.') }}</p>
-                    </div>
+            </article>
+            <article class="flex min-w-0 flex-col items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-3 text-center shadow-sm sm:flex-row sm:gap-4 sm:rounded-[1.75rem] sm:p-5 sm:text-left">
+                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-fuchsia-100 text-fuchsia-600 sm:h-12 sm:w-12 sm:rounded-2xl" aria-hidden="true">
+                    <i class="fa-solid fa-layer-group text-sm sm:text-lg"></i>
                 </div>
-            @endif
-        </section>
+                <div class="min-w-0">
+                    @if ($practiceEnabled)
+                        <p class="text-lg font-semibold tabular-nums tracking-tight text-slate-900 sm:text-2xl">{{ number_format($practiceQuizCount) }}</p>
+                    @else
+                        <p class="text-lg font-semibold tabular-nums tracking-tight text-slate-400 sm:text-2xl">—</p>
+                    @endif
+                    <p class="text-[10px] font-medium leading-tight text-slate-500 sm:mt-0.5 sm:text-xs">{{ __('Practice') }}</p>
+                </div>
+            </article>
+        </div>
 
-        <section class="mb-5 grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.9fr)]">
-            <div class="qs-student-shell p-4 sm:p-5">
-                <div class="mb-4 flex items-center justify-between gap-3">
+        {{-- Progress + quick actions --}}
+        <section class="grid gap-4 lg:grid-cols-[1fr_0.85fr]">
+            <div class="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
+                <div class="flex items-start justify-between gap-3">
                     <div>
-                        <p class="qs-student-section-eyebrow">{{ __('At a glance') }}</p>
-                        <h3 class="text-base font-bold text-slate-950 sm:text-lg">{{ __('Your academic summary') }}</h3>
+                        <h2 class="font-semibold text-slate-900">{{ __('Your progress') }}</h2>
+                        <p class="mt-1 text-sm text-slate-500">
+                            @if ($submitted > 0)
+                                {{ __(':graded of :total submitted exams are graded.', ['graded' => number_format($graded), 'total' => number_format($submitted)]) }}
+                            @else
+                                {{ __('Activity across submissions and graded results.') }}
+                            @endif
+                        </p>
                     </div>
-                    <a href="{{ route('student.results.index') }}" class="qs-student-pill">{{ __('View results') }}</a>
+                    <p class="text-2xl font-semibold tabular-nums text-slate-900">{{ $progressPct }}%</p>
                 </div>
-
-                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    <article class="qs-student-glance-card">
-                        <span class="qs-student-glance-card__icon bg-sky-100 text-sky-700"><i class="fa-solid fa-clipboard-check" aria-hidden="true"></i></span>
-                        <p class="qs-student-glance-card__value">{{ number_format($submittedExamsCount) }}</p>
-                        <p class="qs-student-glance-card__label">{{ __('Quizzes taken') }}</p>
-                    </article>
-
-                    <article class="qs-student-glance-card">
-                        <span class="qs-student-glance-card__icon bg-emerald-100 text-emerald-700"><i class="fa-solid fa-award" aria-hidden="true"></i></span>
-                        <p class="qs-student-glance-card__value">
-                            {{ $bestPracticeScore !== null ? number_format((float) $bestPracticeScore, 1).'%' : number_format($gradedResultsCount) }}
-                        </p>
-                        <p class="qs-student-glance-card__label">
-                            {{ $bestPracticeScore !== null ? __('Best practice score') : __('Results graded') }}
-                        </p>
-                    </article>
-
-                    <article class="qs-student-glance-card">
-                        <span class="qs-student-glance-card__icon bg-amber-100 text-amber-700"><i class="fa-solid fa-user-shield" aria-hidden="true"></i></span>
-                        <p class="qs-student-glance-card__value">{{ $studentProfileReady ? __('Ready') : __('Setup') }}</p>
-                        <p class="qs-student-glance-card__label">{{ __('Profile verification') }}</p>
-                    </article>
+                <div class="mt-5 h-2 overflow-hidden rounded-full bg-slate-100" role="presentation">
+                    <div class="h-full rounded-full bg-[var(--qs-primary)] transition-all" style="width: {{ $progressPct }}%"></div>
                 </div>
-
-                <div class="mt-5 grid gap-3 md:grid-cols-2">
-                    <a href="#student-agenda" class="qs-student-quick-link">
-                        <span class="qs-student-quick-link__icon"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i></span>
-                        <span class="min-w-0 flex-1">
-                            <span class="block text-sm font-semibold text-slate-900">{{ __('Calendar') }}</span>
-                            <span class="mt-0.5 block text-xs text-slate-500">{{ __('See upcoming exam windows and due times.') }}</span>
-                        </span>
-                        <i class="fa-solid fa-chevron-right text-slate-400" aria-hidden="true"></i>
-                    </a>
-
-                    <a href="{{ route('student.results.index') }}" class="qs-student-quick-link">
-                        <span class="qs-student-quick-link__icon"><i class="fa-solid fa-file-circle-check" aria-hidden="true"></i></span>
-                        <span class="min-w-0 flex-1">
-                            <span class="block text-sm font-semibold text-slate-900">{{ __('Class results') }}</span>
-                            <span class="mt-0.5 block text-xs text-slate-500">{{ __('Review published scores and submission outcomes.') }}</span>
-                        </span>
-                        <i class="fa-solid fa-chevron-right text-slate-400" aria-hidden="true"></i>
-                    </a>
-                </div>
+                @if ($upcomingCount > 0 || $activityPct !== $progressPct)
+                    <p class="mt-3 text-xs text-slate-400">
+                        {{ __('Submissions') }}: {{ number_format($submitted) }}
+                        · {{ __('Graded') }}: {{ number_format($graded) }}
+                        @if ($upcomingCount > 0)
+                            · {{ __('Upcoming') }}: {{ $upcomingCount }}
+                        @endif
+                    </p>
+                @endif
             </div>
 
-            <div class="grid gap-4">
-                @if ($practiceEnabled ?? false)
-                    <section id="student-practice" class="qs-student-shell p-4 sm:p-5">
-                        <div class="mb-3 flex items-start gap-3">
-                            <span class="qs-student-side-icon bg-teal-100 text-teal-800"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></span>
-                            <div>
-                                <p class="qs-student-section-eyebrow">{{ __('Practice') }}</p>
-                                <h3 class="text-sm font-bold text-slate-900">{{ __('Study shortcuts') }}</h3>
+            <div class="rounded-[1.75rem] border border-slate-200 bg-white p-2 shadow-sm">
+                <a href="{{ route('student.results.index') }}" class="flex items-center justify-between rounded-2xl px-3 py-3 transition hover:bg-slate-50">
+                    <div class="flex min-w-0 items-center gap-3">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+                            <i class="fa-solid fa-square-poll-vertical" aria-hidden="true"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold text-slate-900">{{ __('Results') }}</p>
+                            <p class="text-xs text-slate-500">{{ __('Check your scores') }}</p>
+                        </div>
+                    </div>
+                    <span class="shrink-0 text-slate-400" aria-hidden="true"><i class="fa-solid fa-chevron-right text-xs"></i></span>
+                </a>
+                @if ($practiceEnabled)
+                    <a href="{{ route('student.practice.revision') }}" class="flex items-center justify-between rounded-2xl px-3 py-3 transition hover:bg-slate-50">
+                        <div class="flex min-w-0 items-center gap-3">
+                            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+                                <i class="fa-solid fa-pen" aria-hidden="true"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <p class="text-sm font-semibold text-slate-900">{{ __('Practice') }}</p>
+                                <p class="text-xs text-slate-500">{{ __('Try more quizzes') }}</p>
                             </div>
                         </div>
-                        <p class="text-xs leading-relaxed text-slate-600">{{ __('Summaries, generated quizzes, and attempts live here and do not affect your official grade.') }}</p>
-                        <div class="mt-4 flex flex-wrap gap-2">
-                            <a href="{{ route('student.practice.summaries.index') }}" class="qs-student-pill">{{ __('Summaries') }}</a>
-                            <a href="{{ route('student.practice.quizzes.index') }}" class="qs-student-pill">{{ __('My quizzes') }}</a>
-                            <a href="{{ route('student.practice.quizzes.create') }}" class="qs-student-cta">{{ __('New quiz') }}</a>
-                        </div>
-                    </section>
+                        <span class="shrink-0 text-slate-400" aria-hidden="true"><i class="fa-solid fa-chevron-right text-xs"></i></span>
+                    </a>
                 @endif
-
-                @if ($heldResults->isNotEmpty() || $pendingManualResults->isNotEmpty())
-                    <section class="qs-student-shell p-4 sm:p-5">
-                        <div class="mb-3 flex items-start gap-3">
-                            <span class="qs-student-side-icon bg-amber-100 text-amber-800"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i></span>
-                            <div>
-                                <p class="qs-student-section-eyebrow">{{ __('Status') }}</p>
-                                <h3 class="text-sm font-bold text-slate-900">{{ __('Result updates') }}</h3>
-                            </div>
+                <a href="{{ route('profile.edit') }}" class="flex items-center justify-between rounded-2xl px-3 py-3 transition hover:bg-slate-50">
+                    <div class="flex min-w-0 items-center gap-3">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+                            <i class="fa-solid fa-user" aria-hidden="true"></i>
                         </div>
-
-                        @if ($heldResults->isNotEmpty())
-                            <div class="qs-student-status-block qs-student-status-block--warn">
-                                <p class="text-sm font-semibold text-amber-950">{{ __('Results under review') }}</p>
-                                <ul class="mt-2 space-y-1.5 text-xs text-amber-950/90">
-                                    @foreach ($heldResults as $row)
-                                        <li class="flex items-center gap-2">
-                                            <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-600/80" aria-hidden="true"></span>
-                                            {{ $row->quiz?->title ?? __('Exam') }}
-                                        </li>
-                                    @endforeach
-                                </ul>
-                            </div>
-                        @endif
-
-                        @if ($pendingManualResults->isNotEmpty())
-                            <div class="qs-student-status-block qs-student-status-block--muted {{ $heldResults->isNotEmpty() ? 'mt-3' : '' }}">
-                                <p class="text-sm font-semibold text-slate-900">{{ __('Awaiting grading') }}</p>
-                                <ul class="mt-2 space-y-1.5 text-xs text-slate-600">
-                                    @foreach ($pendingManualResults as $row)
-                                        <li class="flex items-center gap-2">
-                                            <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" aria-hidden="true"></span>
-                                            {{ $row->quiz?->title ?? __('Exam') }}
-                                        </li>
-                                    @endforeach
-                                </ul>
-                            </div>
-                        @endif
-                    </section>
-                @endif
-
-                @if ($practiceEnabled && $recentPracticeScores->isNotEmpty())
-                    <section class="qs-student-shell p-4 sm:p-5">
-                        <div class="mb-3 flex items-start gap-3">
-                            <span class="qs-student-side-icon bg-emerald-100 text-emerald-800"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span>
-                            <div>
-                                <p class="qs-student-section-eyebrow">{{ __('Recent scores') }}</p>
-                                <h3 class="text-sm font-bold text-slate-900">{{ __('Practice activity') }}</h3>
-                            </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold text-slate-900">{{ __('Profile') }}</p>
+                            <p class="text-xs text-slate-500">{{ __('Manage your details') }}</p>
                         </div>
+                    </div>
+                    <span class="shrink-0 text-slate-400" aria-hidden="true"><i class="fa-solid fa-chevron-right text-xs"></i></span>
+                </a>
+            </div>
+        </section>
+
+        {{-- Activity row: class work, self-study, recent attempts --}}
+        <section class="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
+            {{-- Course assignments (scheduled / open class quizzes) --}}
+            <article class="flex flex-col rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="flex min-w-0 items-center gap-2.5">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700" aria-hidden="true">
+                            <i class="fa-solid fa-clipboard-list"></i>
+                        </span>
+                        <div class="min-w-0">
+                            <h2 class="font-semibold leading-tight text-slate-900">{{ __('Course assignments') }}</h2>
+                            <p class="mt-1 text-xs leading-snug text-slate-500">{{ __('Open and upcoming quizzes from your classes.') }}</p>
+                        </div>
+                    </div>
+                    <a href="{{ route('student.results.index') }}" class="shrink-0 text-sm font-medium text-[var(--qs-primary)] hover:underline">
+                        {{ __('View all') }}
+                    </a>
+                </div>
+                <div class="mt-4 flex min-h-[5.5rem] flex-1 flex-col">
+                    @if ($user->class_id === null)
+                        <p class="text-sm text-slate-500">{{ __('When you are assigned to a class, your scheduled quizzes will show here.') }}</p>
+                    @elseif ($dashboardAssignments->isEmpty())
+                        <p class="text-sm text-slate-500">{{ __('No open or scheduled class quizzes right now.') }}</p>
+                    @else
                         <ul class="space-y-2">
-                            @foreach ($recentPracticeScores as $att)
-                                <li class="qs-student-score-row">
-                                    <div class="min-w-0">
-                                        <p class="truncate text-sm font-semibold text-slate-900">{{ $att->practiceQuiz?->title }}</p>
-                                        <p class="mt-0.5 text-[11px] text-slate-500">{{ $att->practiceQuiz?->course?->code ?? __('Course') }}</p>
-                                    </div>
-                                    <span class="qs-student-score-pill">{{ $att->percentage !== null ? number_format((float) $att->percentage, 1).'%' : '—' }}</span>
+                            @foreach ($dashboardAssignments as $exam)
+                                @php
+                                    $openNow = $availableExams->contains(fn ($e) => (int) $e->id === (int) $exam->id);
+                                @endphp
+                                <li class="min-w-0">
+                                    @if ($openNow)
+                                        <a href="{{ route('student.exam.prepare', $exam) }}" class="group block rounded-xl px-1 py-2 transition hover:bg-slate-50">
+                                            <p class="truncate text-sm font-medium text-slate-900 group-hover:text-[var(--qs-primary)]">{{ $exam->title }}</p>
+                                            <p class="mt-0.5 text-xs font-medium text-emerald-600">{{ __('Open now') }}</p>
+                                        </a>
+                                    @else
+                                        <div class="rounded-xl px-1 py-2">
+                                            <p class="truncate text-sm font-medium text-slate-900">{{ $exam->title }}</p>
+                                            @if ($exam->start_time)
+                                                <p class="mt-0.5 text-xs text-slate-500">{{ __('Starts') }} {{ $exam->start_time->timezone($tz)->format('M j, H:i') }}</p>
+                                            @else
+                                                <p class="mt-0.5 text-xs text-slate-500">{{ __('Scheduled') }}</p>
+                                            @endif
+                                        </div>
+                                    @endif
                                 </li>
                             @endforeach
                         </ul>
-                    </section>
-                @endif
-            </div>
-        </section>
-
-        <section id="student-exams" class="qs-student-shell overflow-hidden !p-0">
-            <div class="flex flex-col gap-3 border-b border-slate-200/80 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                <div>
-                    <p class="qs-student-section-eyebrow">{{ __('Exam centre') }}</p>
-                    <h3 class="text-base font-bold text-slate-950 sm:text-lg">{{ __('My courses and exams') }}</h3>
+                    @endif
                 </div>
-                <a href="{{ route('student.results.index') }}" class="qs-student-pill !py-1.5 text-[11px]">{{ __('Manage results') }}</a>
-            </div>
+            </article>
 
-            @if (! $hasClass)
-                <p class="px-4 py-6 text-sm leading-relaxed text-slate-600 sm:px-5">
-                    <i class="fa-solid fa-circle-info mr-1 text-teal-600" aria-hidden="true"></i>
-                    {{ __('student_ui.class_group_not_assigned') }}
-                </p>
-            @elseif ($coursesWithExams->isEmpty())
-                <p class="px-4 py-6 text-sm text-slate-600 sm:px-5">{{ __('No published exams are linked to your class courses yet.') }}</p>
-            @else
-                <div class="grid gap-0 xl:grid-cols-[minmax(0,1.5fr)_minmax(19rem,0.85fr)]">
-                    <div class="border-b border-slate-200/80 xl:border-b-0 xl:border-r" x-data="{ openCourse: @js($openCourseId) }">
-                        <div class="divide-y divide-slate-100">
-                            @foreach ($coursesWithExams as $courseId => $rows)
-                                @php
-                                    /** @var \App\Models\Quiz $headExam */
-                                    $headExam = $rows->first()['exam'];
-                                    $course = $headExam->course;
-                                @endphp
-                                <div class="bg-white">
-                                    <button
-                                        type="button"
-                                        class="qs-student-course-head w-full !rounded-none !border-0 !shadow-none"
-                                        @click="openCourse = openCourse === '{{ (string) $courseId }}' ? null : '{{ (string) $courseId }}'"
-                                        :aria-expanded="openCourse === '{{ (string) $courseId }}' ? 'true' : 'false'"
-                                    >
-                                        <span class="flex min-w-0 items-center gap-3 text-left">
-                                            <span class="qs-student-course-head__code">
-                                                {{ $course?->code ? \Illuminate\Support\Str::limit($course->code, 4, '') : '—' }}
-                                            </span>
-                                            <span class="min-w-0">
-                                                <span class="block truncate text-sm font-bold text-slate-900">{{ $course?->title ?? __('Course') }}</span>
-                                                <span class="mt-0.5 block text-[11px] font-medium text-slate-500">{{ $rows->count() }} {{ $rows->count() === 1 ? __('exam') : __('exams') }}</span>
-                                            </span>
-                                        </span>
-                                        <i class="fa-solid fa-chevron-down shrink-0 text-slate-400 transition" :class="openCourse === '{{ (string) $courseId }}' ? '-rotate-180' : ''" aria-hidden="true"></i>
-                                    </button>
-                                    <div x-show="openCourse === '{{ (string) $courseId }}'" x-cloak class="border-t border-slate-100 bg-slate-50/50 px-3 py-3 sm:px-4">
-                                        <div class="qs-student-timeline space-y-2">
-                                            @foreach ($rows as $row)
-                                                @php
-                                                    $exam = $row['exam'];
-                                                    $p = (int) $row['progress'];
-                                                    $state = $row['state'];
-                                                    $href = $row['href'];
-                                                    $ringColor = match ($state) {
-                                                        'completed' => '#0d9488',
-                                                        'in_progress' => '#2563eb',
-                                                        'available' => '#14b8a6',
-                                                        'upcoming', 'blocked' => '#94a3b8',
-                                                        'closed' => '#cbd5e1',
-                                                        default => '#94a3b8',
-                                                    };
-                                                @endphp
-                                                <div class="qs-student-timeline__row">
-                                                    <span class="qs-student-timeline__dot" style="background: {{ $state === 'completed' ? '#0d9488' : ($state === 'in_progress' ? '#2563eb' : '#94a3b8') }}"></span>
-                                                    <div class="qs-student-ring shrink-0" style="--qs-student-ring: {{ $ringColor }}; --qs-p: {{ $p }};">
-                                                        <span class="qs-student-ring__hole">{{ $p }}%</span>
-                                                    </div>
-                                                    <div class="min-w-0 flex-1">
-                                                        <p class="text-sm font-semibold text-slate-900">{{ $exam->title }}</p>
-                                                        <p class="mt-0.5 text-[11px] text-slate-500">{{ $row['label'] }}@if ($exam->duration_minutes) · {{ $exam->duration_minutes }} {{ __('min') }}@endif</p>
-                                                        @if ($exam->start_time && in_array($state, ['upcoming', 'available', 'blocked'], true))
-                                                            <p class="mt-1 text-[10px] text-slate-400">
-                                                                {{ __('Opens') }}: {{ $exam->start_time->timezone(config('app.timezone'))->format('M j, H:i') }}
-                                                            </p>
-                                                        @endif
-                                                    </div>
-                                                    @if ($href && in_array($state, ['completed', 'in_progress', 'available', 'closed'], true))
-                                                        <a href="{{ $href }}" class="qs-student-action" title="{{ __('Open') }}">
-                                                            @if (in_array($state, ['completed', 'closed'], true))
-                                                                <i class="fa-solid fa-chevron-right text-xs" aria-hidden="true"></i>
-                                                            @else
-                                                                <i class="fa-solid fa-play text-xs pl-0.5" aria-hidden="true"></i>
-                                                            @endif
-                                                        </a>
-                                                    @else
-                                                        <span class="qs-student-action qs-student-action--muted cursor-default" title="{{ $row['label'] }}">
-                                                            <i class="fa-solid fa-lock text-xs" aria-hidden="true"></i>
-                                                        </span>
-                                                    @endif
-                                                </div>
-                                            @endforeach
-                                        </div>
-                                    </div>
-                                </div>
-                            @endforeach
+            {{-- Revision & self-check (materials → summaries → practice quizzes) --}}
+            <article class="flex flex-col rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="flex min-w-0 items-center gap-2.5">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700" aria-hidden="true">
+                            <i class="fa-solid fa-book-open-reader"></i>
+                        </span>
+                        <div class="min-w-0">
+                            <h2 class="font-semibold leading-tight text-slate-900">{{ __('Revision & self-check') }}</h2>
+                            <p class="mt-1 text-xs leading-snug text-slate-500">{{ __('Practice quizzes and summaries from your course outline and materials.') }}</p>
                         </div>
                     </div>
-
-                    <aside id="student-agenda" class="bg-[#fbfcfb] px-4 py-4 sm:px-5">
-                        <p class="qs-student-section-eyebrow">{{ __('Agenda') }}</p>
-                        <h4 class="text-sm font-bold text-slate-950">{{ __('What needs attention') }}</h4>
-
-                        <div class="mt-4 space-y-3">
-                            <div class="qs-student-agenda-card">
-                                <div class="flex items-start gap-3">
-                                    <span class="qs-student-side-icon bg-emerald-100 text-emerald-800"><i class="fa-solid fa-play" aria-hidden="true"></i></span>
-                                    <div class="min-w-0">
-                                        <p class="text-sm font-semibold text-slate-900">{{ __('Ready to start') }}</p>
-                                        <p class="mt-1 text-xs leading-relaxed text-slate-500">
-                                            {{ $availableCount > 0 ? trans_choice('{1} You have :count exam available now.|[2,*] You have :count exams available now.', $availableCount, ['count' => number_format($availableCount)]) : __('No exam is open right now.') }}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="qs-student-agenda-card">
-                                <div class="flex items-start gap-3">
-                                    <span class="qs-student-side-icon bg-sky-100 text-sky-800"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i></span>
-                                    <div class="min-w-0">
-                                        <p class="text-sm font-semibold text-slate-900">{{ __('Coming up') }}</p>
-                                        <p class="mt-1 text-xs leading-relaxed text-slate-500">
-                                            {{ $upcomingCount > 0 ? trans_choice('{1} :count exam is scheduled next.|[2,*] :count exams are scheduled next.', $upcomingCount, ['count' => number_format($upcomingCount)]) : __('No upcoming exam is scheduled yet.') }}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="qs-student-agenda-card">
-                                <div class="flex items-start gap-3">
-                                    <span class="qs-student-side-icon bg-amber-100 text-amber-800"><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i></span>
-                                    <div class="min-w-0">
-                                        <p class="text-sm font-semibold text-slate-900">{{ __('Result follow-up') }}</p>
-                                        <p class="mt-1 text-xs leading-relaxed text-slate-500">
-                                            {{ ($reviewCount + $awaitingCount) > 0 ? trans_choice('{1} :count result still needs attention.|[2,*] :count results still need attention.', $reviewCount + $awaitingCount, ['count' => number_format($reviewCount + $awaitingCount)]) : __('All visible result updates look settled.') }}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="qs-student-agenda-card">
-                                <div class="flex items-start gap-3">
-                                    <span class="qs-student-side-icon bg-slate-100 text-slate-700"><i class="fa-solid fa-shield-check" aria-hidden="true"></i></span>
-                                    <div class="min-w-0">
-                                        <p class="text-sm font-semibold text-slate-900">{{ __('Profile readiness') }}</p>
-                                        <p class="mt-1 text-xs leading-relaxed text-slate-500">{{ $studentProfileReady ? __('You are ready for scheduled exams.') : __('Finish onboarding if your school asks you to complete profile setup.') }}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </aside>
+                    <a href="{{ route('student.practice.revision') }}" class="shrink-0 text-sm font-medium text-[var(--qs-primary)] hover:underline">
+                        {{ __('Open hub') }}
+                    </a>
                 </div>
-            @endif
+                <div class="mt-4 flex min-h-[5.5rem] flex-1 flex-col">
+                    @if ($practiceEnabled)
+                        <ul class="space-y-1.5 text-sm">
+                            <li>
+                                <a href="{{ route('student.practice.materials.index') }}" class="flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-slate-800 transition hover:bg-slate-50">
+                                    <span class="flex min-w-0 items-center gap-2">
+                                        <i class="fa-solid fa-folder-open w-4 shrink-0 text-center text-[var(--qs-primary)]" aria-hidden="true"></i>
+                                        <span class="truncate font-medium">{{ __('Course outline & files') }}</span>
+                                    </span>
+                                    <i class="fa-solid fa-chevron-right text-[10px] text-slate-400" aria-hidden="true"></i>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{{ route('student.practice.summaries.index') }}" class="flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-slate-800 transition hover:bg-slate-50">
+                                    <span class="flex min-w-0 items-center gap-2">
+                                        <i class="fa-solid fa-file-lines w-4 shrink-0 text-center text-[var(--qs-primary)]" aria-hidden="true"></i>
+                                        <span class="truncate font-medium">{{ __('Slide & topic summaries') }}</span>
+                                    </span>
+                                    <i class="fa-solid fa-chevron-right text-[10px] text-slate-400" aria-hidden="true"></i>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{{ route('student.practice.quizzes.index') }}" class="flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-slate-800 transition hover:bg-slate-50">
+                                    <span class="flex min-w-0 items-center gap-2">
+                                        <i class="fa-solid fa-clipboard-question w-4 shrink-0 text-center text-[var(--qs-primary)]" aria-hidden="true"></i>
+                                        <span class="truncate font-medium">{{ __('My practice quizzes') }}</span>
+                                    </span>
+                                    <i class="fa-solid fa-chevron-right text-[10px] text-slate-400" aria-hidden="true"></i>
+                                </a>
+                            </li>
+                        </ul>
+                    @else
+                        <p class="text-sm text-slate-500">{{ __('Open the revision hub to see how materials, summaries, and practice quizzes work when your school turns them on.') }}</p>
+                        <a href="{{ route('student.practice.revision') }}#materials" class="mt-3 inline-flex text-sm font-semibold text-[var(--qs-primary)] hover:underline">{{ __('What is on this page?') }}</a>
+                    @endif
+                </div>
+            </article>
+
+            {{-- Recent activity (latest practice attempts or results hint) --}}
+            <article class="flex flex-col rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="flex min-w-0 items-center gap-2.5">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-fuchsia-100 text-fuchsia-700" aria-hidden="true">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                        </span>
+                        <div class="min-w-0">
+                            <h2 class="font-semibold leading-tight text-slate-900">{{ __('Recent activity') }}</h2>
+                            <p class="mt-1 text-xs leading-snug text-slate-500">{{ __('Latest practice quiz scores.') }}</p>
+                        </div>
+                    </div>
+                    @if ($practiceEnabled)
+                        <a href="{{ route('student.practice.quizzes.index') }}" class="shrink-0 text-sm font-medium text-[var(--qs-primary)] hover:underline">
+                            {{ __('View all') }}
+                        </a>
+                    @else
+                        <a href="{{ route('student.results.index') }}" class="shrink-0 text-sm font-medium text-[var(--qs-primary)] hover:underline">
+                            {{ __('View all') }}
+                        </a>
+                    @endif
+                </div>
+                <div class="mt-4 flex min-h-[5.5rem] flex-1 flex-col">
+                    @if ($practiceEnabled && $recentPracticeScores->isNotEmpty())
+                        <ul class="space-y-1">
+                            @foreach ($recentPracticeScores as $att)
+                                <li class="flex items-center justify-between gap-3 rounded-xl px-1 py-2.5">
+                                    <div class="min-w-0">
+                                        <p class="truncate text-sm font-medium text-slate-900">{{ $att->practiceQuiz?->title }}</p>
+                                        @if ($att->submitted_at)
+                                            <p class="mt-0.5 text-xs text-slate-500">{{ $att->submitted_at->timezone($tz)->format('M d, Y') }}</p>
+                                        @endif
+                                    </div>
+                                    <p class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold tabular-nums text-slate-800">
+                                        {{ $att->percentage !== null ? number_format((float) $att->percentage, 0).'%' : '—' }}
+                                    </p>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @else
+                        <p class="text-sm text-slate-500">
+                            {{ $practiceEnabled ? __('No practice attempts yet.') : __('Open results to see released scores and status.') }}
+                        </p>
+                    @endif
+                </div>
+            </article>
         </section>
     </div>
 
+    @if (is_array($dashboardPolicyNotice) && ($dashboardPolicyNotice['message'] ?? '') !== '')
+        <div
+            class="pointer-events-none fixed bottom-4 left-0 right-0 z-50 flex justify-center px-4 sm:justify-end sm:px-6"
+            role="status"
+        >
+            <div
+                class="pointer-events-auto w-full max-w-md rounded-2xl border border-slate-800/15 bg-slate-900 px-4 py-3 text-sm text-white shadow-xl shadow-slate-900/25"
+            >
+                <p class="font-medium leading-snug">{{ $dashboardPolicyNotice['message'] }}</p>
+                <div class="mt-3 flex flex-wrap items-center gap-3">
+                    @if (($dashboardPolicyNotice['faq_url'] ?? '') !== '')
+                        <a
+                            href="{{ $dashboardPolicyNotice['faq_url'] }}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="text-xs font-semibold text-teal-200 underline-offset-2 hover:underline"
+                        >
+                            {{ __('Read FAQ') }}
+                        </a>
+                    @endif
+                    <form method="post" action="{{ route('student.dashboard.policy-notice.dismiss') }}" class="inline">
+                        @csrf
+                        <button type="submit" class="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20">
+                            {{ __('Dismiss') }}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @endif
 </x-layouts.student>

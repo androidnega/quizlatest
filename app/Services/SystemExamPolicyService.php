@@ -42,16 +42,6 @@ final class SystemExamPolicyService
     }
 
     /**
-     * Legacy setting — no longer used for face matching. Kept for admin migration / backward compat reads only.
-     *
-     * @deprecated Use {@see self::isExamStartSnapshotRequired()} and {@see self::isCameraMonitoringRequired()}.
-     */
-    public function isFaceVerificationRequired(): bool
-    {
-        return $this->settings->getBool('face_verification_required', true);
-    }
-
-    /**
      * When proctoring is enabled, require one exam-start verification photo (not identity matching).
      */
     public function isExamStartSnapshotRequired(): bool

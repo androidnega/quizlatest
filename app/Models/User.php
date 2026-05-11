@@ -29,6 +29,11 @@ class User extends Authenticatable
         'face_embedding',
         'face_image_path',
         'password',
+        'student_onboarded_at',
+        'student_last_dashboard_at',
+        'policy_notice_ack_version',
+        'last_student_password_reset_at',
+        'is_super_admin',
     ];
 
     protected $hidden = [
@@ -46,8 +51,11 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'student_onboarded_at' => 'datetime',
+            'student_last_dashboard_at' => 'datetime',
             'last_student_password_reset_at' => 'datetime',
             'is_active' => 'boolean',
+            'is_super_admin' => 'boolean',
+            'policy_notice_ack_version' => 'integer',
             'face_embedding' => 'array',
             'password' => 'hashed',
         ];
@@ -126,5 +134,14 @@ class User extends Authenticatable
     public function examSessions(): HasMany
     {
         return $this->hasMany(ExamSession::class, 'student_id');
+    }
+
+    /**
+     * Super administrator: full staff directory and cross-account tools.
+     * The `is_super_admin` column is the only source of truth; every account with this flag is treated the same.
+     */
+    public function isSuperAdmin(): bool
+    {
+        return (bool) $this->is_super_admin;
     }
 }

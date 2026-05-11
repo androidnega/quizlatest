@@ -44,7 +44,6 @@ class ProctoringGovernanceController extends Controller
     public function overrideConfig(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'relax_face_verification' => ['sometimes', 'boolean'],
             'auto_submit_score_override' => ['sometimes', 'nullable', 'integer', 'min:30', 'max:200'],
         ]);
 
