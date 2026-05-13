@@ -85,7 +85,7 @@ class ExamQuestionImportTest extends TestCase
         $ctx = $this->seedDraftExam();
 
         $this->actingAs($ctx['examiner']);
-        $response = $this->from(route('examiner.exams.builder', $ctx['exam']))
+        $response = $this->from(route('examiner.quizzes.workspace', $ctx['exam']))
             ->post(route('examiner.exams.questions.import.preview', $ctx['exam']), [
                 'import_json' => '{',
             ]);
@@ -138,6 +138,7 @@ class ExamQuestionImportTest extends TestCase
         $this->assertDatabaseHas('questions', [
             'quiz_id' => $ctx['exam']->id,
             'type' => 'mcq',
+            'pool_status' => 'draft',
         ]);
     }
 
@@ -149,7 +150,7 @@ class ExamQuestionImportTest extends TestCase
         app(SystemSettingsService::class)->set('enable_ai', 'false', $admin);
 
         $this->actingAs($ctx['examiner']);
-        $html = $this->get(route('examiner.exams.builder', $ctx['exam']))->assertOk()->getContent();
+        $html = $this->get(route('examiner.quizzes.workspace', $ctx['exam']))->assertOk()->getContent();
         $this->assertStringNotContainsString('Generate with AI (internal)', $html);
     }
 }

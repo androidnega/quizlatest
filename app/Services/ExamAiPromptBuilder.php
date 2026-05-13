@@ -13,7 +13,7 @@ final class ExamAiPromptBuilder
     public function build(array $params): string
     {
         $topic = trim((string) ($params['topic'] ?? ''));
-        $count = max(1, min(50, (int) ($params['count'] ?? 5)));
+        $count = max(1, min(250, (int) ($params['count'] ?? 5)));
         $types = $params['types'] ?? ['mcq'];
         if (! is_array($types)) {
             $types = ['mcq'];
@@ -36,7 +36,7 @@ final class ExamAiPromptBuilder
         return <<<PROMPT
 You are generating assessment content for QUIZSNAP. Respond with ONE JSON object only (no markdown fences, no commentary).
 
-Schema:
+Schema (same as JSON import — use correct_answer, never answer_key):
 {
   "sections": [
     {
@@ -46,25 +46,44 @@ Schema:
           "type": "mcq",
           "question_text": "string",
           "marks": number,
-          "options": ["string", "string", ...],
-          "correct_answer": 0 | [0, 1]
+          "options": ["string", "string", "..."],
+          "correct_answer": "exact option text" | 0 | [0, 1],
+          "topic": "string (optional)",
+          "difficulty": "string (optional)",
+          "learning_outcome": "string (optional)",
+          "explanation": "string (optional)"
         },
         {
           "type": "true_false",
           "question_text": "string",
           "marks": number,
-          "correct_answer": true | false
+          "correct_answer": true | false,
+          "topic": "string (optional)",
+          "difficulty": "string (optional)",
+          "learning_outcome": "string (optional)",
+          "explanation": "string (optional)"
         },
         {
           "type": "fill_blank",
-          "question_text": "string with ___ or clear blanks",
+          "question_text": "string with ___ for each blank",
           "marks": number,
-          "correct_answer": ["answer_blank_1", "answer_blank_2"]
+          "correct_answer": ["blank1_answer", "blank2_answer"],
+          "topic": "string (optional)",
+          "difficulty": "string (optional)",
+          "learning_outcome": "string (optional)",
+          "explanation": "string (optional)"
         },
         {
           "type": "essay",
           "question_text": "string",
-          "marks": number
+          "marks": number,
+          "marking_guide": "string (required when possible — how marks are awarded)",
+          "sample_answer": "string (optional)",
+          "rubric": "string or short structured text (optional)",
+          "topic": "string (optional)",
+          "difficulty": "string (optional)",
+          "learning_outcome": "string (optional)",
+          "explanation": "string (optional)"
         }
       ]
     }
@@ -77,8 +96,11 @@ Rules:
 - Topic focus: {$topic}
 - Difficulty guidance: {$difficulty}
 - Default marks per question: {$marks} (you may vary slightly if justified).
-- MCQ: at least two options; correct_answer indices are zero-based.
-- Do not include images, links, or keys outside the schema.
+- MCQ: at least two options; correct_answer must be the exact text of one correct option, or a zero-based index, or an array of indices / matching strings for multiple correct answers.
+- True/False and Fill-in-the-blank: correct_answer is required.
+- Essay: do not include correct_answer. Include marking_guide whenever possible.
+- Add topic, difficulty, learning_outcome, and explanation metadata when it improves reviewability.
+- Do not include images, links, or keys outside the schema (except optional metadata fields listed above).
 PROMPT;
     }
 }

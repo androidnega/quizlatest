@@ -194,9 +194,23 @@ class ExamBuilderController extends Controller
 
         $validated = $request->validate([
             'import_json' => ['required', 'string', 'max:500000'],
+            'selected_question_types' => ['sometimes', 'array'],
+            'selected_question_types.*' => ['string', 'in:mcq,true_false,fill_blank,essay'],
         ]);
 
-        $result = $importValidator->validateJsonString($validated['import_json']);
+        $allowed = null;
+        if (! empty($validated['selected_question_types']) && is_array($validated['selected_question_types'])) {
+            $allowed = array_values(array_unique(array_map(
+                fn ($t) => is_string($t) ? strtolower(trim($t)) : '',
+                $validated['selected_question_types']
+            )));
+            $allowed = array_values(array_filter($allowed, fn ($t) => $t !== ''));
+            if ($allowed === []) {
+                $allowed = null;
+            }
+        }
+
+        $result = $importValidator->validateJsonString($validated['import_json'], $allowed, null);
 
         if (! $result['ok']) {
             return response()->json([
@@ -376,7 +390,7 @@ class ExamBuilderController extends Controller
 
         $pendingImportSections = null;
         if ($source === 'paste_json') {
-            $result = $importValidator->validateJsonString((string) $request->input('import_json', ''));
+            $result = $importValidator->validateJsonString((string) $request->input('import_json', ''), $selectedTypes, null);
             if (! $result['ok']) {
                 return back()
                     ->withErrors(['import_json' => implode("\n", $result['errors'])])
@@ -399,7 +413,7 @@ class ExamBuilderController extends Controller
                 'difficulty' => $request->input('ai_difficulty') ?? 'mixed',
                 'marks_per_question' => (float) ($request->input('ai_marks') ?? 1),
             ]);
-            $gen = $aiGenerator->generateFromPrompt($prompt);
+            $gen = $aiGenerator->generateFromPrompt($prompt, $selectedTypes, null);
             if (! $gen['ok']) {
                 return back()
                     ->withErrors(['ai_topics' => implode("\n", $gen['errors'])])
@@ -1033,7 +1047,12 @@ class ExamBuilderController extends Controller
             'import_json' => ['required', 'string', 'max:500000'],
         ]);
 
-        $result = $validator->validateJsonString($validated['import_json']);
+        $allowed = AssessmentQuestionTypes::effective($exam->selected_question_types);
+        $result = $validator->validateJsonString(
+            $validated['import_json'],
+            $allowed,
+            $this->normalizedPoolQuestionFingerprints($exam)
+        );
         if (! $result['ok']) {
             return back()
                 ->withErrors(['import_json' => implode("\n", $result['errors'])])
@@ -1157,7 +1176,11 @@ class ExamBuilderController extends Controller
             ]);
         }
 
-        $result = $generator->generateFromPrompt($prompt);
+        $result = $generator->generateFromPrompt(
+            $prompt,
+            AssessmentQuestionTypes::effective($exam->selected_question_types),
+            $this->normalizedPoolQuestionFingerprints($exam)
+        );
         if (! $result['ok']) {
             return back()->withErrors(['ai' => implode("\n", $result['errors'])])->withInput();
         }
@@ -1170,6 +1193,22 @@ class ExamBuilderController extends Controller
         ]);
 
         return back()->with('status', 'AI draft validated — review preview below before saving.');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizedPoolQuestionFingerprints(Quiz $exam): array
+    {
+        return Question::query()
+            ->where('quiz_id', $exam->id)
+            ->where('pool_status', '!=', 'archived')
+            ->pluck('question_text')
+            ->map(fn ($t) => mb_strtolower(trim((string) $t)))
+            ->filter(fn ($t) => $t !== '')
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**
@@ -1203,6 +1242,7 @@ class ExamBuilderController extends Controller
                         'answer_schema' => $q['answer_schema'],
                         'marks' => $q['marks'],
                         'question_order' => $qOrder,
+                        'metadata' => $q['metadata'] ?? null,
                         'pool_status' => 'draft',
                     ]);
                 }

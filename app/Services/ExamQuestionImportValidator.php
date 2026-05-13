@@ -5,35 +5,41 @@ namespace App\Services;
 /**
  * Validates QUIZSNAP exam question JSON imports (paste or AI output).
  *
- * Root shape:
+ * Canonical schema (sections root):
  * {
  *   "sections": [
  *     {
  *       "title": "Section A",
  *       "questions": [
- *         { "type": "mcq", "question_text": "...", "marks": 2, "options": ["a","b"], "correct_answer": 0 | [0,1] },
+ *         { "type": "mcq", "question_text": "...", "marks": 2, "options": ["a","b"], "correct_answer": "a" | 0 | [0,1] },
  *         { "type": "true_false", "question_text": "...", "marks": 1, "correct_answer": true },
- *         { "type": "fill_blank", "question_text": "Fill ___", "marks": 1, "correct_answer": ["x"] },
- *         { "type": "essay", "question_text": "...", "marks": 5 }
+ *         { "type": "fill_blank", "question_text": "...", "marks": 1, "correct_answer": ["x"] },
+ *         { "type": "essay", "question_text": "...", "marks": 5, "marking_guide": "...", "topic": "..." }
  *       ]
  *     }
  *   ]
  * }
  *
- * External flat MCQ JSON shape (root JSON array):
- * [
- *   { "text": "…?", "options": { "A": "…", "B": "…", "C": "…", "D": "…" }, "correct": "A", "topic": "…" },
- *   …
- * ]
+ * Use correct_answer only — not answer_key.
+ *
+ * External flat MCQ JSON shape (root JSON array) is still supported for legacy tools.
  */
 final class ExamQuestionImportValidator
 {
     private const ALLOWED_TYPES = ['mcq', 'true_false', 'fill_blank', 'essay'];
 
+    /** @var list<string> */
+    private const ESSAY_EXTRA_METADATA_KEYS = ['marking_guide', 'sample_answer', 'rubric'];
+
+    /** @var list<string> */
+    private const COMMON_METADATA_KEYS = ['topic', 'difficulty', 'learning_outcome', 'explanation'];
+
     /**
+     * @param  list<string>|null  $allowedTypes  When set, question type must be in this list (e.g. assessment selected_question_types).
+     * @param  list<string>|null  $existingQuestionTextsNormalized  Lowercased trimmed texts already in the pool (non-archived), for duplicate detection.
      * @return array{ok: true, sections: list<array{title: string, questions: list<array<string, mixed>>}>}|array{ok: false, errors: list<string>}
      */
-    public function validateJsonString(?string $json): array
+    public function validateJsonString(?string $json, ?array $allowedTypes = null, ?array $existingQuestionTextsNormalized = null): array
     {
         if ($json === null || trim($json) === '') {
             return ['ok' => false, 'errors' => ['JSON body is empty.']];
@@ -57,10 +63,10 @@ final class ExamQuestionImportValidator
                 return ['ok' => false, 'errors' => $convErrors !== [] ? $convErrors : ['Could not convert external MCQ JSON.']];
             }
 
-            return $this->validateDecoded($wrapped);
+            return $this->validateDecoded($wrapped, $allowedTypes, $existingQuestionTextsNormalized);
         }
 
-        return $this->validateDecoded($decoded);
+        return $this->validateDecoded($decoded, $allowedTypes, $existingQuestionTextsNormalized);
     }
 
     /**
@@ -151,12 +157,17 @@ final class ExamQuestionImportValidator
             $topicTitle = is_string($topic) && trim($topic) !== '' ? trim($topic) : 'General';
 
             $byTopic[$topicTitle] ??= [];
+            $meta = [];
+            if (is_string($topic) && trim($topic) !== '') {
+                $meta['topic'] = trim($topic);
+            }
             $byTopic[$topicTitle][] = [
                 'type' => 'mcq',
                 'question_text' => trim($text),
                 'marks' => 1,
                 'options' => $ordered,
-                'correct_answer' => $idx,
+                'correct_answer' => [$idx],
+                'metadata' => $meta === [] ? null : $meta,
             ];
         }
 
@@ -183,9 +194,11 @@ final class ExamQuestionImportValidator
 
     /**
      * @param  array<string, mixed>  $decoded
+     * @param  list<string>|null  $allowedTypes
+     * @param  list<string>|null  $existingQuestionTextsNormalized
      * @return array{ok: true, sections: list<array{title: string, questions: list<array<string, mixed>>}>}|array{ok: false, errors: list<string>}
      */
-    public function validateDecoded(array $decoded): array
+    public function validateDecoded(array $decoded, ?array $allowedTypes = null, ?array $existingQuestionTextsNormalized = null): array
     {
         $errors = [];
 
@@ -195,6 +208,13 @@ final class ExamQuestionImportValidator
 
         if ($decoded['sections'] === []) {
             return ['ok' => false, 'errors' => ['"sections" must contain at least one section.']];
+        }
+
+        $seenInBatch = [];
+        foreach ($existingQuestionTextsNormalized ?? [] as $t) {
+            if (is_string($t) && $t !== '') {
+                $seenInBatch[$t] = true;
+            }
         }
 
         $normalizedSections = [];
@@ -210,7 +230,8 @@ final class ExamQuestionImportValidator
             $title = $section['title'] ?? null;
             if (! is_string($title) || trim($title) === '') {
                 $errors[] = "{$prefix}.title: required non-empty string.";
-                $title = '';
+
+                continue;
             }
 
             $questionsRaw = $section['questions'] ?? null;
@@ -237,12 +258,30 @@ final class ExamQuestionImportValidator
                     continue;
                 }
 
-                $nq = $this->normalizeQuestion($q, $qp, $errors);
-                $normQuestions[] = $nq;
-            }
+                $nq = $this->normalizeQuestion($q, $qp, $allowedTypes, $errors);
+                if ($nq === null) {
+                    $normQuestions[] = null;
 
-            if ($title === '') {
-                continue;
+                    continue;
+                }
+
+                $normKey = mb_strtolower(trim((string) $nq['question_text']));
+                if ($normKey === '') {
+                    $errors[] = "{$qp}.question_text: required non-empty string.";
+                    $normQuestions[] = null;
+
+                    continue;
+                }
+
+                if (isset($seenInBatch[$normKey])) {
+                    $errors[] = "{$qp}: duplicate question_text in this import or already present in the pool for this assessment.";
+                    $normQuestions[] = null;
+
+                    continue;
+                }
+                $seenInBatch[$normKey] = true;
+
+                $normQuestions[] = $nq;
             }
 
             if (in_array(null, $normQuestions, true)) {
@@ -281,14 +320,33 @@ final class ExamQuestionImportValidator
 
     /**
      * @param  array<string, mixed>  $q
+     * @param  list<string>|null  $allowedTypes
      * @param  list<string>  $errors
      * @return array<string, mixed>|null
      */
-    private function normalizeQuestion(array $q, string $qp, array &$errors): ?array
+    private function normalizeQuestion(array $q, string $qp, ?array $allowedTypes, array &$errors): ?array
     {
+        if (array_key_exists('answer_key', $q)) {
+            $errors[] = "{$qp}: use correct_answer, not answer_key.";
+
+            return null;
+        }
+
         $type = $q['type'] ?? null;
-        if (! is_string($type) || ! in_array($type, self::ALLOWED_TYPES, true)) {
-            $errors[] = "{$qp}.type: must be one of ".implode(', ', self::ALLOWED_TYPES).'.';
+        if (! is_string($type) || trim($type) === '') {
+            $errors[] = "{$qp}.type: required string.";
+
+            return null;
+        }
+        $type = strtolower(trim($type));
+        if (! in_array($type, self::ALLOWED_TYPES, true)) {
+            $errors[] = "{$qp}.type: \"{$type}\" is not a supported question type. Use one of: ".implode(', ', self::ALLOWED_TYPES).'.';
+
+            return null;
+        }
+
+        if ($allowedTypes !== null && $allowedTypes !== [] && ! in_array($type, $allowedTypes, true)) {
+            $errors[] = "Question type {$type} is not enabled for this assessment.";
 
             return null;
         }
@@ -313,6 +371,8 @@ final class ExamQuestionImportValidator
             return null;
         }
 
+        $metadata = $this->extractMetadataForType($q, $type);
+
         $row = [
             'type' => $type,
             'question_text' => trim($text),
@@ -320,12 +380,13 @@ final class ExamQuestionImportValidator
             'options' => null,
             'correct_answer' => null,
             'answer_schema' => null,
+            'metadata' => $metadata,
         ];
 
         if ($type === 'mcq') {
             $opts = $q['options'] ?? null;
             if (! is_array($opts)) {
-                $errors[] = "{$qp}.options: MCQ requires an array of option strings.";
+                $errors[] = "{$qp}.options: MCQ questions require at least two options.";
 
                 return null;
             }
@@ -339,13 +400,18 @@ final class ExamQuestionImportValidator
                 $options[] = trim($opt);
             }
             if (count($options) < 2) {
-                $errors[] = "{$qp}.options: at least two options required.";
+                $errors[] = "{$qp}.options: MCQ questions require at least two options.";
 
                 return null;
             }
 
-            $correct = $q['correct_answer'] ?? null;
-            $indices = $this->normalizeMcqCorrect($correct, count($options), "{$qp}.correct_answer", $errors);
+            if (! array_key_exists('correct_answer', $q)) {
+                $errors[] = "{$qp}.correct_answer: MCQ questions require correct_answer.";
+
+                return null;
+            }
+
+            $indices = $this->resolveMcqCorrectIndices($q['correct_answer'], $options, "{$qp}.correct_answer", $errors);
             if ($indices === null) {
                 return null;
             }
@@ -358,7 +424,12 @@ final class ExamQuestionImportValidator
         }
 
         if ($type === 'true_false') {
-            $correct = $q['correct_answer'] ?? null;
+            if (! array_key_exists('correct_answer', $q)) {
+                $errors[] = "{$qp}.correct_answer: True/False questions require correct_answer.";
+
+                return null;
+            }
+            $correct = $q['correct_answer'];
             $bool = $this->normalizeBool($correct);
             if ($bool === null) {
                 $errors[] = "{$qp}.correct_answer: must be boolean true/false or \"true\"/\"false\".";
@@ -371,9 +442,14 @@ final class ExamQuestionImportValidator
         }
 
         if ($type === 'fill_blank') {
-            $correct = $q['correct_answer'] ?? null;
+            if (! array_key_exists('correct_answer', $q)) {
+                $errors[] = "{$qp}.correct_answer: Fill-in-the-Blank questions require correct_answer.";
+
+                return null;
+            }
+            $correct = $q['correct_answer'];
             if ($correct === null) {
-                $errors[] = "{$qp}.correct_answer: required array of acceptable answers per blank.";
+                $errors[] = "{$qp}.correct_answer: Fill-in-the-Blank questions require correct_answer.";
 
                 return null;
             }
@@ -406,45 +482,142 @@ final class ExamQuestionImportValidator
     }
 
     /**
-     * @return list<int>|null
+     * @param  array<string, mixed>  $q
+     * @return array<string, mixed>|null
      */
-    private function normalizeMcqCorrect(mixed $correct, int $optionCount, string $path, array &$errors): ?array
+    private function extractMetadataForType(array $q, string $type): ?array
     {
-        $indices = [];
-        if (is_int($correct) || (is_string($correct) && preg_match('/^-?\d+$/', (string) $correct))) {
-            $indices = [(int) $correct];
-        } elseif (is_array($correct)) {
-            foreach ($correct as $i => $v) {
-                if (is_int($v) || (is_string($v) && ctype_digit((string) $v))) {
-                    $indices[] = (int) $v;
-                } else {
-                    $errors[] = "{$path}[{$i}]: must be an integer option index.";
-
-                    return null;
-                }
-            }
-        } else {
-            $errors[] = "{$path}: must be an integer index or array of indices.";
-
-            return null;
+        $keys = self::COMMON_METADATA_KEYS;
+        if ($type === 'essay') {
+            $keys = array_merge(self::ESSAY_EXTRA_METADATA_KEYS, $keys);
         }
 
-        $indices = array_values(array_unique($indices));
-        foreach ($indices as $idx) {
-            if ($idx < 0 || $idx >= $optionCount) {
-                $errors[] = "{$path}: index {$idx} out of range for options (0–".($optionCount - 1).').';
+        $out = [];
+        foreach ($keys as $k) {
+            if (! array_key_exists($k, $q)) {
+                continue;
+            }
+            $v = $q[$k];
+            if ($v === null) {
+                continue;
+            }
+            if ($k === 'rubric' && is_array($v)) {
+                $out[$k] = $v;
+
+                continue;
+            }
+            if (is_string($v) && trim($v) !== '') {
+                $out[$k] = trim($v);
+            }
+        }
+
+        return $out === [] ? null : $out;
+    }
+
+    /**
+     * @param  list<string>  $options
+     * @return list<int>|null
+     */
+    private function resolveMcqCorrectIndices(mixed $correct, array $options, string $path, array &$errors): ?array
+    {
+        $n = count($options);
+
+        if (is_string($correct)) {
+            $s = trim($correct);
+            if ($s === '') {
+                $errors[] = "{$path}: MCQ questions require correct_answer.";
 
                 return null;
             }
-        }
+            if (preg_match('/^[ABCD]$/i', $s) && $n >= 2 && $n <= 4) {
+                $idx = ord(strtoupper($s)) - ord('A');
+                if ($idx >= 0 && $idx < $n) {
+                    return [$idx];
+                }
+            }
 
-        if ($indices === []) {
-            $errors[] = "{$path}: select at least one correct option.";
+            $matches = [];
+            foreach ($options as $i => $opt) {
+                if (mb_strtolower(trim($opt)) === mb_strtolower($s)) {
+                    $matches[] = $i;
+                }
+            }
+            if (count($matches) === 1) {
+                return [$matches[0]];
+            }
+            if (count($matches) === 0) {
+                $errors[] = "{$path}: must match one of the option values exactly (or use a zero-based index).";
+
+                return null;
+            }
+            $errors[] = "{$path}: matches more than one option; disambiguate or use indices.";
 
             return null;
         }
 
-        return $indices;
+        if (is_int($correct) || (is_string($correct) && preg_match('/^-?\d+$/', (string) $correct))) {
+            $idx = (int) $correct;
+            if ($idx < 0 || $idx >= $n) {
+                $errors[] = "{$path}: index {$idx} out of range for options (0–".($n - 1).').';
+
+                return null;
+            }
+
+            return [$idx];
+        }
+
+        if (is_array($correct)) {
+            if ($correct === []) {
+                $errors[] = "{$path}: select at least one correct option.";
+
+                return null;
+            }
+
+            $allNumeric = true;
+            foreach ($correct as $v) {
+                if (! (is_int($v) || (is_string($v) && ctype_digit((string) $v)))) {
+                    $allNumeric = false;
+                    break;
+                }
+            }
+
+            if ($allNumeric) {
+                $indices = [];
+                foreach ($correct as $i => $v) {
+                    $idx = (int) $v;
+                    if ($idx < 0 || $idx >= $n) {
+                        $errors[] = "{$path}[{$i}]: index {$idx} out of range for options (0–".($n - 1).').';
+
+                        return null;
+                    }
+                    $indices[] = $idx;
+                }
+
+                return $indices;
+            }
+
+            $indices = [];
+            foreach ($correct as $i => $item) {
+                if (! is_string($item)) {
+                    $errors[] = "{$path}[{$i}]: must be a string matching an option or use numeric indices.";
+
+                    return null;
+                }
+                $sub = $this->resolveMcqCorrectIndices($item, $options, "{$path}[{$i}]", $errors);
+                if ($sub === null) {
+                    return null;
+                }
+                foreach ($sub as $ix) {
+                    $indices[] = $ix;
+                }
+            }
+
+            return $indices;
+        }
+
+        $errors[] = "{$path}: must be a string (matching one option), an integer index, or an array of indices or option strings.";
+
+        return null;
     }
 
     private function normalizeBool(mixed $v): ?bool
