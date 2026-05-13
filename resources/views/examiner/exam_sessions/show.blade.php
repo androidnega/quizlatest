@@ -14,6 +14,41 @@
         @endif
     </div>
 
+    @if (! empty($assignmentSessionContext) && $session->exam)
+        @php $ac = $assignmentSessionContext; $tz = config('app.timezone'); @endphp
+        <div class="qs-card rounded-xl border border-sky-200/80 bg-sky-50/50 p-5 shadow-sm">
+            <h3 class="text-sm font-semibold text-slate-900">{{ __('Coursework assignment') }}</h3>
+            <p class="mt-1 text-xs text-slate-700">{{ __('This attempt is coursework. Use the grading queue for marks and feedback; release grades from the assignment workspace when ready.') }}</p>
+            @if (filled($ac['instructions']))
+                <div class="mt-3 max-h-36 overflow-y-auto rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 whitespace-pre-wrap">{{ $ac['instructions'] }}</div>
+            @endif
+            <dl class="mt-4 grid gap-2 text-sm text-slate-800 sm:grid-cols-2">
+                <div>
+                    <dt class="text-xs font-medium text-slate-500">{{ __('Due') }}</dt>
+                    <dd class="font-semibold">{{ $ac['due_at']?->timezone($tz)->format('M j, Y · H:i') ?? '—' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium text-slate-500">{{ __('Grade release') }}</dt>
+                    <dd class="font-semibold">{{ $ac['grades_released'] ? __('Released to students') : __('Not released yet') }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium text-slate-500">{{ __('Submission') }}</dt>
+                    <dd class="font-semibold">
+                        {{ $session->status === 'submitted' ? ($ac['submitted_late'] ? __('Submitted late') : __('Submitted on time')) : __('In progress') }}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium text-slate-500">{{ __('Marking') }}</dt>
+                    <dd class="font-semibold">{{ str_replace('_', ' ', $workflowStatus) }}</dd>
+                </div>
+            </dl>
+            <div class="mt-4 flex flex-wrap gap-2">
+                <a href="{{ route('examiner.quizzes.workspace', ['exam' => $session->exam, 'tab' => 'overview']) }}" class="inline-flex rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50">{{ __('Assignment workspace') }}</a>
+                <a href="{{ route('examiner.grading.pending') }}" class="inline-flex rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50">{{ __('Grading queue') }}</a>
+            </div>
+        </div>
+    @endif
+
     <div class="space-y-6">
         <div class="qs-card rounded-xl p-5 shadow-sm">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-muted">Student</h3>
@@ -23,7 +58,7 @@
             @endif
         </div>
 
-        @if ($verificationEvidenceUrl)
+        @if ($verificationEvidenceUrl && ! ($isAssignmentSession ?? false))
             <div class="qs-card rounded-xl p-5 shadow-sm">
                 <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-muted">{{ __('Exam verification photo') }}</h3>
                 <p class="mt-1 text-xs text-qs-muted">{{ __('Captured once at exam start for session evidence. Camera monitoring may continue during the exam.') }}</p>
@@ -56,7 +91,10 @@
         </div>
 
         <div class="qs-card rounded-xl p-5 shadow-sm">
-            <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-muted">Risk &amp; violations</h3>
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-muted">{{ __('Risk & violations') }}</h3>
+            @if ($isAssignmentSession ?? false)
+                <p class="mt-2 text-xs text-qs-muted">{{ __('Coursework typically has little or no live proctoring; counts below are mostly informational.') }}</p>
+            @endif
             <dl class="mt-3 grid gap-2 text-sm sm:grid-cols-3">
                 <div>
                     <dt class="text-qs-muted">Risk state</dt>

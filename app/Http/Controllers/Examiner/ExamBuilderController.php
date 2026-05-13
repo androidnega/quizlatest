@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Examiner;
 
 use App\Http\Controllers\Controller;
-use App\Models\ActivityLog;
 use App\Models\AcademicYear;
+use App\Models\ActivityLog;
 use App\Models\Classroom;
 use App\Models\Course;
 use App\Models\ExaminerCourseAssignment;
@@ -12,6 +12,7 @@ use App\Models\ExamSection;
 use App\Models\ExamSession;
 use App\Models\Question;
 use App\Models\Quiz;
+use App\Models\Result;
 use App\Models\Term;
 use App\Models\User;
 use App\Services\ExamAiPromptBuilder;
@@ -583,7 +584,7 @@ class ExamBuilderController extends Controller
 
         $sessionsCount = ExamSession::query()->where('exam_id', $exam->id)->count();
 
-        $shareUrl = route('student.exam.prepare', $exam, absolute: true);
+        $shareUrl = route('student.exam.instructions', $exam, absolute: true);
         if (filled($exam->share_token)) {
             $displayToken = (string) $exam->share_token;
         } else {
@@ -605,6 +606,20 @@ class ExamBuilderController extends Controller
         $sessionsWorkspace = null;
         if ($request->user()->can('manageResults', $exam)) {
             $sessionsWorkspace = app(ExamSessionReviewController::class)->buildSessionsWorkspacePayload($request, $exam);
+        }
+
+        $assignmentWorkspaceStats = null;
+        if ($exam->isAssignment()) {
+            $submittedBase = ExamSession::query()
+                ->where('exam_id', $exam->id)
+                ->where('status', 'submitted');
+            $assignmentWorkspaceStats = [
+                'submitted_sessions' => (clone $submittedBase)->count(),
+                'late_submissions' => (clone $submittedBase)->where('submitted_late', true)->count(),
+                'pending_manual' => Result::query()->where('quiz_id', $exam->id)->where('status', 'pending_manual')->count(),
+                'graded' => Result::query()->where('quiz_id', $exam->id)->where('status', 'graded')->count(),
+                'held' => Result::query()->where('quiz_id', $exam->id)->where('status', 'held')->count(),
+            ];
         }
 
         $allowedWorkspaceTabs = ['overview', 'sessions', 'scores', 'analytics'];
@@ -636,6 +651,7 @@ class ExamBuilderController extends Controller
             'questionAnalytics' => $questionAnalytics,
             'sessionsWorkspace' => $sessionsWorkspace,
             'workspaceTab' => $workspaceTab,
+            'assignmentWorkspaceStats' => $assignmentWorkspaceStats,
         ]);
     }
 

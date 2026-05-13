@@ -1,31 +1,84 @@
 @php
     /** @var \App\Models\Quiz $exam */
     $isAssignment = $exam->isAssignment();
+    /** @var array<string, int>|null $submissionStats */
+    $submissionStats = $submissionStats ?? null;
+    $tz = config('app.timezone');
 @endphp
 @if ($isAssignment)
     <section class="rounded-xl border border-sky-200 bg-sky-50/60 p-4 shadow-sm sm:p-5" aria-labelledby="assignment-coursework-heading">
         <h2 id="assignment-coursework-heading" class="text-sm font-semibold text-slate-900">{{ __('Coursework (assignment)') }}</h2>
         <p class="mt-1 text-xs leading-relaxed text-slate-700">
-            {{ __('This assessment is coursework: students type responses in the app with copy and paste blocked for text fields. Live camera proctoring stays off unless your institution later adds an explicit exception.') }}
+            {{ __('This assessment is coursework, not a live invigilated exam. Students type answers in the app; copy and paste is blocked in text fields by default. Live camera and violation auto-submit stay off unless your institution adds an explicit exception later.') }}
         </p>
-        <dl class="mt-4 grid gap-2 text-xs text-slate-800 sm:grid-cols-2">
+
+        <div class="mt-4 rounded-lg border border-slate-200/80 bg-white/90 px-3 py-3 text-sm text-slate-800">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Instructions for students') }}</p>
+            <div class="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-slate-900">{{ filled($exam->description) ? $exam->description : '—' }}</div>
+        </div>
+
+        <dl class="mt-4 grid gap-2 text-xs text-slate-800 sm:grid-cols-2 lg:grid-cols-3">
             <div class="rounded-lg border border-slate-200/80 bg-white/80 px-3 py-2">
                 <dt class="font-medium text-slate-500">{{ __('Due') }}</dt>
                 <dd class="mt-0.5 font-semibold text-slate-900">
-                    {{ $exam->due_at?->timezone(config('app.timezone'))->format('M j, Y · H:i') ?? '—' }}
+                    {{ $exam->due_at?->timezone($tz)->format('M j, Y · H:i') ?? '—' }}
                 </dd>
             </div>
+            @if ($exam->start_time || $exam->end_time)
+                <div class="rounded-lg border border-slate-200/80 bg-white/80 px-3 py-2">
+                    <dt class="font-medium text-slate-500">{{ __('Availability') }}</dt>
+                    <dd class="mt-0.5 font-semibold text-slate-900">
+                        {{ $exam->start_time?->timezone($tz)->format('M j, H:i') ?? '—' }}
+                        —
+                        {{ $exam->end_time?->timezone($tz)->format('M j, H:i') ?? '—' }}
+                    </dd>
+                </div>
+            @endif
             <div class="rounded-lg border border-slate-200/80 bg-white/80 px-3 py-2">
                 <dt class="font-medium text-slate-500">{{ __('Grades visible to students') }}</dt>
                 <dd class="mt-0.5 font-semibold text-slate-900">
                     @if ($exam->grades_released_at)
-                        {{ __('Yes') }} · {{ $exam->grades_released_at->timezone(config('app.timezone'))->format('M j, Y · H:i') }}
+                        {{ __('Yes') }} · {{ $exam->grades_released_at->timezone($tz)->format('M j, Y · H:i') }}
                     @else
                         {{ __('Not yet — release when ready') }}
                     @endif
                 </dd>
             </div>
         </dl>
+
+        @if (is_array($submissionStats))
+            <dl class="mt-3 grid gap-2 text-xs text-slate-800 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="rounded-lg border border-slate-200/80 bg-white/80 px-3 py-2">
+                    <dt class="font-medium text-slate-500">{{ __('Submissions') }}</dt>
+                    <dd class="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">{{ number_format((int) ($submissionStats['submitted_sessions'] ?? 0)) }}</dd>
+                </div>
+                <div class="rounded-lg border border-slate-200/80 bg-white/80 px-3 py-2">
+                    <dt class="font-medium text-slate-500">{{ __('Late submissions') }}</dt>
+                    <dd class="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">{{ number_format((int) ($submissionStats['late_submissions'] ?? 0)) }}</dd>
+                </div>
+                <div class="rounded-lg border border-slate-200/80 bg-white/80 px-3 py-2">
+                    <dt class="font-medium text-slate-500">{{ __('Awaiting marking') }}</dt>
+                    <dd class="mt-0.5 text-lg font-semibold tabular-nums text-amber-800">{{ number_format((int) ($submissionStats['pending_manual'] ?? 0)) }}</dd>
+                </div>
+                <div class="rounded-lg border border-slate-200/80 bg-white/80 px-3 py-2">
+                    <dt class="font-medium text-slate-500">{{ __('Graded') }} / {{ __('Held') }}</dt>
+                    <dd class="mt-0.5 text-sm font-semibold text-slate-900">
+                        {{ number_format((int) ($submissionStats['graded'] ?? 0)) }}
+                        <span class="text-slate-400">·</span>
+                        {{ number_format((int) ($submissionStats['held'] ?? 0)) }}
+                    </dd>
+                </div>
+            </dl>
+        @endif
+
+        <div class="mt-4 flex flex-wrap gap-2">
+            <a href="{{ route('examiner.grading.pending') }}" class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm hover:bg-slate-50">
+                {{ __('Open essay grading queue') }}
+            </a>
+            <a href="{{ route('examiner.quizzes.workspace', ['exam' => $exam, 'tab' => 'sessions']) }}" class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm hover:bg-slate-50">
+                {{ __('View student sessions') }}
+            </a>
+        </div>
 
         @if ($canEditSchedule)
             <form method="post" action="{{ route('examiner.exams.schedule.update', $exam) }}" class="mt-4 space-y-3 rounded-lg border border-slate-200 bg-white p-3">
@@ -41,7 +94,7 @@
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-slate-600" for="assignment-due">{{ __('Due date') }}</label>
-                    <input id="assignment-due" type="datetime-local" name="due_at" value="{{ old('due_at', $exam->due_at?->timezone(config('app.timezone'))->format('Y-m-d\TH:i')) }}" class="mt-1 w-full max-w-md rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                    <input id="assignment-due" type="datetime-local" name="due_at" value="{{ old('due_at', $exam->due_at?->timezone($tz)->format('Y-m-d\TH:i')) }}" class="mt-1 w-full max-w-md rounded-lg border border-slate-200 px-3 py-2 text-sm" />
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <button type="submit" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800">{{ __('Save coursework details') }}</button>
@@ -59,7 +112,7 @@
         @endif
 
         <p class="mt-3 text-[11px] leading-relaxed text-slate-600">
-            {{ __('Typed responses: copy and paste is blocked by default. Manual grading and per-question feedback use the same essay grading queue as other assessments.') }}
+            {{ __('Typed responses: copy and paste stays blocked by default for integrity. Use the grading queue to enter marks and feedback, then release grades when you are ready.') }}
         </p>
     </section>
 @endif

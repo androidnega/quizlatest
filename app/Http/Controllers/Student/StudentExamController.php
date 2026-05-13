@@ -34,7 +34,8 @@ class StudentExamController extends Controller
         $gate = app(ExamRuntimeInfraGate::class);
         $examPolicy = app(SystemExamPolicyService::class);
 
-        $examSession->loadMissing('exam');
+        $examSession->loadMissing(['exam.course']);
+
         $exam = $examSession->exam;
         $isAssignmentMode = $exam?->isAssignment() ?? false;
         $requireCameraMonitoring = $examPolicy->isCameraMonitoringRequiredForQuiz($exam);
@@ -48,6 +49,7 @@ class StudentExamController extends Controller
             'requireCameraMonitoring' => $requireCameraMonitoring,
             'isAssignmentMode' => $isAssignmentMode,
             'assignmentClipboardBlock' => $assignmentClipboardBlock,
+            'documentTitle' => $isAssignmentMode ? __('Assignment') : __('Exam'),
         ]);
     }
 }

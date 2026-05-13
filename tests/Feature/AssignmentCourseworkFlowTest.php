@@ -28,7 +28,7 @@ class AssignmentCourseworkFlowTest extends TestCase
     /**
      * @return array{examiner: User, student: User, courseId: int, classId: int}
      */
-    private function seedExaminerStudentCourse(): array
+    protected function seedExaminerStudentCourse(): array
     {
         $this->seed(InitialSetupSeeder::class);
 

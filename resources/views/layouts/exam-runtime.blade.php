@@ -7,6 +7,7 @@
         $requireCameraMonitoring = $requireCameraMonitoring ?? true;
         $isAssignmentMode = $isAssignmentMode ?? false;
         $assignmentClipboardBlock = $assignmentClipboardBlock ?? false;
+        $documentTitle = $documentTitle ?? null;
     @endphp
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -20,7 +21,7 @@
     <meta name="qs-assignment-mode" content="{{ ! empty($isAssignmentMode) ? '1' : '0' }}">
     <meta name="qs-assignment-clipboard-block" content="{{ ! empty($assignmentClipboardBlock) ? '1' : '0' }}">
 
-    <title>{{ __('Exam') }} — {{ config('app.name') }}</title>
+    <title>{{ ($documentTitle ?? null) ? $documentTitle.' — '.config('app.name') : __('Exam').' — '.config('app.name') }}</title>
 
     @vite(['resources/css/app.css', 'resources/js/studentExamRuntime.js'])
 </head>

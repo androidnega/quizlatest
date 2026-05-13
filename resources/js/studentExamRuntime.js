@@ -267,7 +267,9 @@ async function main() {
                 stopTimer();
                 stopHeartbeat();
                 updateBanner(
-                    'Exam paused — your timer is frozen. Press Resume when you are ready.',
+                    assignmentMode
+                        ? 'Session paused — resume when your connection is stable.'
+                        : 'Exam paused — your timer is frozen. Press Resume when you are ready.',
                     true,
                 );
             } else {
@@ -411,6 +413,36 @@ async function main() {
         els.saveIndicator.classList.toggle('text-qs-muted', ok);
         els.saveIndicator.classList.toggle('text-qs-danger', !ok);
         els.saveIndicator.classList.toggle('font-medium', !ok);
+    }
+
+    function syncAssignmentStudentPanel(data) {
+        if (!assignmentMode) {
+            return;
+        }
+        const v = data?.assignment_student_view;
+        if (!v || typeof v !== 'object') {
+            return;
+        }
+        const statusEl = document.getElementById('assignment-status-line');
+        const gradeEl = document.getElementById('assignment-grade-line');
+        if (statusEl && typeof v.status_heading === 'string') {
+            statusEl.textContent = v.status_heading;
+        }
+        if (!gradeEl) {
+            return;
+        }
+        const parts = [];
+        if (typeof v.grade_heading === 'string') {
+            parts.push(v.grade_heading);
+        }
+        if (v.score != null && v.grades_visible_to_student) {
+            const pct = v.score_percentage != null ? ` (${v.score_percentage}%)` : '';
+            parts.push(`Score: ${v.score}${pct}`);
+        }
+        if (v.examiner_feedback) {
+            parts.push(`Feedback: ${v.examiner_feedback}`);
+        }
+        gradeEl.textContent = parts.join(' · ');
     }
 
     function updateBanner(message, show) {
@@ -605,7 +637,10 @@ async function main() {
         stopTimer();
         void clearSessionPending(sessionId);
         syncControlDisabled();
-        updateBanner('Exam submitted. You may close this page.', true);
+        updateBanner(
+            assignmentMode ? 'Assignment submitted. You may close this page.' : 'Exam submitted. You may close this page.',
+            true,
+        );
         setSaveIndicator('Submitted', true);
         if (els.btnSubmit) {
             els.btnSubmit.disabled = true;
@@ -996,16 +1031,22 @@ async function main() {
             stopSubmitPersistence();
             stopTimer();
             stopHeartbeat();
-            syncControlDisabled();
-            updateBanner(
-                data.exam_ui_state === 'held' ? 'Under review — your result is held.' : 'Exam submitted.',
-                true,
-            );
-            setSaveIndicator('Submitted', true);
+            const held = data.exam_ui_state === 'held';
+            if (assignmentMode) {
+                updateBanner(
+                    held ? 'Under review — your result is held.' : 'Assignment submitted. Thank you.',
+                    true,
+                );
+                setSaveIndicator(held ? 'Held for review' : 'Submitted', true);
+            } else {
+                updateBanner(held ? 'Under review — your result is held.' : 'Exam submitted.', true);
+                setSaveIndicator('Submitted', true);
+            }
             if (els.btnSubmit) {
                 els.btnSubmit.disabled = true;
                 els.btnSubmit.textContent = submitUiDefaultText;
             }
+            syncControlDisabled();
         }
     }
 
@@ -1052,6 +1093,7 @@ async function main() {
 
         applySubmittedFromState(data);
         applyTimerPausedFromState(data);
+        syncAssignmentStudentPanel(data);
 
         if (!serverDone && !timerPaused) {
             startHeartbeat();
@@ -1157,7 +1199,7 @@ async function main() {
             stopTimer();
             syncControlDisabled();
         } else if (state === 'submitted') {
-            updateBanner('Exam submitted.', true);
+            updateBanner(assignmentMode ? 'Assignment submitted.' : 'Exam submitted.', true);
             applyRiskInputsDisabled(true);
             stopTimer();
             serverDone = true;

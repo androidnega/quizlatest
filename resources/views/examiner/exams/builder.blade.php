@@ -249,7 +249,11 @@
         <p x-show="copyToast" x-cloak class="mt-2 w-full text-xs font-medium text-emerald-700 sm:mt-0">{{ __('Copied to clipboard') }}</p>
     </section>
 
-    @include('examiner.exams.partials.assignment-coursework-panel', ['exam' => $exam, 'canEditSchedule' => $canEditSchedule])
+    @include('examiner.exams.partials.assignment-coursework-panel', [
+        'exam' => $exam,
+        'canEditSchedule' => $canEditSchedule,
+        'submissionStats' => $assignmentWorkspaceStats ?? null,
+    ])
 
     {{-- Question overview --}}
     <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6" aria-labelledby="q-overview-heading">

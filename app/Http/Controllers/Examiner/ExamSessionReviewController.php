@@ -528,6 +528,17 @@ class ExamSessionReviewController extends Controller
             }
         }
 
+        $isAssignmentSession = (bool) ($exam?->isAssignment());
+        $assignmentSessionContext = null;
+        if ($isAssignmentSession && $exam !== null) {
+            $assignmentSessionContext = [
+                'instructions' => (string) ($exam->description ?? ''),
+                'due_at' => $exam->due_at,
+                'grades_released' => $exam->grades_released_at !== null,
+                'submitted_late' => (bool) $examSession->submitted_late,
+            ];
+        }
+
         return view('examiner.exam_sessions.show', [
             'session' => $examSession,
             'workflowStatus' => $workflowStatus,
@@ -543,6 +554,8 @@ class ExamSessionReviewController extends Controller
                 ? route('examiner.exam-sessions.invalidate-for-retake', $examSession)
                 : null,
             'classResultsUrl' => $classResultsUrl,
+            'isAssignmentSession' => $isAssignmentSession,
+            'assignmentSessionContext' => $assignmentSessionContext,
         ]);
     }
 

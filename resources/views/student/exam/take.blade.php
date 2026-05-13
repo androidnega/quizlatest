@@ -4,9 +4,67 @@
     'requireCameraMonitoring' => $requireCameraMonitoring,
     'isAssignmentMode' => $isAssignmentMode ?? false,
     'assignmentClipboardBlock' => $assignmentClipboardBlock ?? false,
+    'documentTitle' => $documentTitle ?? null,
 ])
 
 @section('content')
+@php
+    $quiz = $examSession->exam;
+    $tz = config('app.timezone');
+@endphp
+@if ($isAssignmentMode ?? false)
+    <div id="assignment-coursework-panel" class="border-b border-sky-200 bg-sky-50/90">
+        <div class="max-w-7xl mx-auto px-4 py-4 space-y-3">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-sky-900/80">{{ __('Coursework assignment') }}</p>
+                    <h2 class="mt-1 text-lg font-semibold text-qs-text">{{ $quiz?->title }}</h2>
+                    @if ($quiz?->course)
+                        <p class="mt-0.5 text-sm text-qs-muted">{{ $quiz->course->code }} — {{ $quiz->course->title }}</p>
+                    @endif
+                </div>
+            </div>
+            @if (filled($quiz?->description))
+                <div class="rounded-xl border border-sky-100 bg-white/90 px-4 py-3 text-sm leading-relaxed text-qs-text whitespace-pre-wrap">{{ $quiz->description }}</div>
+            @endif
+            <dl class="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                <div class="rounded-lg border border-sky-100 bg-white/90 px-3 py-2">
+                    <dt class="text-xs font-medium text-qs-muted">{{ __('Due') }}</dt>
+                    <dd class="mt-0.5 font-medium text-qs-text">{{ $quiz?->due_at?->timezone($tz)->format('Y-m-d H:i') ?? '—' }}</dd>
+                </div>
+                @if ($quiz?->start_time || $quiz?->end_time)
+                    <div class="rounded-lg border border-sky-100 bg-white/90 px-3 py-2">
+                        <dt class="text-xs font-medium text-qs-muted">{{ __('Availability window') }}</dt>
+                        <dd class="mt-0.5 font-medium text-qs-text">
+                            {{ $quiz->start_time?->timezone($tz)->format('Y-m-d H:i') ?? '—' }}
+                            —
+                            {{ $quiz->end_time?->timezone($tz)->format('Y-m-d H:i') ?? '—' }}
+                        </dd>
+                    </div>
+                @endif
+                <div class="rounded-lg border border-sky-100 bg-white/90 px-3 py-2 sm:col-span-2 lg:col-span-1">
+                    <dt class="text-xs font-medium text-qs-muted">{{ __('Submission & grades') }}</dt>
+                    <dd class="mt-0.5 space-y-1 text-qs-text">
+                        <p id="assignment-status-line" class="font-medium">
+                            @if ($examSession->status === 'submitted')
+                                {{ $examSession->submitted_late ? __('Submitted late') : __('Submitted') }}
+                            @else
+                                {{ __('In progress — your answers save automatically.') }}
+                            @endif
+                        </p>
+                        <p id="assignment-grade-line" class="text-sm text-qs-muted"></p>
+                    </dd>
+                </div>
+            </dl>
+            @if ($assignmentClipboardBlock ?? false)
+                <p class="rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-xs leading-relaxed text-amber-950">
+                    {{ __('Copy and paste is disabled in typed answer fields for this assignment to support academic integrity.') }}
+                </p>
+            @endif
+            <p class="text-xs text-qs-muted">{{ __('This coursework does not use live camera or microphone invigilation unless your school explicitly enabled an exception.') }}</p>
+        </div>
+    </div>
+@endif
 <div id="exam-app" class="min-h-screen flex flex-col">
     <header class="border-b border-qs-soft bg-qs-bg shadow-sm shrink-0">
         <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
@@ -15,14 +73,18 @@
                 <p id="exam-subtitle" class="text-sm text-qs-muted hidden"></p>
             </div>
             <div class="flex items-center gap-4">
-                <button type="button" id="btn-fullscreen"
-                    class="text-sm px-3 py-1.5 rounded border border-qs-soft bg-qs-bg hover:bg-qs-card">
-                    {{ __('Fullscreen') }}
-                </button>
-                <div id="exam-timer" class="font-mono text-xl font-semibold tabular-nums text-qs-accent"
-                    aria-live="polite">--:--</div>
-                <span id="fullscreen-exit-notice" class="hidden max-w-[220px] shrink-0 text-xs text-qs-text"
-                    role="status"></span>
+                @unless ($isAssignmentMode ?? false)
+                    <button type="button" id="btn-fullscreen"
+                        class="text-sm px-3 py-1.5 rounded border border-qs-soft bg-qs-bg hover:bg-qs-card">
+                        {{ __('Fullscreen') }}
+                    </button>
+                    <div id="exam-timer" class="font-mono text-xl font-semibold tabular-nums text-qs-accent"
+                        aria-live="polite">--:--</div>
+                    <span id="fullscreen-exit-notice" class="hidden max-w-[220px] shrink-0 text-xs text-qs-text"
+                        role="status"></span>
+                @else
+                    <span class="max-w-md text-xs leading-snug text-qs-muted">{{ __('Coursework: work at your own pace within the due date. There is no exam countdown clock here.') }}</span>
+                @endunless
             </div>
         </div>
     </header>
@@ -63,7 +125,7 @@
                     <p id="question-progress-label" class="text-xs text-qs-muted"></p>
                 </div>
                 <div id="exam-main" class="flex-1 overflow-y-auto p-4 md:p-6">
-                    <p id="exam-loading" class="text-qs-muted">{{ __('Loading exam…') }}</p>
+                    <p id="exam-loading" class="text-qs-muted">{{ ($isAssignmentMode ?? false) ? __('Loading assignment…') : __('Loading exam…') }}</p>
                     <div id="question-container" class="hidden space-y-4"></div>
                 </div>
             </main>
@@ -72,10 +134,17 @@
 
     <div id="exam-timer-pause-overlay" class="hidden fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/75 px-4" role="dialog" aria-modal="true" aria-labelledby="exam-pause-title">
         <div class="max-w-md rounded-2xl border border-amber-200/80 bg-amber-50 px-5 py-6 text-center shadow-xl">
-            <p id="exam-pause-title" class="text-lg font-semibold text-amber-950">{{ __('Exam paused') }}</p>
-            <p class="mt-2 text-sm leading-relaxed text-amber-900/90">
-                {{ __('Your timer is frozen. When you are ready, resume to continue from where you left off.') }}
-            </p>
+            @if ($isAssignmentMode ?? false)
+                <p id="exam-pause-title" class="text-lg font-semibold text-amber-950">{{ __('Session paused') }}</p>
+                <p id="exam-pause-body" class="mt-2 text-sm leading-relaxed text-amber-900/90">
+                    {{ __('Your connection was interrupted. Press Resume when you are ready to continue your assignment.') }}
+                </p>
+            @else
+                <p id="exam-pause-title" class="text-lg font-semibold text-amber-950">{{ __('Exam paused') }}</p>
+                <p id="exam-pause-body" class="mt-2 text-sm leading-relaxed text-amber-900/90">
+                    {{ __('Your timer is frozen. When you are ready, resume to continue from where you left off.') }}
+                </p>
+            @endif
             <button type="button" id="btn-exam-resume" class="mt-5 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-amber-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-900">
                 {{ __('Resume') }}
             </button>
@@ -86,10 +155,12 @@
         <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
             <div id="save-indicator" class="text-sm text-qs-muted">{{ __('Answers save automatically.') }}</div>
             <div class="flex items-center gap-2">
-                <span id="video-status" class="text-xs text-qs-muted hidden md:inline">{{ __('Camera required for proctoring.') }}</span>
+                @unless ($isAssignmentMode ?? false)
+                    <span id="video-status" class="text-xs text-qs-muted hidden md:inline">{{ __('Camera required for proctoring.') }}</span>
+                @endunless
                 <button type="button" id="btn-submit"
                     class="qs-btn-primary px-5 py-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                    {{ __('Submit exam') }}
+                    {{ ($isAssignmentMode ?? false) ? __('Submit assignment') : __('Submit exam') }}
                 </button>
             </div>
         </div>

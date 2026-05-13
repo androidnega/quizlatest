@@ -65,9 +65,6 @@ class ExamSessionController extends Controller
         if ($status === 'service_unavailable') {
             return response()->json($payload, 503);
         }
-        if (in_array($status, ['otp_required', 'otp_pending'], true)) {
-            return response()->json($payload, 200);
-        }
 
         return response()->json($payload, 200);
     }
@@ -694,7 +691,7 @@ class ExamSessionController extends Controller
             return $this->scrubHeldStudentExamPayload($merged);
         }
 
-        return $merged;
+        return $this->withAssignmentStudentStateHints($merged, $examSession);
     }
 
     /**
@@ -726,6 +723,88 @@ class ExamSessionController extends Controller
         }
 
         return $payload;
+    }
+
+    /**
+     * @param  array<string, mixed>  $merged
+     * @return array<string, mixed>
+     */
+    private function withAssignmentStudentStateHints(array $merged, ExamSession $examSession): array
+    {
+        $exam = $examSession->exam;
+        if ($exam === null || ! $exam->isAssignment()) {
+            return $merged;
+        }
+
+        $result = Result::query()
+            ->where('user_id', $examSession->student_id)
+            ->where('quiz_id', $exam->id)
+            ->first(['status', 'score', 'feedback', 'graded_at']);
+
+        $gradesVisible = $exam->assignmentGradesVisibleToStudents();
+        $feedbackPlain = null;
+        if ($gradesVisible && $result?->status === 'graded') {
+            $feedbackPlain = $this->formatAssignmentFeedbackPlain(
+                is_array($result->feedback) ? $result->feedback : null,
+            );
+        }
+
+        $totalMarks = null;
+        if (isset($merged['exam']['total_marks']) && is_numeric($merged['exam']['total_marks'])) {
+            $totalMarks = (float) $merged['exam']['total_marks'];
+        }
+        $percentage = null;
+        if ($gradesVisible && $result?->status === 'graded' && $totalMarks !== null && $totalMarks > 0) {
+            $percentage = round(((float) $result->score) / $totalMarks * 100, 2);
+        }
+
+        $merged['assignment_student_view'] = [
+            'session_submitted_late' => (bool) ($examSession->submitted_late ?? false),
+            'grades_visible_to_student' => $gradesVisible,
+            'result_status' => $result?->status ?? 'pending_manual',
+            'score' => ($gradesVisible && $result?->status === 'graded') ? (float) $result->score : null,
+            'score_percentage' => $percentage,
+            'examiner_feedback' => $feedbackPlain,
+            'graded_at' => ($gradesVisible && $result?->graded_at) ? $result->graded_at->toAtomString() : null,
+            'status_heading' => $examSession->status === 'submitted'
+                ? ($examSession->submitted_late ? __('Submitted late') : __('Submitted'))
+                : __('In progress'),
+            'grade_heading' => ! $gradesVisible
+                ? __('Grades not released to students yet')
+                : (($result?->status === 'graded')
+                    ? __('Grade visible to you')
+                    : (($result?->status === 'pending_manual')
+                        ? __('Awaiting marking')
+                        : __('Result status: :s', ['s' => (string) ($result?->status ?? '—')]))),
+        ];
+
+        return $merged;
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $feedback
+     */
+    private function formatAssignmentFeedbackPlain(?array $feedback): ?string
+    {
+        if ($feedback === null || $feedback === []) {
+            return null;
+        }
+
+        if (isset($feedback['note']) && is_string($feedback['note'])) {
+            $t = trim($feedback['note']);
+
+            return $t !== '' ? $t : null;
+        }
+
+        if (isset($feedback['text']) && is_string($feedback['text'])) {
+            $t = trim($feedback['text']);
+
+            return $t !== '' ? $t : null;
+        }
+
+        $encoded = json_encode($feedback, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+
+        return $encoded !== '' ? $encoded : null;
     }
 
     private function autoExpireIfTimedOut(ExamSession $examSession): bool

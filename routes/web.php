@@ -49,10 +49,6 @@ Route::get('/', function () {
 
 Route::get('/about', AboutController::class)->name('about');
 
-Route::get('/quiz-hero-demo', function () {
-    return view('quiz-hero-demo');
-})->name('quiz-hero-demo');
-
 Route::any('/staff/login', fn () => redirect('/admin_login', 301));
 
 Route::redirect('/profile', '/dashboard/profile', 301);
@@ -101,6 +97,8 @@ Route::middleware('auth')->group(function () {
         ->name('student.exam.take');
 
     Route::middleware(['verified', 'student'])->group(function () {
+        Route::get('/student/exams/{quiz}/instructions', [StudentExamEntryController::class, 'instructions'])
+            ->name('student.exam.instructions');
         Route::get('/student/exams/{quiz}/prepare', [StudentExamEntryController::class, 'prepare'])
             ->name('student.exam.prepare');
     });
