@@ -23,6 +23,8 @@ class StudentLoginController extends Controller
     /** @var string Session key: index number for returning student password step */
     private const SESSION_RETURNING_INDEX = 'student_login_returning_index';
 
+    private const SESSION_OTP_PENDING = 'student_login_otp_pending';
+
     public function __construct(
         private readonly StudentFirstLoginOtpNotifier $firstLoginOtpNotifier,
     ) {}
@@ -171,7 +173,11 @@ class StudentLoginController extends Controller
 
     public function showOtp(Request $request): View|RedirectResponse
     {
-        if (! $request->session()->has('student_login_user_id') || ! $request->session()->has('student_login_otp_hash')) {
+        if (
+            ! $request->session()->has('student_login_user_id')
+            || ! $request->session()->has('student_login_otp_hash')
+            || ! $request->session()->get(self::SESSION_OTP_PENDING, false)
+        ) {
             return redirect()->route('login');
         }
 
@@ -303,6 +309,7 @@ class StudentLoginController extends Controller
             'student_login_otp_hash' => $hash,
             'student_login_otp_expires_at' => $expiresAt,
             'student_login_otp_attempts' => 0,
+            self::SESSION_OTP_PENDING => true,
         ]);
 
         return redirect()->route('login.otp');
@@ -314,6 +321,7 @@ class StudentLoginController extends Controller
             'student_login_otp_hash',
             'student_login_otp_expires_at',
             'student_login_otp_attempts',
+            self::SESSION_OTP_PENDING,
         ]);
     }
 

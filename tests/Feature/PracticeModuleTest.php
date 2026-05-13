@@ -20,6 +20,7 @@ class PracticeModuleTest extends TestCase
         $student = User::query()->where('role', 'student')->firstOrFail();
 
         $this->actingAs($student)->get(route('student.practice.index'))->assertForbidden();
+        $this->actingAs($student)->get(route('student.practice.revision'))->assertOk();
     }
 
     public function test_student_can_view_practice_hub_when_master_toggle_enabled(): void
@@ -31,7 +32,10 @@ class PracticeModuleTest extends TestCase
 
         $student = User::query()->where('role', 'student')->firstOrFail();
 
-        $this->actingAs($student)->get(route('student.practice.index'))->assertOk();
+        $this->actingAs($student)->get(route('student.practice.index'))
+            ->assertRedirect(route('student.practice.revision'));
+
+        $this->actingAs($student)->get(route('student.practice.revision'))->assertOk();
     }
 
     public function test_examiner_material_routes_forbidden_when_uploads_disabled(): void

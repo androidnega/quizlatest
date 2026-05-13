@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Coordinator;
 use App\Http\Controllers\Controller;
 use App\Models\AcademicYear;
 use App\Models\Classroom;
+use App\Models\ExaminerCourseAssignment;
 use App\Models\Level;
 use App\Models\Program;
 use Illuminate\Contracts\View\View;
@@ -14,16 +15,146 @@ use Illuminate\Validation\Rule;
 
 class ClassroomController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
         $this->authorize('viewAny', Classroom::class);
 
+        $programIds = $this->scopedProgramIds();
+
+        $query = Classroom::query()
+            ->whereIn('program_id', $programIds)
+            ->with(['program.department', 'level'])
+            ->withCount('students');
+
+        $search = trim((string) $request->input('q', ''));
+        if ($search !== '') {
+            $escaped = addcslashes($search, '%_\\');
+            $needle = '%'.$escaped.'%';
+            $query->where(function ($q) use ($needle): void {
+                $q->where('name', 'like', $needle)
+                    ->orWhere('section', 'like', $needle)
+                    ->orWhereHas('program', function ($pq) use ($needle): void {
+                        $pq->where('name', 'like', $needle)->orWhere('code', 'like', $needle);
+                    });
+            });
+        }
+
+        if ($request->filled('program_id')) {
+            $pid = $request->integer('program_id');
+            if (in_array($pid, $programIds, true)) {
+                $query->where('program_id', $pid);
+            }
+        }
+
+        if ($request->filled('level_id')) {
+            $lid = $request->integer('level_id');
+            $allowedLevels = $this->scopedLevelIds();
+            if (in_array($lid, $allowedLevels, true)) {
+                $query->where('level_id', $lid);
+            }
+        }
+
+        $status = (string) $request->input('status', 'all');
+        if ($status === 'active') {
+            $query->where('is_active', true);
+        } elseif ($status === 'inactive') {
+            $query->where('is_active', false);
+        }
+
+        $sort = (string) $request->input('sort', 'name');
+        $dir = strtolower((string) $request->input('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        if ($sort === 'students') {
+            $query->orderBy('students_count', $dir)->orderBy('name');
+        } elseif ($sort === 'recent') {
+            $query->orderByDesc('updated_at')->orderBy('name');
+        } else {
+            $query->orderBy('name', $dir);
+        }
+
+        $classes = $query->paginate(24)->withQueryString();
+
+        $filtersActive = collect($request->only(['q', 'program_id', 'level_id', 'status', 'sort', 'dir']))
+            ->filter(function ($v, string $k): bool {
+                if ($k === 'status' && ($v === null || $v === '' || $v === 'all')) {
+                    return false;
+                }
+                if ($k === 'sort' && ($v === null || $v === '' || $v === 'name')) {
+                    return false;
+                }
+                if ($k === 'dir' && ($v === null || $v === '' || $v === 'asc')) {
+                    return false;
+                }
+
+                return $v !== null && $v !== '';
+            })->isNotEmpty();
+
         return view('coordinator.classes.index', [
-            'classes' => Classroom::query()
-                ->whereIn('program_id', $this->scopedProgramIds())
-                ->with(['program.department', 'level'])
-                ->orderBy('name')
-                ->paginate(15),
+            'classes' => $classes,
+            'programs' => $this->scopedPrograms(),
+            'levels' => $this->scopedLevels(),
+            'filters' => [
+                'q' => $request->input('q', ''),
+                'program_id' => $request->input('program_id'),
+                'level_id' => $request->input('level_id'),
+                'status' => $status,
+                'sort' => $sort,
+                'dir' => $dir,
+            ],
+            'filtersActive' => $filtersActive,
+        ]);
+    }
+
+    public function show(Classroom $classroom): View
+    {
+        $this->authorize('view', $classroom);
+
+        $classroom->load([
+            'program.department',
+            'level',
+            'courses' => fn ($query) => $query->orderBy('code'),
+        ]);
+        $classroom->loadCount('students');
+
+        $students = $classroom->students()
+            ->with(['program', 'level'])
+            ->orderByDesc('created_at')
+            ->paginate(12);
+
+        $courseIds = $classroom->courses->modelKeys();
+        $coursesById = $classroom->courses->keyBy('id');
+
+        $classExaminers = collect();
+
+        if ($courseIds !== []) {
+            $assignments = ExaminerCourseAssignment::query()
+                ->whereIn('course_id', $courseIds)
+                ->where('is_active', true)
+                ->with(['examinerUser'])
+                ->get();
+
+            $classExaminers = $assignments
+                ->groupBy('examiner_user_id')
+                ->map(function ($items) use ($coursesById) {
+                    $examiner = $items->first()->examinerUser;
+                    $courses = $items
+                        ->map(fn (ExaminerCourseAssignment $assignment) => $coursesById->get($assignment->course_id))
+                        ->filter()
+                        ->unique(fn ($course) => $course->id)
+                        ->sortBy(fn ($course) => mb_strtolower((string) $course->code))
+                        ->values();
+
+                    return ['examiner' => $examiner, 'courses' => $courses];
+                })
+                ->filter(fn (array $row): bool => $row['examiner'] !== null)
+                ->sortBy(fn (array $row): string => mb_strtolower((string) ($row['examiner']->name ?? '')))
+                ->values();
+        }
+
+        return view('coordinator.classes.show', [
+            'classroom' => $classroom,
+            'students' => $students,
+            'classExaminers' => $classExaminers,
         ]);
     }
 
@@ -46,6 +177,7 @@ class ClassroomController extends Controller
             'program_id' => ['required', 'integer'],
             'level_id' => ['required', 'integer'],
             'is_active' => ['nullable', 'boolean'],
+            'accent_color' => ['sometimes', 'nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
 
         $programId = (int) $validated['program_id'];
@@ -67,6 +199,10 @@ class ClassroomController extends Controller
 
         $activeYear = AcademicYear::activeForUniversity((int) auth()->user()->university_id);
 
+        $accentHex = array_key_exists('accent_color', $validated) && ($validated['accent_color'] ?? '') !== ''
+            ? '#'.strtoupper(substr((string) $validated['accent_color'], 1))
+            : null;
+
         Classroom::create([
             'university_id' => auth()->user()->university_id,
             'program_id' => $programId,
@@ -76,6 +212,7 @@ class ClassroomController extends Controller
             'academic_year' => $activeYear?->name,
             'academic_year_id' => $activeYear?->id,
             'is_active' => $request->boolean('is_active', true),
+            'accent_color' => $accentHex,
         ]);
 
         return redirect()->route('coordinator.classes.index')->with('status', 'Class created successfully.');
@@ -101,6 +238,7 @@ class ClassroomController extends Controller
             'program_id' => ['required', 'integer'],
             'level_id' => ['required', 'integer'],
             'is_active' => ['nullable', 'boolean'],
+            'accent_color' => ['sometimes', 'nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
 
         $programId = (int) $validated['program_id'];
@@ -121,12 +259,20 @@ class ClassroomController extends Controller
             ],
         ]);
 
-        $classroom->update([
+        $updates = [
             'program_id' => $programId,
             'level_id' => $levelId,
             'name' => $validated['name'],
             'is_active' => $request->boolean('is_active'),
-        ]);
+        ];
+
+        if (array_key_exists('accent_color', $validated)) {
+            $updates['accent_color'] = ($validated['accent_color'] ?? '') !== ''
+                ? '#'.strtoupper(substr((string) $validated['accent_color'], 1))
+                : null;
+        }
+
+        $classroom->update($updates);
 
         return redirect()->route('coordinator.classes.index')->with('status', 'Class updated successfully.');
     }
@@ -137,7 +283,9 @@ class ClassroomController extends Controller
 
         $classroom->update(['is_active' => ! $classroom->is_active]);
 
-        return redirect()->route('coordinator.classes.index')->with('status', 'Class status updated.');
+        return redirect()
+            ->back()
+            ->with('status', __('Class status updated.'));
     }
 
     private function scopedPrograms()

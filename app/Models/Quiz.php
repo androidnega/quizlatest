@@ -31,6 +31,8 @@ class Quiz extends Model
         'proctoring_settings',
         'start_time',
         'end_time',
+        'due_at',
+        'grades_released_at',
     ];
 
     protected $casts = [
@@ -39,6 +41,8 @@ class Quiz extends Model
         'published_at' => 'datetime',
         'start_time' => 'datetime',
         'end_time' => 'datetime',
+        'due_at' => 'datetime',
+        'grades_released_at' => 'datetime',
         'randomize_questions' => 'boolean',
         'randomize_options' => 'boolean',
     ];
@@ -170,6 +174,29 @@ class Quiz extends Model
             return false;
         }
 
+        if ($this->assessment_type === 'assignment' && $this->due_at !== null) {
+            $hours = (int) data_get($this->proctoring_settings, 'late_acceptance_hours', 168);
+            $hours = max(0, min($hours, 24 * 30));
+            $closeAt = $this->due_at->copy()->addHours($hours);
+            if ($at->gt($closeAt)) {
+                return false;
+            }
+        }
+
         return true;
+    }
+
+    public function isAssignment(): bool
+    {
+        return $this->assessment_type === 'assignment';
+    }
+
+    public function assignmentGradesVisibleToStudents(): bool
+    {
+        if (! $this->isAssignment()) {
+            return true;
+        }
+
+        return $this->grades_released_at !== null;
     }
 }

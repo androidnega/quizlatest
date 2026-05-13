@@ -11,7 +11,9 @@
 
             <div class="mb-8 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-wide text-qs-muted">
                 <span id="step-pill-rules" class="rounded-full border border-qs-accent bg-qs-accent/20 px-3 py-1 text-qs-text">{{ __('Rules') }}</span>
-                <span id="step-pill-permissions" class="rounded-full border border-qs-soft px-3 py-1">{{ __('Access') }}</span>
+                @if (!($isAssignment ?? false))
+                    <span id="step-pill-permissions" class="rounded-full border border-qs-soft px-3 py-1">{{ __('Access') }}</span>
+                @endif
                 <span id="step-pill-1" class="rounded-full border border-qs-soft px-3 py-1">{{ __('Overview') }}</span>
                 @if ($otpEnabled)
                     <span id="step-pill-2" class="rounded-full border border-qs-soft px-3 py-1">{{ __('OTP') }}</span>
@@ -24,7 +26,14 @@
 
             <div class="qs-surface space-y-6 p-6 shadow-sm">
                 <section id="panel-rules">
-                    <h3 class="text-lg font-semibold text-qs-text">{{ __('Exam rules & integrity') }}</h3>
+                    <h3 class="text-lg font-semibold text-qs-text">{{ ($isAssignment ?? false) ? __('Assignment integrity') : __('Exam rules & integrity') }}</h3>
+                    @if ($isAssignment ?? false)
+                        <ul class="mt-4 list-disc space-y-2 pl-5 text-sm text-qs-text">
+                            <li>{{ __('Complete this assignment yourself, using only sources and collaboration rules your course allows.') }}</li>
+                            <li>{{ __('Typed responses must be entered in this page. Copy and paste is blocked in answer fields to support academic integrity.') }}</li>
+                            <li>{{ __('This coursework does not use live camera or audio invigilation unless your school explicitly enables an exception.') }}</li>
+                        </ul>
+                    @else
                     <ul class="mt-4 list-disc space-y-2 pl-5 text-sm text-qs-text">
                         <li>{{ __('Complete this exam honestly, on your own, without unauthorised help or materials, unless your institution explicitly allows otherwise.') }}</li>
                         <li>{{ __('Follow invigilator or institution instructions (for example fullscreen, staying visible on camera, and not switching away from the exam without permission).') }}</li>
@@ -38,15 +47,19 @@
                             <li>{{ __('The timer or submission window may still apply — submit before time expires when you are allowed to.') }}</li>
                         </ul>
                     </div>
+                    @endif
                     <label class="mt-5 flex cursor-pointer items-start gap-3 text-sm text-qs-text">
                         <input id="chk-rules-agree" type="checkbox" class="mt-1 h-4 w-4 shrink-0 rounded border-qs-soft text-qs-accent focus:ring-qs-accent" @if ($entryBlocked) disabled @endif />
-                        <span>{{ __('I have read and agree to these rules and understand that my attempt may be auto-submitted or ended under my institution’s proctoring policy.') }}</span>
+                        <span>{{ ($isAssignment ?? false)
+                            ? __('I confirm I will follow the rules above and submit my own work in the answer fields.')
+                            : __('I have read and agree to these rules and understand that my attempt may be auto-submitted or ended under my institution’s proctoring policy.') }}</span>
                     </label>
                     <button type="button" id="btn-rules-next" class="qs-btn-primary mt-6" disabled @if ($entryBlocked) disabled @endif>
                         {{ __('Continue') }}
                     </button>
                 </section>
 
+                @unless ($isAssignment ?? false)
                 <section id="panel-permissions" class="hidden">
                     <h3 class="text-lg font-semibold text-qs-text">{{ __('Camera, microphone & location') }}</h3>
                     <p class="mt-2 text-sm text-qs-muted">
@@ -81,16 +94,23 @@
                         <button type="button" id="btn-permissions-next" class="qs-btn-primary text-sm" disabled @if ($entryBlocked) disabled @endif>{{ __('Continue') }}</button>
                     </div>
                 </section>
+                @endunless
 
                 <section id="panel-overview" class="hidden">
-                    <h3 class="text-lg font-semibold text-qs-text">{{ __('Exam overview') }}</h3>
+                    <h3 class="text-lg font-semibold text-qs-text">{{ ($isAssignment ?? false) ? __('Assignment overview') : __('Exam overview') }}</h3>
                     <dl class="mt-4 grid gap-3 text-sm">
                         <div class="flex justify-between gap-4 border-b border-qs-soft pb-2">
                             <dt class="text-qs-muted">{{ __('Course') }}</dt>
                             <dd class="text-right font-medium text-qs-text">{{ $quiz->course?->code }} — {{ $quiz->course?->title }}</dd>
                         </div>
+                        @if ($quiz->due_at)
+                            <div class="flex justify-between gap-4 border-b border-qs-soft pb-2">
+                                <dt class="text-qs-muted">{{ __('Due') }}</dt>
+                                <dd class="text-right font-medium text-qs-text">{{ $quiz->due_at->timezone(config('app.timezone'))->format('Y-m-d H:i') }}</dd>
+                            </div>
+                        @endif
                         <div class="flex justify-between gap-4 border-b border-qs-soft pb-2">
-                            <dt class="text-qs-muted">{{ __('Duration') }}</dt>
+                            <dt class="text-qs-muted">{{ ($isAssignment ?? false) ? __('Time budget (minutes)') : __('Duration') }}</dt>
                             <dd class="text-right font-medium text-qs-text">{{ $quiz->duration_minutes }} {{ __('minutes') }}</dd>
                         </div>
                         @if ($quiz->start_time || $quiz->end_time)
@@ -163,11 +183,13 @@
                 @endif
 
                 <section id="panel-start" class="hidden">
-                    <h3 class="text-lg font-semibold text-qs-text">{{ __('Ready to begin') }}</h3>
-                    <p class="mt-2 text-sm text-qs-muted">{{ __('When you start, the exam timer may begin immediately according to your institution’s rules.') }}</p>
+                    <h3 class="text-lg font-semibold text-qs-text">{{ ($isAssignment ?? false) ? __('Ready to work') : __('Ready to begin') }}</h3>
+                    <p class="mt-2 text-sm text-qs-muted">{{ ($isAssignment ?? false)
+                        ? __('When you start, you can type and save your answers. There is no live invigilation camera for this coursework by default.')
+                        : __('When you start, the exam timer may begin immediately according to your institution’s rules.') }}</p>
                     <p id="start-message" class="mt-3 text-sm text-qs-muted" role="status"></p>
                     <button type="button" id="btn-start-exam" class="qs-btn-primary mt-6" @if ($entryBlocked) disabled @endif>
-                        {{ __('Start exam now') }}
+                        {{ ($isAssignment ?? false) ? __('Start assignment') : __('Start exam now') }}
                     </button>
                 </section>
             </div>
@@ -179,6 +201,7 @@
             const otpEnabled = @json($otpEnabled);
             const snapshotRequired = @json($snapshotRequired);
             const entryBlocked = @json($entryBlocked);
+            const isAssignment = @json($isAssignment ?? false);
             const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
             const panelRules = document.getElementById('panel-rules');
@@ -336,6 +359,12 @@
 
             let otpVerified = !otpEnabled;
 
+            if (isAssignment) {
+                permCameraOk = true;
+                permMicOk = true;
+                permLocOk = true;
+            }
+
             const chkRules = document.getElementById('chk-rules-agree');
             const btnRulesNext = document.getElementById('btn-rules-next');
             chkRules?.addEventListener('change', () => {
@@ -350,6 +379,11 @@
             document.getElementById('btn-rules-next')?.addEventListener('click', () => {
                 if (entryBlocked) return;
                 if (!chkRules?.checked) return;
+                if (isAssignment) {
+                    showPanel('overview');
+                    setPillActive('overview');
+                    return;
+                }
                 showPanel('permissions');
                 setPillActive('permissions');
             });
@@ -450,6 +484,11 @@
             });
 
             document.getElementById('btn-overview-back')?.addEventListener('click', () => {
+                if (isAssignment) {
+                    showPanel('rules');
+                    setPillActive('rules');
+                    return;
+                }
                 showPanel('permissions');
                 setPillActive('permissions');
             });

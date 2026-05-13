@@ -15,11 +15,16 @@ class CourseMaterial extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    public const KIND_SUPPLEMENTARY = 'supplementary';
+
+    public const KIND_COURSE_OUTLINE = 'course_outline';
+
     protected $fillable = [
         'course_id',
         'class_id',
         'uploaded_by',
         'title',
+        'material_kind',
         'file_path',
         'file_type',
         'extracted_text_path',

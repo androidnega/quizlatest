@@ -5,9 +5,12 @@ namespace App\Http\Controllers\Coordinator;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\Department;
+use App\Models\ExaminerCourseAssignment;
+use App\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class CourseController extends Controller
@@ -125,6 +128,97 @@ class CourseController extends Controller
         $course->update(['is_active' => ! $course->is_active]);
 
         return redirect()->route('coordinator.courses.index')->with('status', 'Course status updated.');
+    }
+
+    public function editExaminerAssignments(Request $request): View
+    {
+        $this->authorize('viewAny', Course::class);
+
+        $courses = Course::query()
+            ->whereIn('department_id', $this->departmentIds())
+            ->orderBy('title')
+            ->get(['id', 'title', 'code', 'department_id']);
+
+        $selectedCourseId = (int) $request->integer('course_id');
+        $selectedCourse = $selectedCourseId > 0
+            ? $courses->firstWhere('id', $selectedCourseId)
+            : null;
+
+        $examiners = User::query()
+            ->where('role', 'examiner')
+            ->where('university_id', auth()->user()->university_id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email']);
+
+        $assignedExaminerIds = [];
+        if ($selectedCourse !== null) {
+            $this->authorize('update', $selectedCourse);
+            $assignedExaminerIds = ExaminerCourseAssignment::query()
+                ->where('course_id', $selectedCourse->id)
+                ->where('is_active', true)
+                ->pluck('examiner_user_id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
+
+        return view('coordinator.courses.assign-examiners', [
+            'courses' => $courses,
+            'selectedCourse' => $selectedCourse,
+            'examiners' => $examiners,
+            'assignedExaminerIds' => $assignedExaminerIds,
+        ]);
+    }
+
+    public function updateExaminerAssignments(Request $request): RedirectResponse
+    {
+        $this->authorize('viewAny', Course::class);
+
+        $validated = $request->validate([
+            'course_id' => ['required', 'integer', 'exists:courses,id'],
+            'examiner_ids' => ['nullable', 'array'],
+            'examiner_ids.*' => ['integer', 'exists:users,id'],
+        ]);
+
+        $course = Course::query()->findOrFail((int) $validated['course_id']);
+        $this->authorize('update', $course);
+
+        $examinerIds = collect($validated['examiner_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $allowedExaminerIds = User::query()
+            ->where('role', 'examiner')
+            ->where('university_id', auth()->user()->university_id)
+            ->whereIn('id', $examinerIds->all())
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        abort_unless(count($allowedExaminerIds) === $examinerIds->count(), 422);
+
+        DB::transaction(function () use ($course, $allowedExaminerIds): void {
+            ExaminerCourseAssignment::query()
+                ->where('course_id', $course->id)
+                ->delete();
+
+            foreach ($allowedExaminerIds as $examinerId) {
+                ExaminerCourseAssignment::query()->create([
+                    'course_id' => $course->id,
+                    'examiner_user_id' => $examinerId,
+                    'assigned_by' => auth()->id(),
+                    'is_active' => true,
+                    'permissions' => null,
+                    'starts_at' => null,
+                    'ends_at' => null,
+                ]);
+            }
+        });
+
+        return redirect()
+            ->route('coordinator.courses.examiners.edit', ['course_id' => $course->id])
+            ->with('status', __('Examiner assignments updated.'));
     }
 
     private function departmentIds(): array

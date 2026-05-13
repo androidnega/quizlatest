@@ -14,24 +14,24 @@ export default {
         extend: {
             colors: {
                 /**
-                 * QUIZSNAP — white-first UI, deep green brand, soft sage structure, warm cream panels, rose danger.
-                 * `accent` mirrors `primary` for legacy classnames (qs-accent → same token).
+                 * Must stay in sync with resources/css/app.css `:root` — Tailwind compiles
+                 * `text-qs-primary`, `bg-qs-card`, etc. from here; arbitrary `var(--qs-*)` uses those variables.
                  */
                 qs: {
-                    bg: '#FFFFFF',
-                    primary: '#166534',
-                    accent: '#166534',
-                    soft: '#DCE8E0',
-                    card: '#FAF7F2',
-                    surface: '#FAF7F2',
-                    text: '#0F2918',
-                    muted: '#5C6B62',
-                    danger: '#9F1239',
-                    'danger-soft': '#FFE4E9',
+                    bg: '#ffffff',
+                    primary: '#56aebb',
+                    accent: '#56aebb',
+                    soft: '#d5e7ea',
+                    card: '#ffffff',
+                    surface: '#ffffff',
+                    text: '#15343a',
+                    muted: '#5f7478',
+                    danger: '#e46f2e',
+                    'danger-soft': '#fff0e7',
                 },
             },
             fontFamily: {
-                sans: ['ui-sans-serif', 'system-ui', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', ...defaultTheme.fontFamily.sans],
+                sans: ['Inter', 'ui-sans-serif', 'system-ui', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', ...defaultTheme.fontFamily.sans],
                 brand: ['Antonio', 'ui-sans-serif', 'system-ui', 'Segoe UI', 'sans-serif'],
             },
         },

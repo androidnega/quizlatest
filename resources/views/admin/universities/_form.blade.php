@@ -20,8 +20,9 @@
     </div>
 
     <div>
-        <label for="settings" class="block text-sm font-medium qs-heading">Settings (JSON)</label>
+        <label for="settings" class="block text-sm font-medium qs-heading">Settings (JSON, optional)</label>
         <textarea id="settings" name="settings" rows="8" class="mt-1 block w-full rounded-md border-qs-soft focus:border-qs-soft focus:ring-qs-accent/40 bg-qs-bg font-mono text-sm">{{ $settingsValue }}</textarea>
+        <p class="mt-1 text-xs text-qs-muted">Leave empty if you do not need extra university settings.</p>
         @error('settings')
             <p class="mt-1 text-sm text-qs-danger">{{ $message }}</p>
         @enderror

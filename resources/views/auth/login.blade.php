@@ -11,7 +11,7 @@
 
         <div>
             <x-input-label for="index_number" :value="__('Index number')" />
-            <x-text-input id="index_number" name="index_number" type="text" :value="old('index_number')" required autofocus autocomplete="username" />
+            <x-text-input id="index_number" name="index_number" type="text" :value="old('index_number')" required autofocus autocomplete="username" placeholder="BC/ITS/24/047" />
             <x-input-error :messages="$errors->get('index_number')" class="mt-2" />
         </div>
 

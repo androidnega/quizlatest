@@ -17,12 +17,32 @@ export function createProctoringEcho() {
     const scheme = import.meta.env.VITE_REVERB_SCHEME ?? 'http';
     const forceTLS = scheme === 'https';
 
+    const rawHost = import.meta.env.VITE_REVERB_HOST;
+    const wsHost =
+        typeof rawHost === 'string' && rawHost.trim() !== ''
+            ? rawHost.trim()
+            : window.location.hostname;
+
+    const rawPort = import.meta.env.VITE_REVERB_PORT;
+    const wsPort = Number(
+        rawPort !== undefined && rawPort !== null && String(rawPort).trim() !== ''
+            ? rawPort
+            : 8080,
+    );
+    const wssPort = Number(
+        rawPort !== undefined && rawPort !== null && String(rawPort).trim() !== ''
+            ? rawPort
+            : forceTLS
+              ? 443
+              : wsPort,
+    );
+
     return new Echo({
         broadcaster: 'reverb',
         key,
-        wsHost: import.meta.env.VITE_REVERB_HOST ?? window.location.hostname,
-        wsPort: Number(import.meta.env.VITE_REVERB_PORT ?? 8080),
-        wssPort: Number(import.meta.env.VITE_REVERB_PORT ?? 443),
+        wsHost,
+        wsPort,
+        wssPort,
         forceTLS,
         enabledTransports: ['ws', 'wss'],
         authEndpoint: `${window.location.origin}/broadcasting/auth`,

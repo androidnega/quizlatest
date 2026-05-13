@@ -4,13 +4,12 @@ namespace App\Http\Controllers\Examiner;
 
 use App\Http\Controllers\Controller;
 use App\Models\AcademicYear;
-use App\Models\Course;
+use App\Models\ClassCourse;
 use App\Models\ExaminerCourseAssignment;
 use App\Models\ExamSession;
 use App\Models\ExamSessionAnswer;
 use App\Models\Quiz;
 use App\Models\Result;
-use App\Services\PracticeModuleSettings;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
@@ -22,15 +21,12 @@ class DashboardController extends Controller
 
         $user = $request->user();
         $manageableCourseIds = $this->manageableCourseIds($request);
+        $assignedCoursesCount = count($manageableCourseIds);
 
-        $assignedCourses = Course::query()
-            ->whereIn('id', ExaminerCourseAssignment::query()
-                ->where('examiner_user_id', $user->id)
-                ->where('is_active', true)
-                ->pluck('course_id'))
-            ->with(['classrooms' => fn ($query) => $query->orderBy('name')])
-            ->orderBy('title')
-            ->get(['id', 'title', 'code']);
+        $classesInScopeCount = ClassCourse::query()
+            ->whereIn('course_id', $manageableCourseIds)
+            ->distinct('class_id')
+            ->count('class_id');
 
         $yearFilter = (int) $request->integer('academic_year_id');
         if ($yearFilter <= 0) {
@@ -47,8 +43,33 @@ class DashboardController extends Controller
             });
         }
 
-        $draftExamCount = (clone $examQuery)->where('status', 'draft')->count();
-        $publishedExamCount = (clone $examQuery)->where('status', 'published')->count();
+        $quizTotalCount = (clone $examQuery)->count();
+
+        $sessionsCount = ExamSession::query()
+            ->whereHas('exam', function ($q) use ($manageableCourseIds, $yearFilter, $user) {
+                $q->where('created_by', $user->id);
+                $q->whereIn('course_id', $manageableCourseIds);
+                if ($yearFilter > 0) {
+                    $q->where(function ($q2) use ($yearFilter) {
+                        $q2->whereNull('academic_year_id')
+                            ->orWhere('academic_year_id', $yearFilter);
+                    });
+                }
+            })
+            ->count();
+
+        $resultsCount = Result::query()
+            ->whereHas('quiz', function ($q) use ($manageableCourseIds, $yearFilter, $user) {
+                $q->where('created_by', $user->id);
+                $q->whereIn('course_id', $manageableCourseIds);
+                if ($yearFilter > 0) {
+                    $q->where(function ($q2) use ($yearFilter) {
+                        $q2->whereNull('academic_year_id')
+                            ->orWhere('academic_year_id', $yearFilter);
+                    });
+                }
+            })
+            ->count();
 
         $heldResultsCount = Result::query()
             ->where('status', 'held')
@@ -79,49 +100,19 @@ class DashboardController extends Controller
             })
             ->count();
 
-        $flaggedSessions = ExamSession::query()
-            ->where('status', 'flagged')
-            ->whereHas('exam', function ($q) use ($manageableCourseIds, $yearFilter, $user) {
-                $q->whereIn('course_id', $manageableCourseIds);
-                $q->where('created_by', $user->id);
-                if ($yearFilter > 0) {
-                    $q->where(function ($q2) use ($yearFilter) {
-                        $q2->whereNull('academic_year_id')
-                            ->orWhere('academic_year_id', $yearFilter);
-                    });
-                }
-            })
-            ->with([
-                'exam:id,title,course_id',
-                'exam.course:id,code,title',
-                'student:id,name,index_number',
-            ])
-            ->orderByDesc('updated_at')
-            ->limit(6)
-            ->get();
-
-        $practice = app(PracticeModuleSettings::class);
-        $firstManageableCourse = Course::query()
-            ->whereIn('id', $manageableCourseIds)
-            ->orderBy('code')
-            ->first(['id', 'code', 'title']);
-
         return view('examiner.dashboard', [
-            'assignedCourses' => $assignedCourses,
             'academicYears' => AcademicYear::query()
                 ->where('university_id', $user->university_id)
                 ->orderByDesc('start_date')
                 ->get(['id', 'name', 'is_active']),
             'selectedAcademicYearId' => $yearFilter > 0 ? $yearFilter : null,
-            'draftExamCount' => $draftExamCount,
-            'publishedExamCount' => $publishedExamCount,
+            'quizTotalCount' => $quizTotalCount,
+            'sessionsCount' => $sessionsCount,
+            'resultsCount' => $resultsCount,
             'heldResultsCount' => $heldResultsCount,
             'pendingManualGradingCount' => $pendingManualGradingCount,
-            'flaggedSessions' => $flaggedSessions,
-            'manageableCourseCount' => count($manageableCourseIds),
-            'practiceOverviewEnabled' => $practice->examinerPracticeOverviewEnabled(),
-            'materialUploadsEnabled' => $practice->courseMaterialUploadsEnabled(),
-            'firstManageableCourse' => $firstManageableCourse,
+            'classesInScopeCount' => $classesInScopeCount,
+            'assignedCoursesCount' => $assignedCoursesCount,
         ]);
     }
 

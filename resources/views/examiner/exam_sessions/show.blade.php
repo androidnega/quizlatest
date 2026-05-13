@@ -2,8 +2,16 @@
     <x-slot name="title">Session review</x-slot>
     <x-slot name="subtitle">{{ $session->exam?->title }}</x-slot>
 
+    @if (session('status'))
+        <div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">{{ session('status') }}</div>
+    @endif
+
     <div class="mb-5 flex flex-wrap items-center gap-3">
-        <a href="{{ route('examiner.exams.sessions.index', $session->exam) }}" class="text-sm font-medium text-qs-text underline-offset-2 hover:underline">← Sessions for this exam</a>
+        <a href="{{ route('examiner.quizzes.workspace', ['exam' => $session->exam, 'tab' => 'sessions']) }}" class="text-sm font-medium text-qs-text underline-offset-2 hover:underline">← {{ __('Sessions for this exam') }}</a>
+        @if (! empty($classResultsUrl))
+            <span class="text-qs-muted">·</span>
+            <a href="{{ $classResultsUrl }}" class="text-sm font-medium text-qs-muted underline-offset-2 hover:text-qs-text hover:underline">{{ __('Back to class results') }}</a>
+        @endif
     </div>
 
     <div class="space-y-6">
@@ -83,6 +91,17 @@
             <div class="qs-card rounded-xl border border-qs-soft p-5 shadow-sm">
                 <h3 class="text-sm font-semibold text-qs-text">Held result</h3>
                 <p class="mt-2 text-sm text-qs-muted">Only an examiner assigned to this course can release, confirm, or override this result.</p>
+            </div>
+        @endif
+
+        @if (! empty($invalidateForRetakeUrl))
+            <div class="qs-card rounded-xl border border-rose-200/80 bg-rose-50/90 p-5 shadow-sm">
+                <h3 class="text-sm font-semibold text-rose-950">{{ __('Allow another attempt') }}</h3>
+                <p class="mt-2 text-xs text-rose-900/85">{{ __('Remove this student’s attempt, result, and proctoring events for this exam so they can start again from the exam entry screen. Use when a session must be voided or retakes are authorized.') }}</p>
+                <form method="POST" action="{{ $invalidateForRetakeUrl }}" class="mt-4" onsubmit="return confirm(@json(__('Clear this attempt permanently? The student will be able to start the exam again.')));">
+                    @csrf
+                    <button type="submit" class="rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-950 hover:bg-rose-100">{{ __('Clear attempt & allow retake') }}</button>
+                </form>
             </div>
         @endif
 

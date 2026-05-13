@@ -23,6 +23,6 @@
             >{{ $ch }}</span>
         @endforeach
     @else
-        <span class="text-qs-primary">Quiz</span><span class="text-[#1e5a3a]">Snap</span>
+        <span class="text-qs-primary">Quiz</span><span class="text-qs-text">Snap</span>
     @endif
 </{{ $tag }}>

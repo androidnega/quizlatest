@@ -1,13 +1,10 @@
-<x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl qs-heading leading-tight">{{ __('My practice quizzes') }}</h2>
-    </x-slot>
+<x-layouts.student>
+    <x-slot name="title">{{ __('My practice quizzes') }}</x-slot>
 
-    <div class="py-10">
-        <div class="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-5xl space-y-6 py-2">
             <div class="flex flex-wrap gap-3">
                 <a href="{{ route('student.practice.quizzes.create') }}" class="qs-btn-primary text-sm">{{ __('Generate new') }}</a>
-                <a href="{{ route('student.practice.index') }}" class="qs-btn-secondary text-sm">{{ __('Practice home') }}</a>
+                <a href="{{ route('student.practice.revision') }}" class="qs-btn-secondary text-sm">{{ __('Revision hub') }}</a>
             </div>
 
             @if ($quizzes->isEmpty())
@@ -48,6 +45,5 @@
                 </div>
                 <div class="mt-4">{{ $quizzes->links() }}</div>
             @endif
-        </div>
     </div>
-</x-app-layout>
+</x-layouts.student>

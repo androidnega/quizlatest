@@ -9,6 +9,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Classroom extends Model
 {
+    /** Default class accent when none is stored (#166534 matches app --qs-primary). */
+    public const DEFAULT_ACCENT_COLOR = '#166534';
+
     protected $table = 'classes';
 
     protected $fillable = [
@@ -20,6 +23,7 @@ class Classroom extends Model
         'academic_year',
         'academic_year_id',
         'is_active',
+        'accent_color',
     ];
 
     protected $casts = [
@@ -54,5 +58,47 @@ class Classroom extends Model
     public function academicYearStruct(): BelongsTo
     {
         return $this->belongsTo(AcademicYear::class, 'academic_year_id');
+    }
+
+    /** @return HasMany<User> */
+    public function students(): HasMany
+    {
+        return $this->hasMany(User::class, 'class_id')->where('role', 'student');
+    }
+
+    /** Normalized #RRGGBB accent for UI (validated storage or default). */
+    public function accentHex(): string
+    {
+        $c = $this->accent_color;
+        if (is_string($c) && preg_match('/^#[0-9A-Fa-f]{6}$/', $c)) {
+            return '#'.strtoupper(ltrim($c, '#'));
+        }
+
+        return self::DEFAULT_ACCENT_COLOR;
+    }
+
+    /** sRGB relative luminance in 0–1 (for hover text contrast). */
+    public function accentRelativeLuminance(): float
+    {
+        $hex = ltrim($this->accentHex(), '#');
+        $r = hexdec(substr($hex, 0, 2)) / 255;
+        $g = hexdec(substr($hex, 2, 2)) / 255;
+        $b = hexdec(substr($hex, 4, 2)) / 255;
+
+        $linear = static function (float $c): float {
+            return $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4;
+        };
+
+        $r = $linear($r);
+        $g = $linear($g);
+        $b = $linear($b);
+
+        return 0.2126 * $r + 0.7152 * $g + 0.0722 * $b;
+    }
+
+    /** True when solid accent background should use light (e.g. white) foreground. */
+    public function accentUsesLightForeground(): bool
+    {
+        return $this->accentRelativeLuminance() < 0.5;
     }
 }

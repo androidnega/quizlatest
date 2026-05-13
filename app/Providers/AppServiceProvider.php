@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -67,14 +68,29 @@ class AppServiceProvider extends ServiceProvider
             'manageSystemSettings',
             fn (User $user): bool => $userPolicy->manageSystemSettings($user),
         );
+        Gate::define(
+            'manageGlobalUserAccounts',
+            fn (User $user): bool => $userPolicy->manageGlobalUserAccounts($user),
+        );
 
-        View::composer('layouts.navigation', function ($view): void {
+        $studentPracticeComposer = function ($view): void {
             $user = auth()->user();
+            $practice = app(PracticeModuleSettings::class);
             $view->with(
                 'studentPracticeNavEnabled',
-                $user !== null && $user->role === 'student' && app(PracticeModuleSettings::class)->studentPracticeEnabled(),
+                $user !== null && $user->role === 'student' && $practice->studentPracticeEnabled(),
             );
-        });
+            $view->with(
+                'studentCourseMaterialsNavEnabled',
+                $user !== null
+                    && $user->role === 'student'
+                    && $practice->courseMaterialUploadsEnabled()
+                    && ! $practice->studentPracticeEnabled(),
+            );
+        };
+
+        View::composer('layouts.navigation', $studentPracticeComposer);
+        View::composer('components.layouts.student', $studentPracticeComposer);
 
         $staffLayoutComposer = function ($view): void {
             $user = auth()->user();
@@ -83,11 +99,23 @@ class AppServiceProvider extends ServiceProvider
             }
             $year = AcademicYear::activeForUniversity((int) $user->university_id);
             $term = $year !== null ? Term::activeForAcademicYear($year->id) : null;
-            $badge = $year !== null ? trim($year->name.($term !== null ? ' · '.$term->name : '')) : null;
+
+            $badge = null;
+            if ($year !== null) {
+                $badge = __('Academic year').' · '.$year->name;
+                if ($term !== null) {
+                    $termLabel = trim((string) $term->name);
+                    $isGenericFullYear = $termLabel === ''
+                        || Str::contains(Str::lower($termLabel), 'full year');
+                    if (! $isGenericFullYear) {
+                        $badge .= ' · '.$termLabel;
+                    }
+                }
+            }
+
             $view->with('staffAcademicPeriodBadge', $badge);
         };
 
         View::composer('components.layouts.coordinator', $staffLayoutComposer);
-        View::composer('components.layouts.examiner', $staffLayoutComposer);
     }
 }

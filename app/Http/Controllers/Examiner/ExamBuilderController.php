@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Examiner;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\AcademicYear;
 use App\Models\Classroom;
 use App\Models\Course;
@@ -23,6 +24,7 @@ use App\Services\OutlineTopicSuggester;
 use App\Services\ProctoringOrchestratorService;
 use App\Services\SystemExamPolicyService;
 use App\Services\SystemSettingsService;
+use App\Support\AssessmentProctoringDefaults;
 use App\Support\AssessmentQuestionTypes;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
@@ -151,6 +153,7 @@ class ExamBuilderController extends Controller
             'rows' => $classroomOptions,
             'courseId' => (int) ($request->old('course_id', $request->query('course_id')) ?: ($courses->first()->id ?? 0)),
             'selectedClassIds' => array_values(array_map('intval', $request->old('classroom_ids', []) ?: [])),
+            'assessmentType' => (string) $request->old('assessment_type', 'quiz'),
             'source' => $questionSourceOld,
             'pastePromptTopics' => (string) $request->old('paste_prompt_topics', ''),
             'pastePromptCount' => (int) $request->old('paste_prompt_count', 10),
@@ -266,14 +269,21 @@ class ExamBuilderController extends Controller
     ): RedirectResponse {
         $this->authorize('create', Quiz::class);
 
+        $assessmentTypeIn = (string) $request->input('assessment_type');
+        $creatingAssignment = $assessmentTypeIn === 'assignment';
+
         $validated = $request->validate([
             'wizard_step' => ['nullable', 'integer', 'in:1,2'],
             'course_id' => ['required', 'integer'],
             'classroom_ids' => ['required', 'array', 'min:1'],
             'classroom_ids.*' => ['integer', 'distinct'],
             'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'duration_minutes' => ['required', 'integer', 'min:1', 'max:600'],
+            'description' => $creatingAssignment
+                ? ['required', 'string', 'min:10', 'max:20000']
+                : ['nullable', 'string', 'max:20000'],
+            'duration_minutes' => $creatingAssignment
+                ? ['required', 'integer', 'min:60', 'max:20160']
+                : ['required', 'integer', 'min:1', 'max:600'],
             'assessment_type' => ['required', 'string', 'in:quiz,mid,exam,assignment'],
             'selected_question_types' => ['required', 'array', 'min:1'],
             'selected_question_types.*' => ['string', 'in:mcq,true_false,fill_blank,essay'],
@@ -282,6 +292,7 @@ class ExamBuilderController extends Controller
             'randomize_options' => ['sometimes', 'boolean'],
             'start_time' => ['nullable', 'date'],
             'end_time' => ['nullable', 'date', 'after_or_equal:start_time'],
+            'due_at' => $creatingAssignment ? ['required', 'date'] : ['nullable', 'date'],
             'question_source' => ['required', 'string', 'in:later,paste_json,ai_generate'],
             'import_json' => ['nullable', 'string', 'max:500000'],
             'paste_prompt_topics' => ['nullable', 'string', 'max:4000'],
@@ -295,6 +306,9 @@ class ExamBuilderController extends Controller
             'ai_outline_file' => ['nullable', 'file', 'max:5120', 'mimes:txt,pdf,docx'],
             'activate_now' => ['sometimes', 'boolean'],
             'show_correct_answers_in_results' => ['sometimes', 'boolean'],
+            'enable_phone' => ['sometimes', 'boolean'],
+            'enable_fullscreen' => ['sometimes', 'boolean'],
+            'enable_auto_submit' => ['sometimes', 'boolean'],
         ]);
 
         $course = Course::query()->find((int) $validated['course_id']);
@@ -379,11 +393,26 @@ class ExamBuilderController extends Controller
         $allowFullscreen = $policyEnabled && $systemSettings->getBool('fullscreen_required', true);
         $allowAutoSubmit = $policyEnabled && $systemSettings->getBool('auto_submit_enabled', true);
 
-        $initialProctoringSettings = ProctoringOrchestratorService::normalizeProctoringSettings([], null);
-        $initialProctoringSettings['phone_detection_enabled'] = $allowPhone ? $request->boolean('enable_phone', true) : false;
-        $initialProctoringSettings['fullscreen_enforced'] = $allowFullscreen ? $request->boolean('enable_fullscreen', true) : false;
-        $initialProctoringSettings['auto_submit_enabled'] = $allowAutoSubmit ? $request->boolean('enable_auto_submit', true) : false;
+        $assessmentType = $validated['assessment_type'];
+        $initialProctoringSettings = AssessmentProctoringDefaults::baselineForType(
+            $assessmentType,
+            $allowPhone,
+            $allowFullscreen,
+            $allowAutoSubmit,
+        );
         $initialProctoringSettings['show_correct_answers_to_students'] = $request->boolean('show_correct_answers_in_results');
+
+        if ($assessmentType !== 'assignment') {
+            $normalizedDraft = ProctoringOrchestratorService::normalizeProctoringSettings($initialProctoringSettings, null);
+            $normalizedDraft['phone_detection_enabled'] = $allowPhone ? $request->boolean('enable_phone', true) : false;
+            $normalizedDraft['fullscreen_enforced'] = $allowFullscreen ? $request->boolean('enable_fullscreen', true) : false;
+            $normalizedDraft['auto_submit_enabled'] = $allowAutoSubmit ? $request->boolean('enable_auto_submit', true) : false;
+            $initialProctoringSettings = $normalizedDraft;
+        }
+
+        $dueAt = ! empty($validated['due_at'] ?? null)
+            ? Carbon::parse((string) $validated['due_at'])
+            : null;
 
         $start = isset($validated['start_time']) ? Carbon::parse($validated['start_time']) : null;
         $end = isset($validated['end_time']) ? Carbon::parse($validated['end_time']) : null;
@@ -443,6 +472,7 @@ class ExamBuilderController extends Controller
             'proctoring_settings' => $initialProctoringSettings,
             'start_time' => $start,
             'end_time' => $end,
+            'due_at' => $dueAt,
         ]);
 
         $quiz->targetClassrooms()->sync($classIds);
@@ -762,8 +792,11 @@ class ExamBuilderController extends Controller
         $normalized['fullscreen_enforced'] = $allowFullscreen ? $request->boolean('enable_fullscreen', true) : false;
         $normalized['auto_submit_enabled'] = $allowAutoSubmit ? $request->boolean('enable_auto_submit', true) : false;
 
-        $extras = array_intersect_key($current, array_flip(['show_correct_answers_to_students', 'mobile_only']));
+        $extras = array_intersect_key($current, array_flip(['show_correct_answers_to_students', 'mobile_only', 'require_essay_marking_guide_on_publish', 'assignment_clipboard_block', 'late_acceptance_hours']));
         $merged = array_merge($normalized, $extras);
+        if ($exam->isAssignment()) {
+            $merged = AssessmentProctoringDefaults::enforceAssignmentCaps($merged);
+        }
 
         $exam->update(['proctoring_settings' => $merged]);
 
@@ -926,6 +959,9 @@ class ExamBuilderController extends Controller
         $validated = $request->validate([
             'start_time' => ['nullable', 'date'],
             'end_time' => ['nullable', 'date'],
+            'due_at' => ['nullable', 'date'],
+            'title' => ['nullable', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:65535'],
         ]);
 
         $start = isset($validated['start_time']) ? Carbon::parse($validated['start_time']) : null;
@@ -935,14 +971,51 @@ class ExamBuilderController extends Controller
             return back()->withErrors(['end_time' => 'End time must be on or after start time.'])->withInput();
         }
 
-        $exam->update([
+        $payload = [
             'start_time' => $start,
             'end_time' => $end,
-        ]);
+        ];
+
+        if (array_key_exists('due_at', $validated)) {
+            $payload['due_at'] = $validated['due_at'] !== null && $validated['due_at'] !== ''
+                ? Carbon::parse($validated['due_at'])
+                : null;
+        }
+        if (array_key_exists('title', $validated) && $validated['title'] !== null) {
+            $payload['title'] = $validated['title'];
+        }
+        if (array_key_exists('description', $validated)) {
+            $payload['description'] = $validated['description'];
+        }
+
+        $exam->update($payload);
 
         $this->bumpExamConfigCache($exam->fresh());
 
         return back()->with('status', 'Exam window updated.');
+    }
+
+    public function releaseAssignmentGrades(Request $request, Quiz $exam): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+        abort_unless($exam->status === 'published', 403);
+        abort_unless($exam->isAssignment(), 404);
+
+        $exam->update(['grades_released_at' => now()]);
+
+        ActivityLog::query()->create([
+            'user_id' => $request->user()->id,
+            'quiz_id' => $exam->id,
+            'event_type' => 'assignment_grades_released',
+            'event_data' => [
+                'released_at' => now()->toIso8601String(),
+            ],
+            'created_at' => now(),
+        ]);
+
+        $this->bumpExamConfigCache($exam->fresh());
+
+        return back()->with('status', __('Students can now see grades and feedback for this assignment.'));
     }
 
     public function storeSection(Request $request, Quiz $exam): RedirectResponse

@@ -1,10 +1,7 @@
-<x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl qs-heading leading-tight">{{ __('Practice quiz') }}</h2>
-    </x-slot>
+<x-layouts.student>
+    <x-slot name="title">{{ __('Practice quiz') }}</x-slot>
 
-    <div class="py-10">
-        <div class="mx-auto max-w-3xl space-y-6 px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-3xl space-y-6 py-2">
             @if (session('status'))
                 <div class="rounded-xl border border-qs-soft bg-qs-card px-4 py-3 text-sm text-qs-text">{{ session('status') }}</div>
             @endif
@@ -44,6 +41,5 @@
                 @method('DELETE')
                 <button type="submit" class="text-sm text-qs-danger">{{ __('Delete quiz') }}</button>
             </form>
-        </div>
     </div>
-</x-app-layout>
+</x-layouts.student>

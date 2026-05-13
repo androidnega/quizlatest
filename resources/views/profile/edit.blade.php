@@ -1,33 +1,20 @@
-<x-app-layout>
-    <x-slot name="header">
-        <h2 class="qs-heading text-xl font-semibold leading-tight">
-            {{ __('Profile') }}
-        </h2>
-    </x-slot>
+@if ($user->role === 'student')
+    <x-layouts.student>
+        <x-slot name="title">{{ __('Profile') }}</x-slot>
+        <x-slot name="subtitle">{{ __('Account details and security') }}</x-slot>
 
-    <div class="py-12">
-        <div class="mx-auto max-w-7xl space-y-6 sm:px-6 lg:px-8">
-            <div class="qs-card sm:p-8">
-                <div class="max-w-xl">
-                    @if ($user->role === 'student')
-                        @include('profile.partials.update-profile-information-form-student')
-                    @else
-                        @include('profile.partials.update-profile-information-form')
-                    @endif
-                </div>
-            </div>
+        @include('profile.partials.student-profile-page')
+    </x-layouts.student>
+@else
+    <x-app-layout>
+        <x-slot name="header">
+            <h2 class="qs-heading text-xl font-semibold leading-tight">
+                {{ __('Profile') }}
+            </h2>
+        </x-slot>
 
-            <div class="qs-card sm:p-8">
-                <div class="max-w-xl">
-                    @include('profile.partials.update-password-form')
-                </div>
-            </div>
-
-            <div class="qs-card sm:p-8">
-                <div class="max-w-xl">
-                    @include('profile.partials.delete-user-form')
-                </div>
-            </div>
+        <div class="py-12">
+            @include('profile.partials.edit-stack')
         </div>
-    </div>
-</x-app-layout>
+    </x-app-layout>
+@endif

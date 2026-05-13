@@ -50,10 +50,10 @@ Route::middleware('guest')->group(function () {
         ->name('student.onboarding');
 
     Route::post('student/onboarding', [StudentOnboardingController::class, 'store'])
-        ->middleware('throttle:12,1')
+        ->middleware('throttle:60,1')
         ->name('student.onboarding.store');
     Route::post('student/onboarding/draft', [StudentOnboardingController::class, 'saveDraft'])
-        ->middleware('throttle:30,1')
+        ->middleware('throttle:180,1')
         ->name('student.onboarding.draft');
 
     Route::get('student/forgot-password', [StudentPasswordResetController::class, 'create'])

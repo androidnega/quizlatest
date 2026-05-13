@@ -59,8 +59,7 @@ class CoordinatorDashboardTest extends TestCase
         $this->actingAs($this->coordinator())
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee(__('Coordinator Dashboard'), false)
-            ->assertSee(__('Setup checklist'), false)
+            ->assertSee(__('Dashboard'), false)
             ->assertSee(__('Overview'), false);
     }
 
@@ -162,7 +161,9 @@ class CoordinatorDashboardTest extends TestCase
 
         $html = $this->actingAs($coord)->get(route('dashboard'))->getContent();
         $this->assertSame('1', $this->metricText($html, 'active-courses'));
-        $this->assertStringContainsString('2 '.__('total'), $this->metricText($html, 'active-programs'));
+        $programsMetric = preg_replace('/\s+/u', ' ', trim($this->metricText($html, 'active-programs')));
+        $this->assertStringContainsString('/ 2', $programsMetric, 'Program total in scope should be 2 for seeded CS department');
+        $this->assertMatchesRegularExpression('/^\d+\s*\/\s*2$/', $programsMetric, 'Active programs shown as count / total');
     }
 
     public function test_active_classes_respects_academic_year(): void
@@ -294,7 +295,7 @@ class CoordinatorDashboardTest extends TestCase
         $this->actingAs($this->coordinator())
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee(route('coordinator.students.upload'), false)
+            ->assertSee(route('coordinator.classes.index'), false)
             ->assertSee(route('coordinator.classes.create'), false)
             ->assertSee(route('coordinator.courses.index'), false)
             ->assertSee(route('coordinator.courses.assign.edit'), false)

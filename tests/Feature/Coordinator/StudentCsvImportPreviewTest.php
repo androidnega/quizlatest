@@ -28,7 +28,6 @@ class StudentCsvImportPreviewTest extends TestCase
                 'map_index_number' => 'index_number',
                 'map_name' => 'name',
                 'map_phone' => 'phone',
-                'map_email' => 'email',
                 'map_program' => 'program',
                 'map_level' => 'level',
                 'map_class_name' => 'class_name',

@@ -1,12 +1,15 @@
 @extends('layouts.exam-runtime', [
     'enableLiveSockets' => $enableLiveSockets,
     'allowPollingFallback' => $allowPollingFallback,
+    'requireCameraMonitoring' => $requireCameraMonitoring,
+    'isAssignmentMode' => $isAssignmentMode ?? false,
+    'assignmentClipboardBlock' => $assignmentClipboardBlock ?? false,
 ])
 
 @section('content')
 <div id="exam-app" class="min-h-screen flex flex-col">
     <header class="border-b border-qs-soft bg-qs-bg shadow-sm shrink-0">
-        <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
             <div>
                 <h1 id="exam-title" class="text-lg font-semibold qs-heading">{{ __('Loading…') }}</h1>
                 <p id="exam-subtitle" class="text-sm text-qs-muted hidden"></p>
@@ -24,23 +27,63 @@
         </div>
     </header>
 
-    <div class="flex flex-1 flex-col md:flex-row max-w-6xl mx-auto w-full min-h-0">
-        <aside class="w-full md:w-52 shrink-0 border-b md:border-b-0 md:border-r border-qs-soft bg-qs-bg p-3 overflow-y-auto max-h-48 md:max-h-none">
-            <p class="text-xs font-semibold text-qs-muted uppercase mb-2">{{ __('Questions') }}</p>
-            <nav id="question-nav" class="flex flex-wrap md:flex-col gap-2"></nav>
+    <div class="flex flex-1 flex-col lg:flex-row max-w-7xl mx-auto w-full min-h-0">
+        {{-- Live proctoring (camera + local mesh preview) — only when institution requires camera monitoring --}}
+        <aside id="proctoring-live-aside"
+            class="{{ $requireCameraMonitoring ? '' : 'hidden' }} w-full lg:w-72 shrink-0 border-b lg:border-b-0 lg:border-r border-qs-soft bg-qs-bg p-3 flex flex-col gap-3 min-h-0 lg:max-w-[20rem]">
+            <p class="text-xs font-semibold text-qs-muted uppercase tracking-wide">{{ __('Live proctoring') }}</p>
+            <div class="relative aspect-video w-full max-h-56 lg:max-h-none overflow-hidden rounded-lg border border-qs-soft bg-black shadow-inner">
+                <video id="proctoring-video" class="absolute inset-0 h-full w-full object-cover" playsinline muted autoplay></video>
+                <canvas id="proctoring-face-canvas" class="absolute inset-0 h-full w-full pointer-events-none" aria-hidden="true"></canvas>
+            </div>
+            <p id="proctoring-local-hint" class="text-xs leading-snug text-qs-muted min-h-[2.5rem]"></p>
+            <p class="text-[11px] leading-snug text-qs-muted">{{ __('Face tracking runs on your device. Only summary events are sent to the server in batches.') }}</p>
         </aside>
 
-        <main class="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <div id="exam-banner" class="hidden px-4 py-2 text-sm border-b border-qs-accent/35 bg-qs-accent/15 text-qs-text"></div>
-            <div id="exam-main" class="flex-1 overflow-y-auto p-4 md:p-6">
-                <p id="exam-loading" class="text-qs-muted">{{ __('Loading exam…') }}</p>
-                <div id="question-container" class="hidden space-y-4"></div>
-            </div>
-        </main>
+        <div class="flex flex-1 flex-col md:flex-row min-w-0 min-h-0">
+            <aside class="w-full md:w-52 shrink-0 border-b md:border-b-0 md:border-r border-qs-soft bg-qs-bg p-3 overflow-y-auto max-h-40 md:max-h-none">
+                <p class="text-xs font-semibold text-qs-muted uppercase mb-2">{{ __('Questions') }}</p>
+                <nav id="question-nav" class="flex flex-wrap md:flex-col gap-2"></nav>
+                <div id="exam-answer-summary" class="mt-3 space-y-1 border-t border-qs-soft pt-3 text-xs leading-snug text-qs-muted"></div>
+            </aside>
+
+            <main class="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
+                <div id="exam-banner" class="hidden px-4 py-2 text-sm border-b border-qs-accent/35 bg-qs-accent/15 text-qs-text"></div>
+                <div id="exam-nav-actions" class="hidden shrink-0 border-b border-qs-soft bg-qs-bg px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" id="btn-q-back" data-q-action
+                            class="qs-btn-secondary min-h-[44px] px-4 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
+                            {{ __('Back') }}
+                        </button>
+                        <button type="button" id="btn-q-next" data-q-action
+                            class="qs-btn-primary min-h-[44px] px-4 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
+                            {{ __('Next') }}
+                        </button>
+                    </div>
+                    <p id="question-progress-label" class="text-xs text-qs-muted"></p>
+                </div>
+                <div id="exam-main" class="flex-1 overflow-y-auto p-4 md:p-6">
+                    <p id="exam-loading" class="text-qs-muted">{{ __('Loading exam…') }}</p>
+                    <div id="question-container" class="hidden space-y-4"></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="exam-timer-pause-overlay" class="hidden fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/75 px-4" role="dialog" aria-modal="true" aria-labelledby="exam-pause-title">
+        <div class="max-w-md rounded-2xl border border-amber-200/80 bg-amber-50 px-5 py-6 text-center shadow-xl">
+            <p id="exam-pause-title" class="text-lg font-semibold text-amber-950">{{ __('Exam paused') }}</p>
+            <p class="mt-2 text-sm leading-relaxed text-amber-900/90">
+                {{ __('Your timer is frozen. When you are ready, resume to continue from where you left off.') }}
+            </p>
+            <button type="button" id="btn-exam-resume" class="mt-5 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-amber-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-900">
+                {{ __('Resume') }}
+            </button>
+        </div>
     </div>
 
     <footer class="border-t border-qs-soft bg-qs-bg shrink-0">
-        <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
             <div id="save-indicator" class="text-sm text-qs-muted">{{ __('Answers save automatically.') }}</div>
             <div class="flex items-center gap-2">
                 <span id="video-status" class="text-xs text-qs-muted hidden md:inline">{{ __('Camera required for proctoring.') }}</span>
@@ -51,8 +94,6 @@
             </div>
         </div>
     </footer>
-
-    <video id="proctoring-video" class="fixed w-px h-px opacity-0 pointer-events-none" playsinline muted autoplay></video>
 
     <div id="essay-clipboard-toast" role="status" aria-live="polite"
         class="pointer-events-none fixed bottom-20 left-1/2 z-50 hidden max-w-sm -translate-x-1/2 rounded-lg border border-qs-soft bg-qs-card px-4 py-2 text-center text-sm text-qs-text shadow-lg">

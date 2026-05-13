@@ -12,4 +12,22 @@ export default defineConfig({
             refresh: true,
         }),
     ],
+    server: {
+        host: '0.0.0.0',
+        port: 5173,
+        strictPort: true,
+        origin: 'http://0.0.0.0:5173',
+        hmr: {
+            host: '0.0.0.0',
+            port: 5173,
+            protocol: 'ws',
+        },
+        cors: {
+            origin: [
+                'http://0.0.0.0:8000',
+                'http://localhost:8000',
+                'http://[::1]:8000',
+            ],
+        },
+    },
 });

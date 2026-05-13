@@ -43,7 +43,9 @@ class UniversityController extends Controller
             'name' => $validated['name'],
             'code' => $validated['code'] ?? null,
             'is_active' => $request->boolean('is_active'),
-            'settings' => isset($validated['settings']) ? json_decode($validated['settings'], true, 512, JSON_THROW_ON_ERROR) : null,
+            'settings' => filled($validated['settings'] ?? null)
+                ? json_decode((string) $validated['settings'], true, 512, JSON_THROW_ON_ERROR)
+                : null,
         ]);
 
         AcademicYear::bootstrapDefaultForUniversity((int) $university->id);
@@ -75,7 +77,9 @@ class UniversityController extends Controller
             'name' => $validated['name'],
             'code' => $validated['code'] ?? null,
             'is_active' => $request->boolean('is_active'),
-            'settings' => isset($validated['settings']) ? json_decode($validated['settings'], true, 512, JSON_THROW_ON_ERROR) : null,
+            'settings' => filled($validated['settings'] ?? null)
+                ? json_decode((string) $validated['settings'], true, 512, JSON_THROW_ON_ERROR)
+                : null,
         ]);
 
         return redirect()->route('admin.universities.index')->with('status', 'University updated successfully.');

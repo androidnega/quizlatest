@@ -26,8 +26,8 @@ export class ProctoringEventBatcher {
     constructor(options) {
         this.examSessionKey = options.examSessionKey;
         this.apiClient = options.apiClient || window.axios;
-        this.flushIntervalMs = options.flushIntervalMs ?? 1800;
-        this.maxBatch = options.maxBatch ?? 10;
+        this.flushIntervalMs = options.flushIntervalMs ?? 4500;
+        this.maxBatch = options.maxBatch ?? 14;
         this.preferGzip = options.preferGzip !== false;
 
         this.queue = [];

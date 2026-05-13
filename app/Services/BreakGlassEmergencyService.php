@@ -70,7 +70,11 @@ final class BreakGlassEmergencyService
             return null;
         }
 
-        return User::query()->where('email', $username)->first();
+        return User::query()
+            ->where(function ($query) use ($username): void {
+                $query->where('email', $username)->orWhere('index_number', $username);
+            })
+            ->first();
     }
 
     public function isStaffBreakGlassTarget(?User $user): bool

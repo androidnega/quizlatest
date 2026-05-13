@@ -220,10 +220,11 @@ class ExaminerQuizIsolationTest extends TestCase
         $this->actingAs($ctx['examinerA'])
             ->get(route('examiner.dashboard'))
             ->assertOk()
-            ->assertSee('ISO101', false)
-            ->assertSee('Isolation Course', false)
-            ->assertSee('ISO-CLASS', false)
-            ->assertDontSee('Exam B Ownership', false);
+            ->assertDontSee('Exam B Ownership', false)
+            ->assertSee(__('All assessments'), false)
+            ->assertSee(__('Courses'), false)
+            ->assertSee(__('Classes'), false)
+            ->assertSee(__('Grading'), false);
     }
 
     public function test_examiner_cannot_builder_publish_or_archive_other_examiner_quiz(): void
@@ -231,7 +232,7 @@ class ExaminerQuizIsolationTest extends TestCase
         $ctx = $this->seedTwoExaminerContext();
 
         $this->actingAs($ctx['examinerA'])
-            ->get(route('examiner.exams.builder', $ctx['quizB']))
+            ->get(route('examiner.quizzes.workspace', $ctx['quizB']))
             ->assertForbidden();
 
         $this->actingAs($ctx['examinerA'])

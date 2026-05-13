@@ -6,7 +6,7 @@ use App\Models\AcademicYear;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
+use RuntimeException;
 
 class InitialSetupSeeder extends Seeder
 {
@@ -15,6 +15,16 @@ class InitialSetupSeeder extends Seeder
      */
     public function run(): void
     {
+        if (DB::table('users')->where('email', 'admin')->exists()) {
+            return;
+        }
+
+        if (DB::table('universities')->where('code', 'DU')->exists()) {
+            throw new RuntimeException(
+                'The default university (code DU) exists but there is no `admin` user — a previous seed or migration failed partway. Run: php artisan migrate:fresh --seed'
+            );
+        }
+
         $now = now();
 
         $universityId = DB::table('universities')->insertGetId([
@@ -106,6 +116,7 @@ class InitialSetupSeeder extends Seeder
             'index_number' => null,
             'role' => 'admin',
             'is_active' => true,
+            'is_super_admin' => true,
             'email_verified_at' => $now,
             'password' => Hash::make('admin123'),
             'remember_token' => null,
@@ -224,19 +235,17 @@ class InitialSetupSeeder extends Seeder
         foreach ($studentNames as $index => $studentName) {
             $serial = str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT);
             $indexNumber = 'BCS/'.date('Y').'/'.$serial;
-            $email = Str::of($studentName)->lower()->replace(' ', '.')->append('@university.edu')->toString();
-
             $studentId = DB::table('users')->insertGetId([
                 'university_id' => $universityId,
                 'program_id' => $bscCsProgramId,
                 'level_id' => $level100Id,
                 'class_id' => null,
                 'name' => $studentName,
-                'email' => $email,
+                'email' => null,
                 'index_number' => $indexNumber,
                 'role' => 'student',
                 'is_active' => true,
-                'email_verified_at' => $now,
+                'email_verified_at' => null,
                 'student_onboarded_at' => $now,
                 'password' => Hash::make('student123'),
                 'remember_token' => null,

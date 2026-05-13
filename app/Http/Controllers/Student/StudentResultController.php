@@ -18,13 +18,26 @@ class StudentResultController extends Controller
     {
         $user = auth()->user();
 
-        $yearFilter = (int) request()->integer('academic_year_id');
         $activeYearId = AcademicYear::activeForUniversity((int) $user->university_id)?->id;
+        $showAllYears = request()->boolean('all_years');
+
+        if ($showAllYears) {
+            $yearFilter = 0;
+        } elseif (request()->filled('academic_year_id')) {
+            $yearFilter = (int) request('academic_year_id');
+        } else {
+            $yearFilter = $activeYearId !== null ? (int) $activeYearId : 0;
+        }
+
+        $academicYears = AcademicYear::query()
+            ->where('university_id', $user->university_id)
+            ->orderByDesc('start_date')
+            ->get(['id', 'name', 'is_active']);
 
         $sessions = ExamSession::query()
             ->where('student_id', $user->id)
             ->where('status', 'submitted')
-            ->with(['exam:id,title,total_marks,academic_year_id'])
+            ->with(['exam:id,title,total_marks,academic_year_id,course_id', 'exam.course:id,code,title'])
             ->when($yearFilter > 0, function ($q) use ($yearFilter) {
                 $q->whereHas('exam', function ($eq) use ($yearFilter) {
                     $eq->where(function ($q2) use ($yearFilter) {
@@ -48,14 +61,24 @@ class StudentResultController extends Controller
             $session->setRelation('result', $resultsByQuiz->get($session->exam_id));
         });
 
+        $resultsShowingAllYears = $yearFilter === 0;
+        $resultsFocusedYearId = $yearFilter > 0 ? $yearFilter : null;
+        $resultsFilterLabel = $resultsShowingAllYears
+            ? __('All academic years')
+            : ($academicYears->firstWhere('id', $yearFilter)?->name ?? __('Academic year'));
+        $defaultsToActiveYear = ! $showAllYears
+            && ! request()->filled('academic_year_id')
+            && $activeYearId !== null
+            && $yearFilter === (int) $activeYearId;
+
         return view('student.results.index', [
             'sessions' => $sessions,
-            'academicYears' => AcademicYear::query()
-                ->where('university_id', $user->university_id)
-                ->orderByDesc('start_date')
-                ->get(['id', 'name', 'is_active']),
-            'selectedAcademicYearId' => $yearFilter > 0 ? $yearFilter : null,
+            'academicYears' => $academicYears,
             'activeAcademicYearId' => $activeYearId,
+            'resultsShowingAllYears' => $resultsShowingAllYears,
+            'resultsFocusedYearId' => $resultsFocusedYearId,
+            'resultsFilterLabel' => $resultsFilterLabel,
+            'defaultsToActiveYear' => $defaultsToActiveYear,
         ]);
     }
 
@@ -65,7 +88,8 @@ class StudentResultController extends Controller
         $this->authorize('viewStudentResult', $examSession);
 
         $examSession->load([
-            'exam:id,title,total_marks,proctoring_settings',
+            'exam:id,title,total_marks,proctoring_settings,course_id,assessment_type,grades_released_at',
+            'exam.course:id,code,title',
         ]);
 
         $result = Result::query()
@@ -75,12 +99,16 @@ class StudentResultController extends Controller
 
         $status = $result?->status ?? 'pending_manual';
 
+        $assignmentGradesPending = $examSession->exam?->isAssignment()
+            && $status === 'graded'
+            && ! $examSession->exam->assignmentGradesVisibleToStudents();
+
         $breakdown = [];
         $percentage = null;
         $examinerFeedback = null;
         $showCorrect = false;
 
-        if ($status === 'graded' && $examSession->exam !== null) {
+        if ($status === 'graded' && $examSession->exam !== null && ! $assignmentGradesPending) {
             $showCorrect = $examSession->exam->revealsCorrectAnswersForStudentResults();
             $breakdown = StudentExamResultBreakdown::rows($examSession, $showCorrect);
             $totalMarks = (float) ($examSession->exam->total_marks ?? 0);
@@ -94,6 +122,7 @@ class StudentResultController extends Controller
             'session' => $examSession,
             'result' => $result,
             'resultStatus' => $status,
+            'assignmentGradesPending' => $assignmentGradesPending,
             'breakdown' => $breakdown,
             'percentage' => $percentage,
             'examinerFeedback' => $examinerFeedback,
@@ -107,7 +136,7 @@ class StudentResultController extends Controller
         $this->authorize('downloadStudentResultPdf', $examSession);
 
         $examSession->load([
-            'exam:id,title,total_marks,proctoring_settings',
+            'exam:id,title,total_marks,proctoring_settings,assessment_type,grades_released_at',
             'student:id,name,index_number',
         ]);
 
@@ -117,6 +146,10 @@ class StudentResultController extends Controller
             ->first(['id', 'score', 'status', 'feedback']);
 
         abort_if($result === null || $result->status !== 'graded', 403);
+
+        if ($examSession->exam?->isAssignment() && ! $examSession->exam->assignmentGradesVisibleToStudents()) {
+            abort(403);
+        }
 
         $showCorrect = $examSession->exam?->revealsCorrectAnswersForStudentResults() ?? false;
         $breakdown = StudentExamResultBreakdown::rows($examSession, $showCorrect);

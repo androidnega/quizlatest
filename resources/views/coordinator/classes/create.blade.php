@@ -45,6 +45,21 @@
             </div>
 
             <div>
+                <label for="accent_color" class="block text-sm font-medium text-qs-muted">{{ __('Card color') }}</label>
+                <p class="mt-0.5 text-xs text-qs-muted">{{ __('Shown softly on the class card; hovering fills with this solid color.') }}</p>
+                <input
+                    id="accent_color"
+                    name="accent_color"
+                    type="color"
+                    value="{{ old('accent_color', \App\Models\Classroom::DEFAULT_ACCENT_COLOR) }}"
+                    class="mt-2 h-11 w-[4.25rem] cursor-pointer rounded-lg border border-qs-soft bg-qs-bg p-1 shadow-inner"
+                />
+                @error('accent_color')
+                    <p class="mt-1 text-xs text-qs-danger">{{ $message }}</p>
+                @enderror
+            </div>
+
+            <div>
                 <label class="block text-sm font-medium text-qs-muted">Department</label>
                 <input type="text" value="Auto from selected program (coordinator-scoped)" disabled class="mt-1 block w-full rounded-lg border-qs-soft bg-qs-card text-qs-muted" />
             </div>

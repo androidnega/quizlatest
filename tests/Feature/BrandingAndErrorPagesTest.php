@@ -57,7 +57,7 @@ class BrandingAndErrorPagesTest extends TestCase
         $user = User::factory()->create(['role' => 'student']);
 
         $this->actingAs($user)
-            ->get('/dashboard/admin')
+            ->get('/dashboard/universities')
             ->assertForbidden()
             ->assertSee('QuizSnap', false);
     }

@@ -1,7 +1,15 @@
 QuizSnap — dev only (from seeders). Change these before production.
 
-STAFF LOGIN (/admin_login)
-Use “Username” in the staff login form. Password is the same column below.
+STAFF LOGIN — required URL: /admin_login
+Do not use the student page (/login) for admin or manuel; staff credentials only work on the staff portal.
+
+Use “Email or username” in the form. Passwords are the values in the table below.
+
+Seeded admins (dev): both `admin` and `manuel` have `is_super_admin` = true, so both see “Manage users” and the same staff-directory powers. (In production, turn off `is_super_admin` for accounts that should not have that access.)
+
+Super admin is defined only by `is_super_admin` on the `users` row. Same flag ⇒ same abilities; one admin UI at /dashboard after login.
+
+Seeded `admin` password is stored via the same bcrypt path as `manuel` (query builder in OwnerAdminSeeder for manuel). If login ever fails after pulling code, run: php artisan db:seed --class=OwnerAdminSeeder
 
 Role          Username                         Password
 admin         admin                            admin123

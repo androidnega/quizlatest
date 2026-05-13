@@ -14,20 +14,23 @@
                 <ul class="mt-6 space-y-3">
                     @if (auth()->user()->role === 'admin')
                         <li>
-                            <a href="{{ route('admin.dashboard') }}" class="qs-btn-primary flex min-h-[44px] w-full items-center justify-center rounded-lg text-center text-sm font-semibold">
+                            <a href="{{ route('dashboard') }}" class="qs-btn-primary flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg text-center text-sm font-semibold">
+                                <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
                                 {{ __('Admin dashboard') }}
                             </a>
                         </li>
                     @endif
                     @if (auth()->user()->role === 'coordinator')
                         <li>
-                            <a href="{{ route('dashboard') }}" class="qs-btn-primary flex min-h-[44px] w-full items-center justify-center rounded-lg text-center text-sm font-semibold">
+                            <a href="{{ route('dashboard') }}" class="qs-btn-primary flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg text-center text-sm font-semibold">
+                                <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
                                 {{ __('Coordinator dashboard') }}
                             </a>
                         </li>
                     @endif
                     <li>
-                        <a href="{{ route('profile.edit') }}" class="qs-btn-secondary flex min-h-[44px] w-full items-center justify-center rounded-lg border border-qs-soft text-center text-sm font-semibold">
+                        <a href="{{ route('profile.edit') }}" class="qs-btn-secondary flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-qs-soft text-center text-sm font-semibold">
+                            <i class="fa-solid fa-user" aria-hidden="true"></i>
                             {{ __('Profile') }}
                         </a>
                     </li>

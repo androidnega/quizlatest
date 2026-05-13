@@ -19,5 +19,9 @@ window.fetchProctoringCapability = fetchProctoringCapability;
 window.ProctoringEventBatcher = ProctoringEventBatcher;
 window.createProctoringEcho = createProctoringEcho;
 window.ExamStateEngine = ExamStateEngine;
+window.loadFaceTemplateService = async () => {
+    const mod = await import('./faceTemplateService');
+    return mod.FaceTemplateService;
+};
 
 Alpine.start();

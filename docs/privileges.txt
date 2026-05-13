@@ -1,0 +1,231 @@
+QuizSnap — privileges & access model
+======================================
+This file summarizes who can do what, derived from middleware, Laravel Gates/policies,
+and route groups in this repository. For seeded dev login hints, see:
+  docs/dev-privileged-accounts.txt
+
+
+1) Identity: roles and flags
+----------------------------
+• users.role (string) — primary staff/student partition used by route middleware:
+    - admin
+    - coordinator
+    - examiner
+    - student
+
+• users.is_super_admin (boolean) — NOT a separate middleware role. Admins with this flag
+  gain extra Gates (see §3). Regular admin UI still requires role === 'admin'.
+
+• Coordinators also use coordinator_assignments (active rows) to scope departments/classes/students.
+
+• Examiners use examiner_course_assignments (active) to scope which courses/exams they work on.
+
+
+2) HTTP middleware (route groups)
+---------------------------------
+Alias (bootstrap/app.php) → middleware class → requirement
+
+  admin        EnsureUserIsAdmin        Auth + role === 'admin'
+  coordinator  EnsureUserIsCoordinator  Auth + role === 'coordinator'
+  examiner     EnsureUserIsExaminer     Auth + role === 'examiner' (mayAccessExaminerPortal)
+  student      EnsureUserIsStudent      Auth + role === 'student'
+
+Staff sign-in is intended at the staff portal (see dev-privileged-accounts.txt); students use /login.
+
+Shared (many dashboards):
+  • auth + verified on /dashboard/* (profile, role-specific sections).
+  • Student exam taking: auth + verified + student for listed student routes.
+
+
+3) Explicit Gates (AppServiceProvider + UserPolicy)
+---------------------------------------------------
+Registered with Gate::define; implemented on App\Policies\UserPolicy:
+
+  manageCoordinatorDirectory
+      role === 'admin'
+      Used for: admin coordinator directory CRUD (list/create/edit coordinators).
+
+  manageSystemSettings
+      role === 'admin'
+      Used for: system settings, academic years admin UI, etc.
+
+  viewStudentDirectory
+      role === 'coordinator'
+      Used for: coordinator student/program/class import and management surfaces.
+
+  manageGlobalUserAccounts
+      user->isSuperAdmin()  (is_super_admin === true)
+      Used for: “Manage users” / global staff account listing & create.
+
+UserPolicy methods also used via authorize() on User model:
+
+  manageStudentInScope(coordinator, student)
+      Coordinator may manage a student if the student’s program.department_id is in the
+      coordinator’s active coordinator_assignments department list.
+
+  manageCoordinatorAccount(admin, coordinator)
+      role === 'admin' AND target role === 'coordinator'
+
+  manageUserAsAdmin(admin, target)
+      admin->isSuperAdmin() AND target->role !== 'student'
+      (edit/update non-student staff accounts in user admin UI.)
+
+
+4) Model policies (summary by role)
+-----------------------------------
+
+4.1 ExamPolicy — Gate::policy(Quiz::class, ExamPolicy::class)  [exams are Quiz models]
+
+  viewAny
+      admin: yes
+      examiner: yes if at least one active examiner_course_assignment
+      coordinator: yes if at least one active coordinator_assignment
+
+  view / update / delete (manageExam)
+      admin: any exam
+      examiner: exam.created_by === examiner AND active assignment on exam.course_id
+      coordinator: no (false)
+
+  create
+      admin: yes
+      examiner: yes if any active examiner_course_assignment
+      coordinator: no
+
+  manageResults (sessions, force actions, review tied to exam)
+      admin: any exam
+      examiner: same as manageExam (creator + course assignment)
+      coordinator: no
+
+
+4.2 ExamSessionPolicy — Gate::policy(ExamSession::class, …)
+
+  view
+      admin: yes
+      others: user->can('manageResults', $examSession->exam)
+
+  viewStudentResult
+      student only; own session; status === 'submitted'
+
+  downloadStudentResultPdf
+      same as viewStudentResult plus underlying Result status === 'graded'
+
+
+4.3 UniversityPolicy
+
+  viewAny / view / create / update / delete
+      admin only
+
+
+4.4 CoursePolicy
+
+  viewAny
+      coordinator only (in practice coordinators list courses)
+
+  view / update (canAccessCourseForExamWork)
+      admin: yes
+      examiner: active assignment on that course
+      coordinator: course.department_id in coordinator’s active departments
+
+  delete (ownsDepartmentCourse)
+      coordinator only, same department scope as above
+
+
+4.5 ProgramPolicy
+
+  viewAny / create
+      coordinator
+
+  view / update / delete
+      coordinator AND program.department_id in active coordinator assignments
+
+
+4.6 LevelPolicy
+
+  viewAny
+      coordinator
+
+  view / update
+      coordinator AND level.university_id === user.university_id
+
+
+4.7 ClassroomPolicy
+
+  viewAny / create
+      coordinator
+
+  view / update / assignCourses
+      coordinator AND classroom’s program.department_id in coordinator’s active departments
+
+
+4.8 QuestionPolicy
+
+  view / update / delete on Question
+      Delegates to Gate on the parent quiz (ExamPolicy view/update/delete).
+
+
+4.9 ResultPolicy (convention-discovered: Result → ResultPolicy)
+
+  view
+      admin: any
+      student: own result
+      examiner: quiz.created_by === examiner
+      coordinator: quiz.course.department_id in coordinator’s departments
+
+  update (e.g. grading)
+      admin: any
+      examiner: quiz.created_by === examiner
+      coordinator: no
+
+
+5) Admin route capabilities (/dashboard/... under middleware admin)
+-------------------------------------------------------------------
+Typical areas (non-exhaustive; all still require individual authorize() where present):
+
+  • Universities CRUD
+  • Coordinators directory CRUD (Gate: manageCoordinatorDirectory / manageCoordinatorAccount)
+  • User accounts (super admin only: manageGlobalUserAccounts / manageUserAsAdmin)
+  • Proctoring governance toggles, emergency shutdown, override config
+  • System settings + lock/unlock
+  • Academic years & terms
+  • Academic reset snapshots (read)
+  • Secure exam evidence downloads (authorization uses ExamSession policy view)
+  • Health snapshot JSON
+
+
+6) Coordinator route capabilities (/dashboard/... under middleware coordinator)
+-------------------------------------------------------------------------------
+  • Academic reset (preview/apply flows) for their flows as implemented
+  • Students: directory, import/export, bulk status, edit, destroy — scoped by policies
+  • Programs, levels, classes, courses — scoped to assigned departments / university
+  • Class–course assignment, examiner assignment on courses
+
+
+7) Examiner route capabilities (/dashboard/... under middleware examiner)
+-------------------------------------------------------------------------
+  • Workspace, exam builder (Quiz), publish/unpublish/archive/clone, scheduling, delivery,
+    questions/sections, AI generation hooks, session review, class summaries/results
+  • Course materials for assigned courses
+  • Manual grading queues
+  All exam/course actions still enforced by ExamPolicy / CoursePolicy as applicable.
+
+
+8) Student route capabilities
+-----------------------------
+  • Exam prepare/start/take (verified + student + app rules for onboarding/active)
+  • Results index/show/PDF per ExamSessionPolicy
+  • Practice/revision module routes when enabled (verified + student)
+  • Proctoring upload endpoints (auth) as routed
+
+
+9) Break-glass emergency access (routes/auth.php)
+-------------------------------------------------
+  • Only active when BreakGlassEmergencyService reports enabled (configuration/env).
+  • Flow is gated and throttled; targets privileged staff accounts, not students.
+  • See BreakGlassEmergencyController + BreakGlassEmergencyService for exact rules.
+
+
+10) Maintenance note
+--------------------
+  If you change policies or middleware, update this file so operators and auditors keep a
+  single reference. Policy source of truth remains the PHP classes under app/Policies/ and
+  app/Providers/AppServiceProvider.php.

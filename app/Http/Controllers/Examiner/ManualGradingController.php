@@ -98,7 +98,7 @@ class ManualGradingController extends Controller
         ActivityLog::query()->create([
             'user_id' => $request->user()->id,
             'quiz_id' => $answer->question->quiz_id,
-            'event_type' => $isOverride ? 'essay_manual_grade_override' : 'essay_manual_grade',
+            'event_type' => $this->manualGradeEventType($answer, $isOverride),
             'event_data' => [
                 'exam_session_answer_id' => $answer->id,
                 'exam_session_id' => $answer->exam_session_id,
@@ -116,6 +116,16 @@ class ManualGradingController extends Controller
         return redirect()
             ->route('examiner.grading.pending')
             ->with('status', 'Grade saved.');
+    }
+
+    private function manualGradeEventType(ExamSessionAnswer $answer, bool $isOverride): string
+    {
+        $quiz = $answer->question->quiz;
+        if ($quiz !== null && $quiz->isAssignment()) {
+            return $isOverride ? 'assignment_manual_grade_override' : 'assignment_manual_grade';
+        }
+
+        return $isOverride ? 'essay_manual_grade_override' : 'essay_manual_grade';
     }
 
     /**

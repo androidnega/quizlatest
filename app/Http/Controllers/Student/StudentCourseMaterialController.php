@@ -14,13 +14,14 @@ class StudentCourseMaterialController extends Controller
 {
     public function index(PracticeModuleSettings $practice): View|RedirectResponse
     {
-        $practice->assertStudentPracticeOrAbort();
+        $practice->assertStudentCourseMaterialsBrowseOrAbort();
 
         $user = auth()->user();
 
         $materials = CourseMaterial::query()
             ->visibleToStudent($user)
             ->with(['course:id,code,title'])
+            ->orderByRaw("CASE WHEN material_kind = '".CourseMaterial::KIND_COURSE_OUTLINE."' THEN 0 ELSE 1 END")
             ->orderByDesc('created_at')
             ->get();
 
@@ -34,7 +35,7 @@ class StudentCourseMaterialController extends Controller
         SensitiveStorageService $sensitiveStorage,
         CourseMaterial $material,
     ): StreamedResponse|RedirectResponse {
-        $practice->assertStudentPracticeOrAbort();
+        $practice->assertStudentCourseMaterialsBrowseOrAbort();
 
         $user = auth()->user();
 

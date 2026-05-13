@@ -7,27 +7,27 @@
 
         <title>{{ config('app.name', 'QuizSnap') }} — {{ __('Examiner') }}</title>
         @include('layouts.partials.favicon')
+        @include('layouts.partials.shell-sidebar-head', ['collapseKey' => 'qs.sidebar.examiner'])
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="h-full overflow-hidden font-sans antialiased bg-qs-bg text-qs-text">
         @php
-            $sessionsActive = request()->routeIs('examiner.exams.sessions.*') || request()->routeIs('examiner.exam-sessions.*');
-            $examsActive = request()->routeIs('examiner.exams.*') && ! $sessionsActive;
+            $examsActive = request()->routeIs('examiner.exams.*');
+            $coursesActive = request()->routeIs('examiner.courses.*');
             $gradingActive = request()->routeIs('examiner.grading.*');
-            $practiceActive = request()->routeIs('examiner.practice-overview.*');
             $navItems = [
                 ['label' => __('Dashboard'), 'href' => route('examiner.dashboard'), 'active' => request()->routeIs('examiner.dashboard'), 'icon' => 'house'],
+                ['label' => __('Courses'), 'href' => route('examiner.courses.index'), 'active' => $coursesActive, 'icon' => 'book'],
+                ['label' => __('Classes'), 'href' => route('examiner.teaching-classes.index'), 'active' => request()->routeIs('examiner.teaching-classes.*'), 'icon' => 'user-group'],
                 ['label' => __('Exams'), 'href' => route('examiner.exams.index'), 'active' => $examsActive, 'icon' => 'file-lines'],
-                ['label' => __('Exam builder'), 'href' => route('examiner.exams.create'), 'active' => request()->routeIs('examiner.exams.create'), 'icon' => 'pen-ruler'],
-                ['label' => __('Essay grading'), 'href' => route('examiner.grading.pending'), 'active' => $gradingActive, 'icon' => 'clipboard-check'],
-                ['label' => __('Sessions & held review'), 'href' => route('examiner.exams.index'), 'active' => $sessionsActive, 'icon' => 'chart-simple'],
-                ['label' => __('Practice overview'), 'href' => route('examiner.practice-overview.index'), 'active' => $practiceActive, 'icon' => 'book-open-reader'],
+                ['label' => __('Grading'), 'href' => route('examiner.grading.pending'), 'active' => $gradingActive, 'icon' => 'clipboard-check'],
             ];
         @endphp
         <div
             x-data="{
                 drawerOpen: false,
+                quickOpen: false,
                 collapsed: (() => {
                     try {
                         return localStorage.getItem('qs.sidebar.examiner') === '1';
@@ -40,23 +40,36 @@
                     try {
                         localStorage.setItem('qs.sidebar.examiner', this.collapsed ? '1' : '0');
                     } catch (e) {}
+                    this.syncShellSidebarClass();
+                },
+                syncShellSidebarClass() {
+                    try {
+                        document.documentElement.classList.toggle('qs-shell-sidebar-collapsed', this.collapsed);
+                    } catch (e) {}
                 },
             }"
+            x-init="syncShellSidebarClass()"
             @keydown.escape.window="drawerOpen = false"
             class="qs-app-shell"
         >
             <div
                 x-show="drawerOpen"
-                x-transition.opacity
                 x-cloak
                 class="fixed inset-0 z-40 bg-qs-text/40 md:hidden"
                 @click="drawerOpen = false"
                 aria-hidden="true"
             ></div>
+            <div
+                x-show="quickOpen"
+                x-cloak
+                class="fixed inset-0 z-40 bg-black/20 md:hidden"
+                @click="quickOpen = false"
+                aria-hidden="true"
+            ></div>
 
             <aside
-                class="fixed inset-y-0 left-0 z-50 flex w-[min(19rem,calc(100vw-2rem))] max-w-full flex-col border-r border-qs-soft bg-qs-bg shadow-xl transition-transform duration-200 ease-out md:hidden"
-                :class="drawerOpen ? 'translate-x-0' : '-translate-x-full'"
+                class="fixed inset-y-0 left-0 z-50 flex w-[min(19rem,calc(100vw-2rem))] max-w-full -translate-x-full flex-col border-r border-qs-soft bg-qs-bg shadow-xl md:hidden"
+                :class="drawerOpen ? '!translate-x-0' : ''"
                 id="examiner-mobile-nav"
                 aria-label="{{ __('Examiner navigation') }}"
             >
@@ -80,7 +93,6 @@
                             :href="$item['href']"
                             :active="$item['active']"
                             :icon="$item['icon']"
-                            :close-drawer="true"
                             always-show-label
                         >{{ $item['label'] }}</x-ui.sidebar-link>
                     @endforeach
@@ -88,21 +100,21 @@
             </aside>
 
             <aside
-                class="hidden shrink-0 flex-col border-r border-qs-soft bg-qs-bg transition-[width] duration-200 ease-out md:flex"
-                :class="collapsed ? 'w-[4.25rem]' : 'w-56'"
+                class="qs-desktop-sidebar hidden w-56 shrink-0 flex-col border-r border-qs-soft bg-qs-bg md:flex"
                 aria-label="{{ __('Examiner navigation') }}"
             >
-                <div class="flex shrink-0 items-center gap-2 border-b border-qs-soft px-2 py-3" :class="collapsed ? 'flex-col' : 'justify-between'">
-                    <div class="min-w-0 px-1" x-show="! collapsed" x-transition>
+                <div class="qs-sidebar-brand-row flex shrink-0 items-center justify-between gap-2 border-b border-qs-soft px-2 py-3">
+                    <div class="qs-shell-sidebar-brand min-w-0 px-1">
                         <p class="truncate text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ __('Examiner') }}</p>
                     </div>
                     <button
                         type="button"
-                        class="inline-flex min-h-[40px] min-w-[40px] shrink-0 items-center justify-center rounded-lg border border-qs-soft text-qs-muted hover:bg-qs-card hover:text-qs-text focus:outline-none focus:ring-2 focus:ring-qs-primary/25"
+                        class="qs-sidebar-collapse-btn inline-flex min-h-[40px] min-w-[40px] shrink-0 items-center justify-center rounded-lg border border-qs-soft text-qs-muted hover:bg-qs-card hover:text-qs-text focus:outline-none focus:ring-2 focus:ring-qs-primary/25"
                         @click="toggleCollapse()"
-                        :title="collapsed ? '{{ __('Expand sidebar') }}' : '{{ __('Collapse sidebar') }}'"
+                        title="{{ __('Toggle sidebar') }}"
                     >
-                        <i class="fa-solid text-xs" :class="collapsed ? 'fa-angles-right' : 'fa-angles-left'" aria-hidden="true"></i>
+                        <i class="fa-solid fa-angles-left text-xs qs-sidebar-collapse-icon-expanded" aria-hidden="true"></i>
+                        <i class="fa-solid fa-angles-right text-xs qs-sidebar-collapse-icon-collapsed" aria-hidden="true"></i>
                     </button>
                 </div>
                 <nav class="flex flex-1 flex-col space-y-0.5 overflow-y-auto p-2">
@@ -131,10 +143,58 @@
                         </button>
                         <span class="truncate text-xs font-semibold text-qs-muted md:hidden">{{ config('app.name') }}</span>
                     </div>
-                    <x-ui.shell-profile-menu />
+                    <div class="flex items-center gap-2">
+                        @php
+                            $draftAlerts = is_array($examinerDraftAlerts ?? null) ? $examinerDraftAlerts : [];
+                            $deletedDraftCount = (int) ($examinerDraftDeletedCount ?? 0);
+                        @endphp
+                        <div class="relative" x-data="{ open: false }" @keydown.escape.window="open = false">
+                            <button
+                                type="button"
+                                class="relative inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-qs-soft text-qs-text hover:bg-qs-card"
+                                @click="open = !open"
+                                aria-label="{{ __('Draft notifications') }}"
+                            >
+                                <i class="fa-regular fa-bell"></i>
+                                @if (count($draftAlerts) > 0 || $deletedDraftCount > 0)
+                                    <span class="absolute -right-1 -top-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-semibold text-white">
+                                        {{ count($draftAlerts) + ($deletedDraftCount > 0 ? 1 : 0) }}
+                                    </span>
+                                @endif
+                            </button>
+                            <div
+                                x-show="open"
+                                x-cloak
+                                @click.outside="open = false"
+                                class="absolute right-0 z-[60] mt-1 w-80 max-w-[90vw] rounded-xl border border-qs-soft bg-white p-3 shadow-lg"
+                            >
+                                <p class="text-xs font-semibold text-qs-text">{{ __('Draft reminders') }}</p>
+                                @if ($deletedDraftCount > 0)
+                                    <p class="mt-2 rounded-md border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs text-rose-700">
+                                        {{ $deletedDraftCount }} draft assessment(s) older than 14 days were auto-deleted.
+                                    </p>
+                                @endif
+                                @forelse ($draftAlerts as $alert)
+                                    <a href="{{ route('examiner.quizzes.workspace', $alert['id']) }}" class="mt-2 block rounded-md border border-slate-200 px-2 py-1.5 text-xs hover:bg-slate-50">
+                                        <span class="font-medium text-slate-900">{{ $alert['title'] }}</span>
+                                        <span class="mt-1 block text-slate-600">
+                                            @if ($alert['urgent'])
+                                                {{ __('Draft is :days days old. Return now or it will auto-delete in :remaining days.', ['days' => $alert['age_days'], 'remaining' => $alert['remaining_days']]) }}
+                                            @else
+                                                {{ __('Draft is :days days old. Continue it soon.', ['days' => $alert['age_days']]) }}
+                                            @endif
+                                        </span>
+                                    </a>
+                                @empty
+                                    <p class="mt-2 text-xs text-slate-500">{{ __('No pending draft reminders.') }}</p>
+                                @endforelse
+                            </div>
+                        </div>
+                        <x-ui.shell-profile-menu />
+                    </div>
                 </header>
 
-                <main class="qs-app-main-scroll mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+                <main class="qs-app-main-scroll mx-auto w-full max-w-screen-2xl px-4 py-5 sm:px-6 lg:px-8 xl:px-10">
                     @if (session('status'))
                         <div class="mb-5 flex items-start gap-3 rounded-xl border border-qs-soft bg-qs-card px-4 py-3 text-sm text-qs-text shadow-sm">
                             <i class="fa-solid fa-circle-check mt-0.5 text-qs-primary" aria-hidden="true"></i>
@@ -145,13 +205,43 @@
                     <x-ui.shell-page-heading
                         :title="$title ?? __('Examiner')"
                         :subtitle="isset($subtitle) ? $subtitle : null"
-                        :period-badge="$staffAcademicPeriodBadge ?? null"
+                        :period-badge="null"
                     >
                         <x-slot name="actions">{{ $headingActions ?? '' }}</x-slot>
                     </x-ui.shell-page-heading>
 
                     {{ $slot }}
                 </main>
+            </div>
+
+            <div class="fixed bottom-5 right-5 z-50 md:hidden">
+            <div
+                x-show="quickOpen"
+                x-cloak
+                class="mb-2 w-56 rounded-xl border border-qs-soft bg-qs-card p-2 shadow-lg"
+            >
+                    <a href="{{ route('examiner.exams.create') }}" class="flex min-h-[40px] items-center gap-2 rounded-lg px-3 text-sm font-medium text-qs-text hover:bg-qs-soft/50" @click="quickOpen = false">
+                        <i class="fa-solid fa-plus text-xs text-qs-primary" aria-hidden="true"></i>
+                        {{ __('New assessment') }}
+                    </a>
+                    <a href="{{ route('examiner.teaching-classes.index') }}" class="flex min-h-[40px] items-center gap-2 rounded-lg px-3 text-sm font-medium text-qs-text hover:bg-qs-soft/50" @click="quickOpen = false">
+                        <i class="fa-solid fa-users text-xs text-qs-primary" aria-hidden="true"></i>
+                        {{ __('Classes') }}
+                    </a>
+                    <a href="{{ route('examiner.grading.pending') }}" class="flex min-h-[40px] items-center gap-2 rounded-lg px-3 text-sm font-medium text-qs-text hover:bg-qs-soft/50" @click="quickOpen = false">
+                        <i class="fa-solid fa-clipboard-check text-xs text-qs-primary" aria-hidden="true"></i>
+                        {{ __('Grading') }}
+                    </a>
+                </div>
+                <button
+                    type="button"
+                    class="inline-flex h-14 w-14 items-center justify-center rounded-full border border-qs-primary/20 bg-qs-primary text-white shadow-lg hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-qs-primary/35"
+                    :class="quickOpen ? 'rotate-45' : ''"
+                    @click="quickOpen = !quickOpen"
+                    aria-label="{{ __('Open quick actions') }}"
+                >
+                    <i class="fa-solid fa-plus text-lg" aria-hidden="true"></i>
+                </button>
             </div>
         </div>
         @stack('scripts')

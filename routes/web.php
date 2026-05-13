@@ -340,6 +340,7 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
                 Route::post('/{exam}/unpublish', [ExamBuilderController::class, 'unpublish'])->name('exams.unpublish');
                 Route::post('/{exam}/archive', [ExamBuilderController::class, 'archive'])->name('exams.archive');
                 Route::post('/{exam}/clone', [ExamBuilderController::class, 'cloneExam'])->name('exams.clone');
+                Route::post('/{exam}/release-assignment-grades', [ExamBuilderController::class, 'releaseAssignmentGrades'])->name('exams.release-assignment-grades');
                 Route::patch('/{exam}/schedule', [ExamBuilderController::class, 'updateSchedule'])->name('exams.schedule.update');
                 Route::patch('/{exam}/delivery', [ExamBuilderController::class, 'updateDeliverySettings'])->name('exams.delivery.update');
                 Route::patch('/{exam}/proctoring-options', [ExamBuilderController::class, 'updateProctoringExaminerChoices'])->name('exams.proctoring-options.update');

@@ -15,6 +15,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CourseMaterialController extends Controller
@@ -47,6 +48,36 @@ class CourseMaterialController extends Controller
         ]);
     }
 
+    public function outline(
+        Request $request,
+        PracticeModuleSettings $practice,
+        ExaminerCourseScopeService $scope,
+        Course $course,
+    ): View|RedirectResponse {
+        $practice->assertMaterialUploadsOrAbort();
+        abort_unless($scope->canManageCourse($request->user(), (int) $course->id), 403);
+
+        $classes = Classroom::query()
+            ->where('university_id', $request->user()->university_id)
+            ->whereHas('classCourses', fn ($q) => $q->where('course_id', $course->id))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $latestOutlines = CourseMaterial::query()
+            ->where('course_id', $course->id)
+            ->where('material_kind', CourseMaterial::KIND_COURSE_OUTLINE)
+            ->with(['uploader:id,name', 'classroom:id,name'])
+            ->orderByDesc('created_at')
+            ->limit(8)
+            ->get();
+
+        return view('examiner.course-materials.outline', [
+            'course' => $course,
+            'classes' => $classes,
+            'latestOutlines' => $latestOutlines,
+        ]);
+    }
+
     public function store(
         Request $request,
         PracticeModuleSettings $practice,
@@ -61,6 +92,7 @@ class CourseMaterialController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'class_id' => ['nullable', 'integer', 'exists:classes,id'],
             'file' => ['required', 'file', 'max:12288', 'mimes:pdf,docx,txt'],
+            'material_kind' => ['required', 'string', Rule::in([CourseMaterial::KIND_SUPPLEMENTARY, CourseMaterial::KIND_COURSE_OUTLINE])],
         ]);
 
         $classId = isset($validated['class_id']) ? (int) $validated['class_id'] : null;
@@ -79,6 +111,7 @@ class CourseMaterialController extends Controller
             'class_id' => $classId,
             'uploaded_by' => $request->user()->id,
             'title' => $validated['title'],
+            'material_kind' => $validated['material_kind'],
             'file_path' => '',
             'file_type' => $ext,
             'extracted_text_path' => null,
@@ -106,14 +139,27 @@ class CourseMaterialController extends Controller
                 'extraction_error' => $e->getMessage(),
             ]);
 
+            $failRoute = $validated['material_kind'] === CourseMaterial::KIND_COURSE_OUTLINE
+                ? 'examiner.courses.outline'
+                : 'examiner.courses.materials.index';
+
             return redirect()
-                ->route('examiner.courses.materials.index', $course)
+                ->route($failRoute, $course)
                 ->withErrors(['file' => __('Extraction failed: :msg', ['msg' => $e->getMessage()])]);
         }
 
+        $successRoute = $validated['material_kind'] === CourseMaterial::KIND_COURSE_OUTLINE
+            ? 'examiner.courses.outline'
+            : 'examiner.courses.materials.index';
+
         return redirect()
-            ->route('examiner.courses.materials.index', $course)
-            ->with('status', __('Material uploaded and processed.'));
+            ->route($successRoute, $course)
+            ->with(
+                'status',
+                $validated['material_kind'] === CourseMaterial::KIND_COURSE_OUTLINE
+                    ? __('Course outline uploaded and processed.')
+                    : __('Material uploaded and processed.'),
+            );
     }
 
     public function download(

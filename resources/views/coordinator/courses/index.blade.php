@@ -4,6 +4,9 @@
 
     <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <a href="{{ route('coordinator.courses.examiners.edit') }}" class="qs-btn-secondary inline-flex min-h-[44px] items-center justify-center px-4 text-sm font-semibold">
+                {{ __('Assign examiners') }}
+            </a>
             <a href="{{ route('coordinator.courses.assign.edit') }}" class="qs-btn-secondary inline-flex min-h-[44px] items-center justify-center px-4 text-sm font-semibold">
                 {{ __('Assign to classes') }}
             </a>

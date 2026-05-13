@@ -3,12 +3,17 @@
     <x-slot name="subtitle">{{ $course->code }} — {{ $course->title }}</x-slot>
 
     <div class="space-y-8">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <a href="{{ route('examiner.courses.show', $course) }}" class="text-sm font-medium text-sky-700 underline-offset-2 hover:underline">← {{ __('Back to course') }}</a>
+            <a href="{{ route('examiner.courses.outline', $course) }}" class="text-sm font-semibold text-sky-700 underline-offset-2 hover:underline">{{ __('Course outline upload') }} →</a>
+        </div>
+
         @if (session('status'))
             <div class="rounded-xl border border-qs-soft bg-qs-card px-4 py-3 text-sm text-qs-text">{{ session('status') }}</div>
         @endif
 
         <section class="rounded-xl border border-qs-soft bg-qs-bg p-6">
-            <h3 class="text-sm font-semibold text-qs-text">{{ __('Upload material') }}</h3>
+            <h3 class="text-sm font-semibold text-qs-text">{{ __('Upload supplementary material') }}</h3>
             @if ($errors->any())
                 <ul class="mt-2 list-disc ps-5 text-sm text-qs-danger">
                     @foreach ($errors->all() as $e)
@@ -18,6 +23,7 @@
             @endif
             <form method="POST" action="{{ route('examiner.courses.materials.store', $course) }}" enctype="multipart/form-data" class="mt-4 space-y-4">
                 @csrf
+                <input type="hidden" name="material_kind" value="{{ \App\Models\CourseMaterial::KIND_SUPPLEMENTARY }}" />
                 <div>
                     <label class="block text-xs font-medium text-qs-muted">{{ __('Title') }}</label>
                     <input type="text" name="title" value="{{ old('title') }}" required class="qs-input mt-2 w-full py-2.5" />
@@ -44,6 +50,7 @@
                 <thead>
                     <tr>
                         <th class="text-left">{{ __('Title') }}</th>
+                        <th class="text-left">{{ __('Kind') }}</th>
                         <th class="text-left">{{ __('Type') }}</th>
                         <th class="text-left">{{ __('Status') }}</th>
                         <th class="text-right">{{ __('Actions') }}</th>
@@ -53,6 +60,9 @@
                     @forelse ($materials as $m)
                         <tr>
                             <td class="text-sm text-qs-text">{{ $m->title }}</td>
+                            <td class="text-sm text-qs-muted">
+                                {{ $m->material_kind === \App\Models\CourseMaterial::KIND_COURSE_OUTLINE ? __('Outline') : __('Supplementary') }}
+                            </td>
                             <td class="text-sm text-qs-muted">{{ strtoupper($m->file_type) }}</td>
                             <td class="text-sm text-qs-muted">{{ $m->status }}</td>
                             <td class="text-right space-x-3">
@@ -66,7 +76,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="px-4 py-8 text-center text-sm text-qs-muted">{{ __('No materials yet.') }}</td>
+                            <td colspan="5" class="px-4 py-8 text-center text-sm text-qs-muted">{{ __('No materials yet.') }}</td>
                         </tr>
                     @endforelse
                 </tbody>

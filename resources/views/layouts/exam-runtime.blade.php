@@ -5,6 +5,8 @@
         $enableLiveSockets = $enableLiveSockets ?? true;
         $allowPollingFallback = $allowPollingFallback ?? true;
         $requireCameraMonitoring = $requireCameraMonitoring ?? true;
+        $isAssignmentMode = $isAssignmentMode ?? false;
+        $assignmentClipboardBlock = $assignmentClipboardBlock ?? false;
     @endphp
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -15,6 +17,8 @@
     <meta name="qs-enable-live-sockets" content="{{ ! empty($enableLiveSockets) ? '1' : '0' }}">
     <meta name="qs-allow-polling-fallback" content="{{ ! empty($allowPollingFallback) ? '1' : '0' }}">
     <meta name="qs-require-camera-monitoring" content="{{ ! empty($requireCameraMonitoring) ? '1' : '0' }}">
+    <meta name="qs-assignment-mode" content="{{ ! empty($isAssignmentMode) ? '1' : '0' }}">
+    <meta name="qs-assignment-clipboard-block" content="{{ ! empty($assignmentClipboardBlock) ? '1' : '0' }}">
 
     <title>{{ __('Exam') }} — {{ config('app.name') }}</title>
 

@@ -72,6 +72,19 @@ class PracticeModuleSettings
         abort_unless($this->studentPracticeEnabled(), 403, __('Practice features are disabled.'));
     }
 
+    /**
+     * Students may browse uploaded course files when practice hub is on, or when material uploads are enabled alone.
+     */
+    public function studentCourseMaterialsBrowseEnabled(): bool
+    {
+        return $this->studentPracticeEnabled() || $this->courseMaterialUploadsEnabled();
+    }
+
+    public function assertStudentCourseMaterialsBrowseOrAbort(): void
+    {
+        abort_unless($this->studentCourseMaterialsBrowseEnabled(), 403, __('Course materials are not available.'));
+    }
+
     public function assertMaterialUploadsOrAbort(): void
     {
         abort_unless($this->courseMaterialUploadsEnabled(), 403, __('Course material uploads are disabled.'));

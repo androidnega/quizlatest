@@ -16,10 +16,8 @@ class OnlineQuizHeroTest extends TestCase
         $this->assertStringNotContainsString((string) __('Student Taking an Online Quiz'), $html);
     }
 
-    public function test_quiz_hero_demo_route_renders_component(): void
+    public function test_quiz_hero_demo_route_is_removed(): void
     {
-        $html = $this->get('/quiz-hero-demo')->assertOk()->getContent();
-
-        $this->assertStringContainsString('data-online-quiz-hero', $html);
+        $this->get('/quiz-hero-demo')->assertNotFound();
     }
 }

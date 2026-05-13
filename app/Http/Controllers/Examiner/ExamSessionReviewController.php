@@ -3,18 +3,27 @@
 namespace App\Http\Controllers\Examiner;
 
 use App\Http\Controllers\Controller;
+use App\Models\Classroom;
+use App\Models\Course;
+use App\Models\ExaminerCourseAssignment;
 use App\Models\ExamSession;
 use App\Models\ProctoringEvent;
 use App\Models\Quiz;
 use App\Models\Result;
+use App\Models\User;
+use App\Services\ExamSessionInvalidateForRetakeService;
 use App\Services\ResultFinalizationService;
 use App\Services\SensitiveStorageService;
+use Carbon\Carbon;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class ExamSessionReviewController extends Controller
 {
@@ -23,7 +32,12 @@ class ExamSessionReviewController extends Controller
     /** @var list<string> */
     private const VIOLATION_EVENT_TYPES = ['tab_switch', 'phone_detected', 'face_missing', 'fullscreen_exit', 'essay_clipboard_attempt'];
 
-    public function index(Request $request, Quiz $exam): View
+    /**
+     * Data for the Sessions tab inside the quiz workspace (no full-page navigation).
+     *
+     * @return array<string, mixed>
+     */
+    public function buildSessionsWorkspacePayload(Request $request, Quiz $exam): array
     {
         $this->authorize('manageResults', $exam);
 
@@ -54,6 +68,15 @@ class ExamSessionReviewController extends Controller
             $query->where('risk_state', $riskFilter);
         }
 
+        $search = $request->query('q');
+        if (is_string($search) && trim($search) !== '') {
+            $term = '%'.trim($search).'%';
+            $query->whereHas('student', function ($q) use ($term): void {
+                $q->where('index_number', 'like', $term)
+                    ->orWhere('name', 'like', $term);
+            });
+        }
+
         $sessions = $query->paginate(25)->withQueryString();
 
         $studentIds = $sessions->getCollection()->pluck('student_id')->unique()->values();
@@ -68,11 +91,283 @@ class ExamSessionReviewController extends Controller
             $session->setAttribute('workflow_display_status', $this->workflowDisplayStatus($session));
         });
 
-        return view('examiner.exam_sessions.index', [
-            'exam' => $exam,
+        $resultsByClassCount = Classroom::query()
+            ->whereHas('courses', fn ($q) => $q->whereKey($exam->course_id))
+            ->count();
+        $overviewAttemptsCount = ExamSession::query()
+            ->where('exam_id', $exam->id)
+            ->count();
+        $flaggedStudentsCount = $analytics['flagged_sessions']->count();
+
+        $scoreBounds = Result::query()
+            ->where('quiz_id', $exam->id)
+            ->selectRaw('MIN(score) as lo, MAX(score) as hi')
+            ->first();
+
+        $violationEventTotal = array_sum($analytics['violation_totals']);
+        $studentsWithViolations = ExamSession::query()
+            ->where('exam_id', $exam->id)
+            ->where('violation_count', '>', 0)
+            ->distinct()
+            ->count('student_id');
+
+        return [
+            'exam' => $exam->loadMissing('course:id,code,title'),
             'sessions' => $sessions,
             'riskStates' => self::RISK_STATES,
             'analytics' => $analytics,
+            'resultsByClassCount' => $resultsByClassCount,
+            'overviewAttemptsCount' => $overviewAttemptsCount,
+            'flaggedStudentsCount' => $flaggedStudentsCount,
+            'scoreLow' => $scoreBounds->lo ?? null,
+            'scoreHigh' => $scoreBounds->hi ?? null,
+            'violationEventTotal' => $violationEventTotal,
+            'studentsWithViolations' => $studentsWithViolations,
+        ];
+    }
+
+    /**
+     * Legacy URL: sessions list now lives in the quiz workspace tab (client-side switch).
+     */
+    public function index(Request $request, Quiz $exam): RedirectResponse
+    {
+        $this->authorize('manageResults', $exam);
+
+        $params = ['exam' => $exam, 'tab' => 'sessions'];
+        foreach (['status', 'risk_state', 'q', 'page'] as $key) {
+            $v = $request->query($key);
+            if ($v !== null && $v !== '') {
+                $params[$key] = $v;
+            }
+        }
+
+        return redirect()->route('examiner.quizzes.workspace', $params);
+    }
+
+    public function invalidateSessionsInRange(
+        Request $request,
+        Quiz $exam,
+        ExamSessionInvalidateForRetakeService $invalidator,
+    ): RedirectResponse {
+        $this->authorize('manageResults', $exam);
+
+        $validated = $request->validate([
+            'from' => ['required', 'date'],
+            'to' => ['required', 'date', 'after_or_equal:from'],
+        ]);
+
+        $from = Carbon::parse($validated['from']);
+        $to = Carbon::parse($validated['to']);
+
+        $studentIds = ExamSession::query()
+            ->where('exam_id', $exam->id)
+            ->where('status', 'submitted')
+            ->whereNotNull('end_time')
+            ->whereBetween('end_time', [$from, $to])
+            ->distinct()
+            ->pluck('student_id')
+            ->unique()
+            ->values();
+
+        $cleared = 0;
+        foreach ($studentIds as $studentId) {
+            $invalidator->invalidate((int) $studentId, (int) $exam->id);
+            $cleared++;
+        }
+
+        return back()->with(
+            'status',
+            __('Cleared :n student record(s) for this quiz who completed within the selected window. Each student can start again.', ['n' => $cleared]),
+        );
+    }
+
+    public function exportCsv(Request $request, Quiz $exam): StreamedResponse
+    {
+        $this->authorize('manageResults', $exam);
+
+        $query = ExamSession::query()
+            ->where('exam_id', $exam->id)
+            ->with(['student'])
+            ->orderByDesc('end_time')
+            ->orderByDesc('id');
+
+        $statusFilter = $request->query('status');
+        if (is_string($statusFilter) && $statusFilter !== '') {
+            match ($statusFilter) {
+                'in_progress' => $query->where('status', '!=', 'submitted'),
+                'submitted' => $query->where('status', 'submitted')->whereNotExists(
+                    fn (Builder $sub) => $this->scopedResultSubquery($sub, $exam->id),
+                ),
+                'held', 'pending_manual', 'graded' => $query->where('status', 'submitted')->whereExists(
+                    fn (Builder $sub) => $this->scopedResultSubquery($sub, $exam->id, $statusFilter),
+                ),
+                default => null,
+            };
+        }
+
+        $riskFilter = $request->query('risk_state');
+        if (is_string($riskFilter) && in_array($riskFilter, self::RISK_STATES, true)) {
+            $query->where('risk_state', $riskFilter);
+        }
+
+        $search = $request->query('q');
+        if (is_string($search) && trim($search) !== '') {
+            $term = '%'.trim($search).'%';
+            $query->whereHas('student', function ($q) use ($term): void {
+                $q->where('index_number', 'like', $term)
+                    ->orWhere('name', 'like', $term);
+            });
+        }
+
+        $rows = $query->get();
+        $studentIds = $rows->pluck('student_id')->unique()->values();
+        $resultsByStudentId = Result::query()
+            ->where('quiz_id', $exam->id)
+            ->whereIn('user_id', $studentIds)
+            ->get()
+            ->keyBy('user_id');
+
+        $filename = 'sessions-'.$exam->id.'-'.now()->format('Y-m-d-His').'.csv';
+
+        return response()->streamDownload(function () use ($rows, $resultsByStudentId): void {
+            $handle = fopen('php://output', 'wb');
+            fputcsv($handle, ['index_number', 'name', 'status', 'risk_state', 'violations', 'score', 'end_time']);
+            foreach ($rows as $session) {
+                $session->setRelation('result', $resultsByStudentId->get($session->student_id));
+                $session->setAttribute('workflow_display_status', $this->workflowDisplayStatus($session));
+                $result = $session->result;
+                fputcsv($handle, [
+                    $session->student?->index_number ?? '',
+                    $session->student?->name ?? '',
+                    str_replace('_', ' ', (string) $session->workflow_display_status),
+                    $session->risk_state,
+                    (string) $session->violation_count,
+                    $result !== null ? (string) $result->score : '',
+                    $session->end_time?->timezone(config('app.timezone'))->format('Y-m-d H:i:s') ?? '',
+                ]);
+            }
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    public function classSummary(Request $request, Quiz $exam): View
+    {
+        $this->authorize('manageResults', $exam);
+
+        $classrooms = Classroom::query()
+            ->whereHas('courses', fn ($q) => $q->whereKey($exam->course_id))
+            ->withCount('students')
+            ->orderBy('name')
+            ->get(['id', 'name', 'section']);
+
+        $statsRows = Result::query()
+            ->selectRaw('users.class_id as class_id')
+            ->selectRaw('COUNT(results.id) as submitted_count')
+            ->selectRaw('AVG(results.score) as average_score')
+            ->selectRaw("SUM(CASE WHEN results.status = 'pending_manual' THEN 1 ELSE 0 END) as pending_manual_count")
+            ->selectRaw("SUM(CASE WHEN results.status = 'held' THEN 1 ELSE 0 END) as held_count")
+            ->join('users', 'users.id', '=', 'results.user_id')
+            ->where('users.role', 'student')
+            ->where('results.quiz_id', $exam->id)
+            ->whereIn('users.class_id', $classrooms->pluck('id'))
+            ->groupBy('users.class_id')
+            ->get()
+            ->keyBy('class_id');
+
+        return view('examiner.exam_sessions.class-summary', [
+            'exam' => $exam->loadMissing('course'),
+            'classrooms' => $classrooms,
+            'statsRows' => $statsRows,
+        ]);
+    }
+
+    public function classResults(Request $request, Quiz $exam, Classroom $classroom): View
+    {
+        $this->authorize('manageResults', $exam);
+        $this->assertClassLinkedToExamCourse($classroom, (int) $exam->course_id);
+
+        $students = User::query()
+            ->where('role', 'student')
+            ->where('class_id', $classroom->id)
+            ->orderBy('name')
+            ->paginate(50)
+            ->withQueryString();
+
+        $studentIds = $students->getCollection()->pluck('id')->all();
+
+        $sessions = ExamSession::query()
+            ->where('exam_id', $exam->id)
+            ->whereIn('student_id', $studentIds)
+            ->orderByDesc('id')
+            ->get(['id', 'session_id', 'student_id', 'status', 'risk_state', 'violation_count', 'start_time', 'end_time']);
+
+        $latestSessionByStudentId = $sessions
+            ->groupBy('student_id')
+            ->map(fn (Collection $group): ?ExamSession => $group->first());
+
+        $resultsByStudentId = Result::query()
+            ->where('quiz_id', $exam->id)
+            ->whereIn('user_id', $studentIds)
+            ->get()
+            ->keyBy('user_id');
+
+        return view('examiner.exam_sessions.class-results', [
+            'exam' => $exam->loadMissing('course'),
+            'classroom' => $classroom,
+            'students' => $students,
+            'latestSessionByStudentId' => $latestSessionByStudentId,
+            'resultsByStudentId' => $resultsByStudentId,
+        ]);
+    }
+
+    public function courseOverview(Request $request, Course $course): View
+    {
+        $user = $request->user();
+        if ($user->role !== 'admin') {
+            abort_unless($user->role === 'examiner', 403);
+            abort_unless($this->isAssignedExaminerForCourse((int) $user->id, (int) $course->id), 403);
+        }
+
+        return view('examiner.courses.show', [
+            'course' => $course->loadMissing('department'),
+        ]);
+    }
+
+    public function courseClassOverview(Request $request, Course $course, Classroom $classroom): View
+    {
+        $user = $request->user();
+        if ($user->role !== 'admin') {
+            abort_unless($user->role === 'examiner', 403);
+            abort_unless($this->isAssignedExaminerForCourse((int) $user->id, (int) $course->id), 403);
+        }
+
+        $this->assertClassLinkedToExamCourse($classroom, (int) $course->id);
+
+        $myExams = Quiz::query()
+            ->where('course_id', $course->id)
+            ->where('created_by', $user->id)
+            ->orderByDesc('updated_at')
+            ->get(['id', 'title', 'status', 'assessment_type', 'total_marks', 'created_at']);
+
+        $examRows = Result::query()
+            ->selectRaw('results.quiz_id as quiz_id')
+            ->selectRaw('COUNT(results.id) as submitted_count')
+            ->selectRaw('AVG(results.score) as average_score')
+            ->selectRaw("SUM(CASE WHEN results.status = 'pending_manual' THEN 1 ELSE 0 END) as pending_manual_count")
+            ->selectRaw("SUM(CASE WHEN results.status = 'held' THEN 1 ELSE 0 END) as held_count")
+            ->join('users', 'users.id', '=', 'results.user_id')
+            ->where('users.role', 'student')
+            ->where('users.class_id', $classroom->id)
+            ->whereIn('results.quiz_id', $myExams->pluck('id'))
+            ->groupBy('results.quiz_id')
+            ->get()
+            ->keyBy('quiz_id');
+
+        return view('examiner.courses.class-overview', [
+            'course' => $course,
+            'classroom' => $classroom->loadMissing('level:id,name,code'),
+            'myExams' => $myExams,
+            'examRows' => $examRows,
         ]);
     }
 
@@ -225,6 +520,14 @@ class ExamSessionReviewController extends Controller
             $verificationEvidenceUrl = route('examiner.exam-sessions.evidence.verification', $examSession);
         }
 
+        $classResultsUrl = null;
+        if ($exam !== null && $examSession->class_id) {
+            $cr = Classroom::query()->find((int) $examSession->class_id);
+            if ($cr !== null && $cr->courses()->whereKey((int) $exam->course_id)->exists()) {
+                $classResultsUrl = route('examiner.exams.classes.results', [$exam, $cr]);
+            }
+        }
+
         return view('examiner.exam_sessions.show', [
             'session' => $examSession,
             'workflowStatus' => $workflowStatus,
@@ -236,6 +539,10 @@ class ExamSessionReviewController extends Controller
             'releaseUrl' => route('exam-sessions.review.release', $examSession),
             'confirmFailUrl' => route('exam-sessions.review.confirm-fail', $examSession),
             'overrideUrl' => route('exam-sessions.review.override', $examSession),
+            'invalidateForRetakeUrl' => $canManageResults
+                ? route('examiner.exam-sessions.invalidate-for-retake', $examSession)
+                : null,
+            'classResultsUrl' => $classResultsUrl,
         ]);
     }
 
@@ -263,5 +570,22 @@ class ExamSessionReviewController extends Controller
         }
 
         return $rowResult->status;
+    }
+
+    private function assertClassLinkedToExamCourse(Classroom $classroom, int $courseId): void
+    {
+        $linked = $classroom->courses()->whereKey($courseId)->exists();
+        if (! $linked) {
+            throw new HttpException(403, 'Class is not linked to this exam course.');
+        }
+    }
+
+    private function isAssignedExaminerForCourse(int $examinerId, int $courseId): bool
+    {
+        return ExaminerCourseAssignment::query()
+            ->where('examiner_user_id', $examinerId)
+            ->where('course_id', $courseId)
+            ->where('is_active', true)
+            ->exists();
     }
 }

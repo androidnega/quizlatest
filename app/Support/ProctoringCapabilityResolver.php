@@ -31,21 +31,21 @@ final class ProctoringCapabilityResolver
         return match ($level) {
             1 => [
                 'level' => 1,
-                'face_interval_ms' => 12000,
-                'phone_interval_ms' => 20000,
+                'face_interval_ms' => 32000,
+                'phone_interval_ms' => 45000,
                 'enable_pose_landmarker' => true,
                 'enable_coco_ssd' => true,
             ],
             2 => [
                 'level' => 2,
-                'face_interval_ms' => 18000,
-                'phone_interval_ms' => 35000,
+                'face_interval_ms' => 42000,
+                'phone_interval_ms' => 60000,
                 'enable_pose_landmarker' => true,
                 'enable_coco_ssd' => true,
             ],
             default => [
                 'level' => 3,
-                'face_interval_ms' => 28000,
+                'face_interval_ms' => 60000,
                 'phone_interval_ms' => null,
                 'enable_pose_landmarker' => false,
                 'enable_coco_ssd' => false,

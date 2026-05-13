@@ -121,6 +121,8 @@ async function main() {
     const enableLiveSockets = meta('qs-enable-live-sockets') === '1';
     const allowPollingFallback = meta('qs-allow-polling-fallback') === '1';
     const requireCameraMonitoring = meta('qs-require-camera-monitoring') === '1';
+    const assignmentMode = meta('qs-assignment-mode') === '1';
+    const assignmentClipboardBlock = meta('qs-assignment-clipboard-block') === '1';
     if (!sessionId || !examId) {
         return;
     }
@@ -132,6 +134,11 @@ async function main() {
         subtitle: document.getElementById('exam-subtitle'),
         timer: document.getElementById('exam-timer'),
         nav: document.getElementById('question-nav'),
+        answerSummary: document.getElementById('exam-answer-summary'),
+        navActions: document.getElementById('exam-nav-actions'),
+        btnQBack: document.getElementById('btn-q-back'),
+        btnQNext: document.getElementById('btn-q-next'),
+        questionProgress: document.getElementById('question-progress-label'),
         main: document.getElementById('question-container'),
         loading: document.getElementById('exam-loading'),
         banner: document.getElementById('exam-banner'),
@@ -139,7 +146,12 @@ async function main() {
         btnSubmit: document.getElementById('btn-submit'),
         btnFullscreen: document.getElementById('btn-fullscreen'),
         fullscreenExitNotice: document.getElementById('fullscreen-exit-notice'),
+        pauseOverlay: document.getElementById('exam-timer-pause-overlay'),
+        btnResume: document.getElementById('btn-exam-resume'),
         video: document.getElementById('proctoring-video'),
+        faceCanvas: document.getElementById('proctoring-face-canvas'),
+        localProctorHint: document.getElementById('proctoring-local-hint'),
+        videoStatus: document.getElementById('video-status'),
         essayClipboardToast: document.getElementById('essay-clipboard-toast'),
     };
 
@@ -147,6 +159,8 @@ async function main() {
     const proctoringBatcher = new ProctoringEventBatcher({
         examSessionKey: sessionId,
         apiClient: axios,
+        flushIntervalMs: 4500,
+        maxBatch: 14,
     });
 
     let essayClipboardToastTimer = null;
@@ -188,6 +202,8 @@ async function main() {
 
     let flatQuestions = [];
     let currentIdx = 0;
+    /** Furthest question index the student has reached (unlocks forward progress). */
+    let furthestIdx = 0;
     let latestPayload = null;
     let timerHandle = null;
     /** Server has accepted submission (terminal for answers). */
@@ -198,6 +214,9 @@ async function main() {
     let submitInputLock = false;
     let autoSubmitTriggered = false;
     const debouncers = new Map();
+    const pendingSaveBuilders = new Map();
+    /** Client-side payloads not yet confirmed on server (for UI + frontier checks). */
+    const lastLocalPayload = new Map();
     const questionRevision = new Map();
     let serverSkewMs = 0;
     let examEndAtMs = null;
@@ -207,6 +226,182 @@ async function main() {
     let submitUiDefaultText = els.btnSubmit?.textContent ?? 'Submit';
     let fullscreenExitNoticeTimer = null;
     let examDocumentWasFullscreen = false;
+    let timerPaused = false;
+    let heartbeatHandle = null;
+
+    function stopHeartbeat() {
+        if (heartbeatHandle) {
+            clearInterval(heartbeatHandle);
+            heartbeatHandle = null;
+        }
+    }
+
+    function startHeartbeat() {
+        stopHeartbeat();
+        heartbeatHandle = window.setInterval(() => {
+            if (serverDone || timerPaused) {
+                return;
+            }
+            void axios.post(`/exam-sessions/${encodeURIComponent(sessionId)}/heartbeat`).catch(() => {});
+        }, 25000);
+    }
+
+    function syncPauseOverlay(show) {
+        if (!els.pauseOverlay) {
+            return;
+        }
+        els.pauseOverlay.classList.toggle('hidden', !show);
+    }
+
+    function applyTimerPausedFromState(data) {
+        if (data.session_status === 'submitted') {
+            syncPauseOverlay(false);
+            stopHeartbeat();
+
+            return;
+        }
+        const next = data.timer_paused === true || data.session_status === 'paused';
+        if (next !== timerPaused) {
+            timerPaused = next;
+            if (timerPaused) {
+                stopTimer();
+                stopHeartbeat();
+                updateBanner(
+                    'Exam paused — your timer is frozen. Press Resume when you are ready.',
+                    true,
+                );
+            } else {
+                updateBanner('', false);
+                startHeartbeat();
+            }
+        }
+        syncPauseOverlay(timerPaused);
+        const remLive = computeRemainingSeconds();
+        if (timerPaused) {
+            const fixed = Number(data.time_remaining_seconds ?? NaN);
+            renderTimerDisplay(Number.isFinite(fixed) ? fixed : remLive);
+        } else {
+            renderTimerDisplay(remLive === null ? null : remLive);
+        }
+        syncControlDisabled();
+    }
+
+    function ensureTimerClockRunning() {
+        if (serverDone || timerPaused || timerHandle) {
+            return;
+        }
+        startTimerClock();
+    }
+
+    function isAnswerPayloadComplete(q, payload) {
+        if (!payload || typeof payload !== 'object') {
+            return false;
+        }
+        if (q.type === 'mcq') {
+            const sel = Array.isArray(payload.selected)
+                ? payload.selected
+                : payload.selected != null
+                  ? [payload.selected]
+                  : [];
+            return sel.length > 0;
+        }
+        if (q.type === 'true_false') {
+            return payload.value === true || payload.value === false;
+        }
+        if (q.type === 'fill_blank') {
+            const n = fillBlankCount(q);
+            const blanks = Array.isArray(payload.blanks) ? payload.blanks : [];
+            if (blanks.length < n) {
+                return false;
+            }
+            for (let i = 0; i < n; i += 1) {
+                if (!String(blanks[i] ?? '').trim()) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if (q.type === 'essay') {
+            return String(payload.text ?? '').trim().length > 0;
+        }
+        return false;
+    }
+
+    function getEffectivePayload(q) {
+        if (lastLocalPayload.has(q.id)) {
+            return lastLocalPayload.get(q.id);
+        }
+        return latestPayload?.saved_answers?.[String(q.id)]?.answer_payload ?? null;
+    }
+
+    function isQuestionFullyAnswered(q) {
+        return isAnswerPayloadComplete(q, getEffectivePayload(q));
+    }
+
+    function firstIncompleteIndex() {
+        for (let i = 0; i < flatQuestions.length; i += 1) {
+            if (!isQuestionFullyAnswered(flatQuestions[i])) {
+                return i;
+            }
+        }
+        return flatQuestions.length;
+    }
+
+    function refreshFrontierFromAnswers() {
+        if (!flatQuestions.length) {
+            furthestIdx = 0;
+            return;
+        }
+        const fi = firstIncompleteIndex();
+        furthestIdx = fi >= flatQuestions.length ? flatQuestions.length - 1 : fi;
+    }
+
+    function pruneLocalPayloadFromServer() {
+        const sa = latestPayload?.saved_answers;
+        if (!sa || typeof sa !== 'object') {
+            return;
+        }
+        for (const q of flatQuestions) {
+            const server = sa[String(q.id)]?.answer_payload;
+            if (!isAnswerPayloadComplete(q, server)) {
+                continue;
+            }
+            const loc = lastLocalPayload.get(q.id);
+            if (loc === undefined) {
+                continue;
+            }
+            if (isAnswerPayloadComplete(q, loc)) {
+                lastLocalPayload.delete(q.id);
+            }
+        }
+    }
+
+    function countAnsweredQuestions() {
+        let c = 0;
+        for (const q of flatQuestions) {
+            if (isQuestionFullyAnswered(q)) {
+                c += 1;
+            }
+        }
+        return c;
+    }
+
+    function updateAnswerSummary() {
+        const el = els.answerSummary;
+        if (!el || !flatQuestions.length) {
+            return;
+        }
+        const n = flatQuestions.length;
+        const done = countAnsweredQuestions();
+        el.innerHTML = '';
+        const p1 = document.createElement('p');
+        p1.innerHTML = `<span class="font-semibold text-emerald-700">Answered</span>: ${done} · <span class="font-semibold text-amber-800">Not answered</span>: ${n - done}`;
+        const p2 = document.createElement('p');
+        p2.className = 'text-[11px] text-qs-muted';
+        p2.textContent = 'Numbers: green ring = answered, amber = not yet. You cannot skip ahead of the first unanswered question.';
+        el.appendChild(p1);
+        el.appendChild(p2);
+    }
 
     function setSaveIndicator(text, ok = true) {
         if (!els.saveIndicator) {
@@ -245,6 +440,12 @@ async function main() {
     }
 
     function syncTimerAnchors(payload) {
+        if (assignmentMode) {
+            examEndAtMs = null;
+            timedExam = false;
+
+            return;
+        }
         const st = payload?.server_time;
         if (st) {
             const serverMs = Date.parse(st);
@@ -297,8 +498,9 @@ async function main() {
     function startTimerClock() {
         stopTimer();
         timerHandle = window.setInterval(() => {
-            if (serverDone) {
+            if (serverDone || timerPaused) {
                 stopTimer();
+
                 return;
             }
             const sec = computeRemainingSeconds();
@@ -315,7 +517,7 @@ async function main() {
     }
 
     function effectiveInputsLocked() {
-        return serverDone || riskInputsDisabled || submitInputLock;
+        return serverDone || riskInputsDisabled || submitInputLock || timerPaused;
     }
 
     function applyRiskInputsDisabled(disabled) {
@@ -326,7 +528,7 @@ async function main() {
     function syncControlDisabled() {
         const locked = effectiveInputsLocked();
         const controls = document.querySelectorAll(
-            '#question-container input, #question-container textarea, #question-container button[data-q-action]',
+            '#question-container input, #question-container textarea, #question-container button[data-q-action], #exam-nav-actions button[data-q-action]',
         );
         controls.forEach((el) => {
             el.disabled = locked;
@@ -484,6 +686,74 @@ async function main() {
         return false;
     }
 
+    function canNavigateTo(i) {
+        if (!Number.isFinite(i) || i < 0 || i >= flatQuestions.length) {
+            return false;
+        }
+        /** First incomplete question index is the frontier; nothing beyond it is reachable. */
+        return i <= furthestIdx;
+    }
+
+    function goToQuestionIndex(i) {
+        if (!canNavigateTo(i)) {
+            return;
+        }
+        currentIdx = i;
+        renderQuestion();
+        renderNav();
+        syncQuestionNavButtons();
+    }
+
+    async function advanceQuestionNext() {
+        if (currentIdx >= flatQuestions.length - 1) {
+            return;
+        }
+        if (currentIdx === furthestIdx) {
+            const q = flatQuestions[currentIdx];
+            if (!isQuestionFullyAnswered(q)) {
+                return;
+            }
+            await flushDebouncerForQuestion(q.id);
+        }
+        currentIdx += 1;
+        pruneLocalPayloadFromServer();
+        refreshFrontierFromAnswers();
+        renderQuestion();
+        renderNav();
+        updateAnswerSummary();
+        syncQuestionNavButtons();
+    }
+
+    function retreatQuestionBack() {
+        if (currentIdx <= 0) {
+            return;
+        }
+        currentIdx -= 1;
+        renderQuestion();
+        renderNav();
+        syncQuestionNavButtons();
+    }
+
+    function syncQuestionNavButtons() {
+        if (els.navActions) {
+            els.navActions.classList.remove('hidden');
+        }
+        const n = flatQuestions.length;
+        const q = flatQuestions[currentIdx];
+        const atFrontier = currentIdx === furthestIdx;
+        const frontierComplete = q ? isQuestionFullyAnswered(q) : true;
+        if (els.btnQBack) {
+            els.btnQBack.disabled = currentIdx <= 0;
+        }
+        if (els.btnQNext) {
+            els.btnQNext.disabled =
+                currentIdx >= n - 1 || (atFrontier && !frontierComplete);
+        }
+        if (els.questionProgress) {
+            els.questionProgress.textContent = `Question ${currentIdx + 1} of ${n} — complete each question in order; answered items in the list show a green ring.`;
+        }
+    }
+
     function renderNav() {
         if (!els.nav) {
             return;
@@ -492,20 +762,68 @@ async function main() {
         flatQuestions.forEach((q, i) => {
             const btn = document.createElement('button');
             btn.type = 'button';
+            const allowed = canNavigateTo(i);
+            const isCurrent = i === currentIdx;
+            const answered = isQuestionFullyAnswered(q);
+            const ring = answered ? 'ring-2 ring-emerald-600/70' : 'ring-2 ring-amber-600/60';
             btn.className =
-                'text-left text-sm px-2 py-1 rounded border border-qs-soft hover:bg-qs-card w-full md:w-auto ' +
-                (i === currentIdx ? 'bg-qs-accent/25 border-qs-accent' : '');
+                'text-left text-sm px-2 py-1 rounded border w-full md:w-auto ' +
+                (isCurrent
+                    ? `bg-qs-accent/25 border-qs-accent font-semibold ${ring}`
+                    : allowed
+                      ? `border-qs-soft hover:bg-qs-card text-qs-text ${ring}`
+                      : 'border-qs-soft/60 text-qs-muted/50 cursor-not-allowed opacity-50');
+            btn.disabled = !allowed;
             btn.textContent = `${i + 1}`;
+            btn.title = !allowed
+                ? 'Answer earlier questions first — you cannot skip ahead of the first unanswered question.'
+                : answered
+                  ? 'Answered'
+                  : 'Not answered yet';
             btn.addEventListener('click', () => {
-                currentIdx = i;
-                renderQuestion();
-                renderNav();
+                if (!allowed) {
+                    return;
+                }
+                goToQuestionIndex(i);
             });
             els.nav.appendChild(btn);
         });
     }
 
+    async function flushDebouncerForQuestion(questionId) {
+        const prev = debouncers.get(questionId);
+        if (prev) {
+            clearTimeout(prev);
+            debouncers.delete(questionId);
+        }
+        const build = pendingSaveBuilders.get(questionId);
+        if (!build) {
+            return;
+        }
+        pendingSaveBuilders.delete(questionId);
+        const payload = build();
+        if (!payload) {
+            return;
+        }
+        setSaveIndicator('Saving…', true);
+        const ok = await sendAnswerWithOfflineQueue(questionId, payload);
+        setSaveIndicator(ok ? 'Saved' : 'Offline or unsaved — will retry when online', ok);
+    }
+
+    function bumpLocalAnswerUi() {
+        pruneLocalPayloadFromServer();
+        refreshFrontierFromAnswers();
+        if (currentIdx > furthestIdx) {
+            currentIdx = furthestIdx;
+            renderQuestion();
+        }
+        renderNav();
+        updateAnswerSummary();
+        syncQuestionNavButtons();
+    }
+
     function scheduleSave(questionId, buildPayload) {
+        pendingSaveBuilders.set(questionId, buildPayload);
         const prev = debouncers.get(questionId);
         if (prev) {
             clearTimeout(prev);
@@ -514,6 +832,7 @@ async function main() {
         debouncers.set(
             questionId,
             setTimeout(async () => {
+                pendingSaveBuilders.delete(questionId);
                 const payload = buildPayload();
                 if (!payload) {
                     return;
@@ -548,7 +867,7 @@ async function main() {
         wrap.appendChild(title);
         wrap.appendChild(body);
 
-        const saved = latestPayload?.saved_answers?.[String(q.id)]?.answer_payload;
+        const saved = getEffectivePayload(q);
 
         if (q.type === 'mcq') {
             const optsRoot = document.createElement('div');
@@ -575,7 +894,15 @@ async function main() {
                             sel.push(j);
                         }
                     });
+                    lastLocalPayload.set(q.id, { type: 'mcq', selected: sel });
+                    bumpLocalAnswerUi();
                     if (sel.length === 0) {
+                        const prev = debouncers.get(q.id);
+                        if (prev) {
+                            clearTimeout(prev);
+                            debouncers.delete(q.id);
+                        }
+                        pendingSaveBuilders.delete(q.id);
                         return;
                     }
                     scheduleSave(q.id, () => ({ type: 'mcq', selected: sel }));
@@ -598,6 +925,8 @@ async function main() {
                 rb.name = `tf-${q.id}`;
                 rb.checked = saved?.value === val;
                 rb.addEventListener('change', () => {
+                    lastLocalPayload.set(q.id, { type: 'true_false', value: val });
+                    bumpLocalAnswerUi();
                     scheduleSave(q.id, () => ({ type: 'true_false', value: val }));
                 });
                 lab.appendChild(rb);
@@ -621,9 +950,17 @@ async function main() {
                 inp.addEventListener('input', () => {
                     const vals = [];
                     blanksRoot.querySelectorAll('input[data-blank]').forEach((node) => vals.push(node.value));
+                    lastLocalPayload.set(q.id, { type: 'fill_blank', blanks: vals });
+                    bumpLocalAnswerUi();
                     scheduleSave(q.id, () => ({ type: 'fill_blank', blanks: vals }));
                 });
                 inp.dataset.blank = String(i);
+                if (assignmentMode && assignmentClipboardBlock) {
+                    attachEssayAntiClipboard(inp, {
+                        showWarning: showEssayClipboardWarning,
+                        onBlocked: (actionType) => enqueueEssayClipboardAttempt(q.id, actionType),
+                    });
+                }
                 blanksRoot.appendChild(inp);
             }
             wrap.appendChild(blanksRoot);
@@ -634,17 +971,22 @@ async function main() {
                 'block w-full rounded border border-qs-soft bg-qs-bg px-3 py-2 font-sans text-qs-text shadow-sm focus:border-qs-accent focus:outline-none focus:ring-2 focus:ring-qs-accent/40';
             ta.value = saved?.text ?? '';
             ta.addEventListener('input', () => {
+                lastLocalPayload.set(q.id, { type: 'essay', text: ta.value });
+                bumpLocalAnswerUi();
                 scheduleSave(q.id, () => ({ type: 'essay', text: ta.value }));
             });
-            attachEssayAntiClipboard(ta, {
-                showWarning: showEssayClipboardWarning,
-                onBlocked: (actionType) => enqueueEssayClipboardAttempt(q.id, actionType),
-            });
+            if (!assignmentMode || assignmentClipboardBlock) {
+                attachEssayAntiClipboard(ta, {
+                    showWarning: showEssayClipboardWarning,
+                    onBlocked: (actionType) => enqueueEssayClipboardAttempt(q.id, actionType),
+                });
+            }
             wrap.appendChild(ta);
         }
 
         els.main.appendChild(wrap);
         syncControlDisabled();
+        syncQuestionNavButtons();
     }
 
     function applySubmittedFromState(data) {
@@ -653,6 +995,7 @@ async function main() {
             submitInputLock = false;
             stopSubmitPersistence();
             stopTimer();
+            stopHeartbeat();
             syncControlDisabled();
             updateBanner(
                 data.exam_ui_state === 'held' ? 'Under review — your result is held.' : 'Exam submitted.',
@@ -680,21 +1023,41 @@ async function main() {
             els.subtitle.classList.remove('hidden');
         }
 
-        if (Array.isArray(data.sections) && flatQuestions.length === 0) {
-            flatQuestions = flattenQuestions(data.sections);
-            renderNav();
-            if (els.loading) {
-                els.loading.classList.add('hidden');
+        if (Array.isArray(data.sections)) {
+            const isFirstHydrate = flatQuestions.length === 0;
+            if (isFirstHydrate) {
+                flatQuestions = flattenQuestions(data.sections);
             }
-            els.main?.classList.remove('hidden');
-            renderQuestion();
+            if (flatQuestions.length) {
+                pruneLocalPayloadFromServer();
+                refreshFrontierFromAnswers();
+                if (isFirstHydrate) {
+                    currentIdx = furthestIdx;
+                    if (els.loading) {
+                        els.loading.classList.add('hidden');
+                    }
+                    els.main?.classList.remove('hidden');
+                    renderQuestion();
+                } else if (currentIdx > furthestIdx) {
+                    currentIdx = furthestIdx;
+                    renderQuestion();
+                }
+                renderNav();
+                updateAnswerSummary();
+                syncQuestionNavButtons();
+            }
         }
 
         syncTimerAnchors(data);
-        const rem = computeRemainingSeconds();
-        renderTimerDisplay(rem === null ? null : rem);
 
         applySubmittedFromState(data);
+        applyTimerPausedFromState(data);
+
+        if (!serverDone && !timerPaused) {
+            startHeartbeat();
+        }
+
+        ensureTimerClockRunning();
 
         await flushOfflineAnswerQueue();
 
@@ -875,6 +1238,38 @@ async function main() {
         }
     });
 
+    function updateLocalProctoringHint(hint) {
+        const el = els.localProctorHint;
+        if (!el) {
+            return;
+        }
+        const map = {
+            ok: 'Face detected — stay centred in the frame.',
+            no_face: 'Warning: your face is not visible. Centre yourself in the camera.',
+            multiple: 'Warning: more than one face in view. Only you may be on camera.',
+            off_center: 'Adjust your position so your face fills the green outline.',
+        };
+        el.textContent = map[hint] || '';
+    }
+
+    els.btnQBack?.addEventListener('click', () => retreatQuestionBack());
+    els.btnQNext?.addEventListener('click', () => void advanceQuestionNext());
+
+    els.btnResume?.addEventListener('click', async () => {
+        if (serverDone) {
+            return;
+        }
+        try {
+            setSaveIndicator('Resuming…', true);
+            await axios.post(`/exam-sessions/${encodeURIComponent(sessionId)}/resume`);
+            await fetchState();
+            setSaveIndicator(latestPayload?.session_status === 'active' ? 'Ready' : 'Saved', true);
+        } catch {
+            setSaveIndicator('Could not resume — try refreshing', false);
+            updateBanner('Could not resume this session. Refresh the page or go back to your dashboard.', true);
+        }
+    });
+
     window.addEventListener('online', () => {
         if (sessionIsSubmittedForQueue()) {
             return;
@@ -891,10 +1286,6 @@ async function main() {
     } catch {
         updateBanner('Could not load exam state. Check your connection and refresh.', true);
         return;
-    }
-
-    if (!serverDone) {
-        startTimerClock();
     }
 
     window.setInterval(() => void fetchState().catch(() => {}), effectivePollMs);
@@ -916,36 +1307,43 @@ async function main() {
     }
 
     try {
-        const perf = await fetchProctoringCapability(axios);
-        const runtime = new ProctoringRuntimeEngine({
-            videoElement: els.video,
-            sessionId,
-            examId,
-            studentId,
-            apiClient: axios,
-            performanceProfile: perf,
-            eventBatcher: proctoringBatcher,
-        });
+        if (!assignmentMode) {
+            const perf = await fetchProctoringCapability(axios);
+            const runtime = new ProctoringRuntimeEngine({
+                videoElement: els.video,
+                sessionId,
+                examId,
+                studentId,
+                apiClient: axios,
+                performanceProfile: perf,
+                eventBatcher: proctoringBatcher,
+                previewCanvas: requireCameraMonitoring ? els.faceCanvas : null,
+                onFramingHint: requireCameraMonitoring ? updateLocalProctoringHint : null,
+            });
 
-        if (requireCameraMonitoring) {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-            if (els.video) {
-                els.video.srcObject = stream;
-                await els.video.play().catch(() => {});
+            if (requireCameraMonitoring) {
+                els.videoStatus?.classList.remove('hidden');
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                if (els.video) {
+                    els.video.srcObject = stream;
+                    await els.video.play().catch(() => {});
+                }
+                await runtime.init();
+                await postVerificationImageOnce(els.video, sessionId);
+            } else {
+                await runtime.init({ browserOnly: true });
             }
-            await runtime.init();
-            await postVerificationImageOnce(els.video, sessionId);
-        } else {
-            await runtime.init({ browserOnly: true });
-        }
 
-        runtime.start();
+            runtime.start();
+        }
     } catch (e) {
         console.error(e);
-        updateBanner(
-            'Camera or proctoring initialization failed. You may continue answering; contact support if issues persist.',
-            true,
-        );
+        if (!assignmentMode) {
+            updateBanner(
+                'Camera or proctoring initialization failed. You may continue answering; contact support if issues persist.',
+                true,
+            );
+        }
     }
 }
 

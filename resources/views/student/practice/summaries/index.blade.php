@@ -1,10 +1,7 @@
-<x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl qs-heading leading-tight">{{ __('Study summaries') }}</h2>
-    </x-slot>
+<x-layouts.student>
+    <x-slot name="title">{{ __('Study summaries') }}</x-slot>
 
-    <div class="py-10">
-        <div class="mx-auto max-w-4xl space-y-10 px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-4xl space-y-10 py-2">
             <section class="rounded-xl border border-qs-soft bg-qs-bg p-6">
                 <h3 class="text-sm font-semibold text-qs-text">{{ __('Generate summary') }}</h3>
                 @if ($errors->has('summary'))
@@ -44,6 +41,5 @@
                     <div class="mt-4">{{ $summaries->links() }}</div>
                 @endif
             </section>
-        </div>
     </div>
-</x-app-layout>
+</x-layouts.student>

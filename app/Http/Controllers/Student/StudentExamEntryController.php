@@ -58,9 +58,10 @@ class StudentExamEntryController extends Controller
 
         return view('student.exam.prepare', [
             'quiz' => $quiz,
-            'otpEnabled' => $this->examPolicy->isOtpEnabled(),
+            'isAssignment' => $quiz->isAssignment(),
+            'otpEnabled' => $quiz->isAssignment() ? false : $this->examPolicy->isOtpEnabled(),
             'smsEnabled' => $this->examPolicy->isSmsEnabled(),
-            'snapshotRequired' => $this->examPolicy->isExamStartSnapshotRequired(),
+            'snapshotRequired' => $this->examPolicy->isExamStartSnapshotRequiredForQuiz($quiz),
             'otpExpirySeconds' => $this->examPolicy->getOtpExpirySeconds(),
             'entryBlocked' => $this->globalControl->blocksExamStarts(),
         ]);
@@ -95,6 +96,14 @@ class StudentExamEntryController extends Controller
             ->where('course_id', $quiz->course_id)
             ->exists();
         abort_unless($hasCourse, 403);
+
+        if ($quiz->targetClassrooms()->exists()) {
+            abort_unless(
+                $quiz->targetClassrooms()->where('classes.id', (int) $user->class_id)->exists(),
+                403,
+                __('This quiz is not assigned to your class group.')
+            );
+        }
 
         $alreadySubmitted = ExamSession::query()
             ->where('student_id', $user->id)

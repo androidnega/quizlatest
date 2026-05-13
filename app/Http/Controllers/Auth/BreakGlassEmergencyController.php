@@ -127,6 +127,6 @@ class BreakGlassEmergencyController extends Controller
 
         $this->breakGlass->clearThrottle($request, $key);
 
-        return redirect()->intended(route('admin.dashboard', absolute: false));
+        return redirect()->intended(route('dashboard', absolute: false));
     }
 }

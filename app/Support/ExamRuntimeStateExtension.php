@@ -31,19 +31,18 @@ final class ExamRuntimeStateExtension
         $durationMinutes = (int) ($exam->duration_minutes ?? 0);
         $start = $examSession->start_time;
 
-        $examEndAtIso = null;
-        if ($start !== null && $durationMinutes > 0) {
-            $examEndAtIso = $start->copy()->addMinutes($durationMinutes)->toAtomString();
-        }
-
-        $timeRemainingSeconds = 0;
-        if ($examSession->status !== 'submitted' && $start !== null && $durationMinutes > 0) {
-            $endAt = $start->copy()->addMinutes($durationMinutes);
-            $timeRemainingSeconds = max(0, $endAt->getTimestamp() - $now->getTimestamp());
-        }
+        $timeRemainingSeconds = ExamSessionTimer::timeRemainingSeconds($examSession, $exam, $now);
+        $examEndAtIso = ExamSessionTimer::examEndAtIso($examSession, $exam, $now);
+        $timerPaused = ExamSessionTimer::timerPaused($examSession);
 
         if ($examSession->sessionQuestions->isEmpty()) {
-            return self::legacyFullExamPayload($examSession, $exam, $now, $examEndAtIso, $timeRemainingSeconds, $durationMinutes);
+            return array_merge(
+                self::legacyFullExamPayload($examSession, $exam, $now, $examEndAtIso, $timeRemainingSeconds, $durationMinutes),
+                [
+                    'timer_paused' => $timerPaused,
+                    'timer_pause_reason' => $timerPaused ? 'disconnect' : null,
+                ],
+            );
         }
 
         /** @var Collection<int, ExamSessionQuestion> $ordered */
@@ -121,12 +120,19 @@ final class ExamRuntimeStateExtension
             'exam_end_at' => $examEndAtIso,
             'time_remaining_seconds' => $timeRemainingSeconds,
             'duration_minutes' => $durationMinutes,
+            'timer_paused' => $timerPaused,
+            'timer_pause_reason' => $timerPaused ? 'disconnect' : null,
+            'assessment_type' => (string) ($exam->assessment_type ?? 'exam'),
+            'due_at' => $exam->due_at?->toAtomString(),
+            'submitted_late' => (bool) ($examSession->submitted_late ?? false),
             'exam' => [
                 'id' => (int) $exam->id,
                 'title' => (string) $exam->title,
                 'description' => $exam->description,
                 'duration_minutes' => $durationMinutes,
                 'total_marks' => round($assignedMarks, 2),
+                'assessment_type' => (string) ($exam->assessment_type ?? 'exam'),
+                'due_at' => $exam->due_at?->toAtomString(),
             ],
             'sections' => $sectionsPayload,
             'saved_answers' => $savedAnswers,
@@ -178,12 +184,17 @@ final class ExamRuntimeStateExtension
             'exam_end_at' => $examEndAtIso,
             'time_remaining_seconds' => $timeRemainingSeconds,
             'duration_minutes' => $durationMinutes,
+            'assessment_type' => (string) ($exam->assessment_type ?? 'exam'),
+            'due_at' => $exam->due_at?->toAtomString(),
+            'submitted_late' => (bool) ($examSession->submitted_late ?? false),
             'exam' => [
                 'id' => (int) $exam->id,
                 'title' => (string) $exam->title,
                 'description' => $exam->description,
                 'duration_minutes' => $durationMinutes,
                 'total_marks' => $exam->total_marks !== null ? (float) $exam->total_marks : null,
+                'assessment_type' => (string) ($exam->assessment_type ?? 'exam'),
+                'due_at' => $exam->due_at?->toAtomString(),
             ],
             'sections' => $sectionsPayload,
             'saved_answers' => self::buildSavedAnswersMap($examSession),
@@ -217,6 +228,8 @@ final class ExamRuntimeStateExtension
             'exam_end_at' => null,
             'time_remaining_seconds' => 0,
             'duration_minutes' => 0,
+            'timer_paused' => false,
+            'timer_pause_reason' => null,
             'exam' => null,
             'sections' => [],
             'saved_answers' => [],

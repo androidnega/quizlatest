@@ -14,6 +14,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class StudentController extends Controller
@@ -25,12 +26,6 @@ class StudentController extends Controller
         $departmentIds = $this->departmentIds();
         $programs = Program::query()->whereIn('department_id', $departmentIds)->orderBy('name')->get();
         $levels = Level::query()->orderBy('sort_order')->get();
-        $classes = Classroom::query()
-            ->whereHas('program', fn ($query) => $query->whereIn('department_id', $departmentIds))
-            ->with(['program', 'level'])
-            ->orderBy('name')
-            ->get();
-
         $students = User::query()
             ->where('role', 'student')
             ->whereHas('program', fn ($query) => $query->whereIn('department_id', $departmentIds))
@@ -41,8 +36,7 @@ class StudentController extends Controller
                 $search = trim((string) $request->input('search'));
                 $query->where(function ($subQuery) use ($search) {
                     $subQuery->where('name', 'like', "%{$search}%")
-                        ->orWhere('index_number', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%");
+                        ->orWhere('index_number', 'like', "%{$search}%");
                 });
             })
             ->latest()
@@ -53,47 +47,374 @@ class StudentController extends Controller
             'students' => $students,
             'programs' => $programs,
             'levels' => $levels,
-            'classes' => $classes,
             'filters' => $request->only(['program_id', 'level_id', 'search']),
         ]);
     }
 
-    public function editClass(User $student): View
+    public function legacyAssignClassRedirect(User $student): RedirectResponse
     {
+        abort_unless($student->role === 'student', 404);
         $this->authorize('manageStudentInScope', $student);
 
-        return view('coordinator.students.assign-class', [
-            'student' => $student->load(['program.department', 'level', 'classroom']),
+        return redirect()->route('coordinator.students.edit', $student);
+    }
+
+    public function edit(User $student): View
+    {
+        abort_unless($student->role === 'student', 404);
+        $this->authorize('manageStudentInScope', $student);
+
+        $student->load(['program.department', 'level', 'classroom', 'university']);
+
+        abort_if($student->university_id === null || (int) $student->university_id <= 0, 404);
+
+        $departmentIds = $this->departmentIds();
+
+        return view('coordinator.students.edit', [
+            'student' => $student,
+            'programs' => Program::query()
+                ->whereIn('department_id', $departmentIds)
+                ->where('university_id', $student->university_id)
+                ->orderBy('name')
+                ->get(),
+            'levels' => Level::query()
+                ->where('university_id', $student->university_id)
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(),
             'classes' => $this->scopedClasses(),
         ]);
     }
 
-    public function updateClass(Request $request, User $student): RedirectResponse
+    public function update(Request $request, User $student): RedirectResponse
     {
+        abort_unless($student->role === 'student', 404);
         $this->authorize('manageStudentInScope', $student);
 
+        abort_if($student->university_id === null || (int) $student->university_id <= 0, 404);
+
+        $universityId = (int) $student->university_id;
+
         $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'index_number' => [
+                'required',
+                'string',
+                'max:64',
+                Rule::unique('users', 'index_number')
+                    ->ignore($student->id)
+                    ->where(fn ($query) => $query->where('university_id', $universityId)),
+            ],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'program_id' => ['required', 'integer', 'exists:programs,id'],
+            'level_id' => ['required', 'integer', 'exists:levels,id'],
             'class_id' => ['nullable', 'integer', 'exists:classes,id'],
+            'generate_password' => ['nullable', 'boolean'],
         ]);
 
-        $classId = $validated['class_id'] ?? null;
-        if ($classId === null && $student->is_active) {
-            return redirect()->back()->withErrors([
-                'class_id' => 'Active students must have a class assignment.',
-            ]);
+        $isActive = $request->boolean('is_active');
+
+        $program = Program::query()->findOrFail((int) $validated['program_id']);
+        abort_unless((int) $program->university_id === $universityId, 422);
+        abort_unless($this->departmentIds()->contains((int) $program->department_id), 403);
+
+        $level = Level::query()->findOrFail((int) $validated['level_id']);
+        abort_unless((int) $level->university_id === $universityId, 422);
+
+        $classId = isset($validated['class_id']) ? (int) $validated['class_id'] : null;
+        if ($classId !== null && $classId <= 0) {
+            $classId = null;
+        }
+
+        $phoneRaw = trim((string) ($validated['phone'] ?? ''));
+        $normalizedPhone = null;
+        if ($phoneRaw !== '') {
+            $normalizedPhone = StudentPhone::normalize($phoneRaw);
+            if ($normalizedPhone === null || ! StudentPhone::isGhanaMobile($normalizedPhone)) {
+                return back()->withErrors(['phone' => __('Enter a valid Ghana mobile number or leave phone blank.')])->withInput();
+            }
+            if ($this->universityHasConflictingStudentPhone($universityId, $normalizedPhone, (int) $student->id)) {
+                return back()->withErrors(['phone' => __('Another student in this institution already uses this phone number.')])->withInput();
+            }
+        }
+
+        if ($isActive && $classId === null) {
+            return back()->withErrors([
+                'class_id' => __('Active students must be assigned to a class.'),
+            ])->withInput();
         }
 
         if ($classId !== null) {
-            $classroom = Classroom::query()->find((int) $classId);
+            $classroom = Classroom::query()->find($classId);
             abort_if($classroom === null, 404);
             $this->authorize('view', $classroom);
-
-            abort_unless((int) $student->program_id === (int) $classroom->program_id, 422);
+            abort_unless((int) $classroom->university_id === $universityId, 422);
+            abort_unless((int) $classroom->program_id === (int) $program->id, 422);
+            abort_unless((int) $classroom->level_id === (int) $level->id, 422);
         }
 
-        $student->update(['class_id' => $classId]);
+        $payload = [
+            'name' => $validated['name'],
+            'index_number' => trim((string) $validated['index_number']),
+            'phone' => $normalizedPhone,
+            'program_id' => (int) $program->id,
+            'level_id' => (int) $level->id,
+            'class_id' => $classId,
+            'is_active' => $isActive,
+            'email' => null,
+        ];
 
-        return redirect()->route('coordinator.students.index')->with('status', 'Student class assignment updated.');
+        $generatedPassword = null;
+        if ($request->boolean('generate_password')) {
+            $generatedPassword = Str::upper(Str::random(10));
+            $payload['password'] = $generatedPassword;
+            $payload['last_student_password_reset_at'] = now();
+        }
+
+        $student->update($payload);
+
+        $redirect = redirect()
+            ->route('coordinator.students.edit', $student)
+            ->with('status', __('Student saved.'));
+
+        if ($generatedPassword !== null) {
+            $redirect->with('generated_password', $generatedPassword);
+        }
+
+        return $redirect;
+    }
+
+    public function destroy(User $student): RedirectResponse
+    {
+        abort_unless($student->role === 'student', 404);
+        $this->authorize('manageStudentInScope', $student);
+
+        if ((int) ($student->class_id ?? 0) > 0) {
+            return back()->withErrors([
+                'student_delete' => __('Remove the student from class assignment before deleting.'),
+            ]);
+        }
+
+        if ($this->studentHasAcademicData((int) $student->id)) {
+            return back()->withErrors([
+                'student_delete' => __('This student has quizzes, attempts, exam sessions, or results and cannot be deleted.'),
+            ]);
+        }
+
+        $student->delete();
+
+        return redirect()
+            ->route('coordinator.students.index')
+            ->with('status', __('Student removed.'));
+    }
+
+    public function exportJson(Request $request): StreamedResponse
+    {
+        $this->authorize('viewStudentDirectory');
+
+        $departmentIds = $this->departmentIds();
+        $students = User::query()
+            ->where('role', 'student')
+            ->whereHas('program', fn ($query) => $query->whereIn('department_id', $departmentIds))
+            ->with(['program', 'level', 'classroom'])
+            ->orderBy('id')
+            ->get();
+
+        $payload = [
+            'exported_at' => now()->toIso8601String(),
+            'count' => $students->count(),
+            'students' => $students->map(fn (User $student): array => [
+                'name' => $student->name,
+                'index_number' => $student->index_number,
+                'phone' => $student->phone,
+                'program_code' => $student->program?->code,
+                'program_name' => $student->program?->name,
+                'level_code' => $student->level?->code,
+                'level_name' => $student->level?->name,
+                'class_name' => $student->classroom?->name,
+                'is_active' => (bool) $student->is_active,
+            ])->values()->all(),
+        ];
+
+        $filename = 'students-export-'.now()->format('Ymd-His').'.json';
+
+        return response()->streamDownload(function () use ($payload): void {
+            echo json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        }, $filename, ['Content-Type' => 'application/json; charset=UTF-8']);
+    }
+
+    public function importJsonForm(): View
+    {
+        $this->authorize('viewStudentDirectory');
+
+        return view('coordinator.students.import-json');
+    }
+
+    public function importJson(Request $request): RedirectResponse
+    {
+        $this->authorize('viewStudentDirectory');
+
+        $validated = $request->validate([
+            'json_file' => ['required', 'file', 'max:4096'],
+        ]);
+
+        $contents = file_get_contents($validated['json_file']->getRealPath());
+        if ($contents === false || trim($contents) === '') {
+            return back()->withErrors(['json_file' => __('Uploaded JSON is empty.')])->withInput();
+        }
+
+        $decoded = json_decode($contents, true);
+        if (! is_array($decoded)) {
+            return back()->withErrors(['json_file' => __('Invalid JSON payload.')])->withInput();
+        }
+
+        $rows = $decoded['students'] ?? $decoded;
+        if (! is_array($rows)) {
+            return back()->withErrors(['json_file' => __('JSON must be an array of students or an object containing a students array.')])->withInput();
+        }
+
+        $departmentIds = $this->departmentIds();
+        $programs = Program::query()
+            ->whereIn('department_id', $departmentIds)
+            ->get();
+
+        $programByCode = $programs->keyBy(fn (Program $p) => Str::lower((string) $p->code));
+        $programByName = $programs->keyBy(fn (Program $p) => Str::lower((string) $p->name));
+        $levelByCode = Level::query()->get()->keyBy(fn (Level $l) => Str::lower((string) $l->code));
+        $levelByName = Level::query()->get()->keyBy(fn (Level $l) => Str::lower((string) $l->name));
+        $studentRoleId = (int) (Role::query()->where('slug', 'student')->value('id') ?? 0);
+
+        $imported = 0;
+        $updated = 0;
+        $skipped = 0;
+        $errors = [];
+
+        DB::transaction(function () use (
+            $rows,
+            $programByCode,
+            $programByName,
+            $levelByCode,
+            $levelByName,
+            $studentRoleId,
+            &$imported,
+            &$updated,
+            &$skipped,
+            &$errors
+        ): void {
+            foreach ($rows as $i => $row) {
+                if (! is_array($row)) {
+                    $skipped++;
+
+                    continue;
+                }
+
+                $index = trim((string) ($row['index_number'] ?? ''));
+                $name = trim((string) ($row['name'] ?? ''));
+
+                if ($index === '' || $name === '') {
+                    $skipped++;
+
+                    continue;
+                }
+
+                $program = $programByCode->get(Str::lower(trim((string) ($row['program_code'] ?? ''))))
+                    ?? $programByName->get(Str::lower(trim((string) ($row['program_name'] ?? ''))));
+                $level = $levelByCode->get(Str::lower(trim((string) ($row['level_code'] ?? ''))))
+                    ?? $levelByName->get(Str::lower(trim((string) ($row['level_name'] ?? ''))));
+
+                if (! $program || ! $level) {
+                    $skipped++;
+
+                    continue;
+                }
+
+                $className = trim((string) ($row['class_name'] ?? ''));
+                $classId = null;
+                if ($className !== '') {
+                    $classId = Classroom::query()
+                        ->where('program_id', $program->id)
+                        ->where('level_id', $level->id)
+                        ->where('name', $className)
+                        ->value('id');
+                }
+
+                $phoneRaw = trim((string) ($row['phone'] ?? ''));
+                $phone = null;
+                if ($phoneRaw !== '') {
+                    $phone = StudentPhone::normalize($phoneRaw);
+                    if ($phone === null || ! StudentPhone::isGhanaMobile($phone)) {
+                        $errors[] = __('Row :row skipped: invalid phone.', ['row' => $i + 1]);
+                        $skipped++;
+
+                        continue;
+                    }
+                }
+
+                $isActive = filter_var($row['is_active'] ?? true, FILTER_VALIDATE_BOOL);
+                if ($isActive && $classId === null) {
+                    $isActive = false;
+                }
+
+                $existing = User::query()
+                    ->where('role', 'student')
+                    ->where('index_number', $index)
+                    ->where('university_id', $program->university_id)
+                    ->first();
+
+                $payload = [
+                    'university_id' => $program->university_id,
+                    'program_id' => $program->id,
+                    'level_id' => $level->id,
+                    'class_id' => $classId,
+                    'name' => $name,
+                    'email' => null,
+                    'phone' => $phone,
+                    'index_number' => $index,
+                    'role' => 'student',
+                    'is_active' => $isActive,
+                ];
+
+                if ($existing) {
+                    if ($this->studentHasAcademicData((int) $existing->id)) {
+                        $errors[] = __('Row :row skipped: existing student has academic data and cannot be reassigned.', ['row' => $i + 1]);
+                        $skipped++;
+
+                        continue;
+                    }
+                    $existing->update($payload);
+                    $updated++;
+
+                    continue;
+                }
+
+                $created = User::create(array_merge($payload, [
+                    'email_verified_at' => null,
+                    'student_onboarded_at' => null,
+                    'password' => Str::password(32),
+                ]));
+                if ($studentRoleId > 0) {
+                    DB::table('role_user')->updateOrInsert(
+                        ['role_id' => $studentRoleId, 'user_id' => $created->id],
+                        ['created_at' => now(), 'updated_at' => now()]
+                    );
+                }
+                $imported++;
+            }
+        });
+
+        $message = __('JSON import complete. :imported created, :updated updated, :skipped skipped.', [
+            'imported' => $imported,
+            'updated' => $updated,
+            'skipped' => $skipped,
+        ]);
+
+        if ($errors !== []) {
+            return redirect()->route('coordinator.students.import-json.form')
+                ->with('status', $message)
+                ->with('json_import_errors', array_slice($errors, 0, 10));
+        }
+
+        return redirect()->route('coordinator.students.index')->with('status', $message);
     }
 
     public function uploadForm(): View
@@ -111,7 +432,6 @@ class StudentController extends Controller
             'csv_file' => ['required', 'file', 'mimes:csv,txt', 'max:4096'],
             'map_index_number' => ['required', 'string', 'max:64'],
             'map_name' => ['nullable', 'string', 'max:64'],
-            'map_email' => ['nullable', 'string', 'max:64'],
             'map_phone' => ['nullable', 'string', 'max:64'],
             'map_program' => ['required', 'string', 'max:64'],
             'map_level' => ['required', 'string', 'max:64'],
@@ -121,7 +441,6 @@ class StudentController extends Controller
 
         $mapIndex = Str::lower(trim($validated['map_index_number']));
         $mapName = Str::lower(trim((string) ($validated['map_name'] ?? '')));
-        $mapEmail = Str::lower(trim((string) ($validated['map_email'] ?? '')));
         $mapPhone = Str::lower(trim((string) ($validated['map_phone'] ?? '')));
         $mapProgram = Str::lower(trim($validated['map_program']));
         $mapLevel = Str::lower(trim($validated['map_level']));
@@ -145,7 +464,6 @@ class StudentController extends Controller
 
         foreach ($rows as $rowNumber => $row) {
             $name = $mapName !== '' ? trim((string) ($row[$mapName] ?? '')) : '';
-            $email = $mapEmail !== '' ? trim((string) ($row[$mapEmail] ?? '')) : '';
             $phoneRaw = $mapPhone !== '' ? trim((string) ($row[$mapPhone] ?? '')) : '';
             $indexNumber = trim((string) ($row[$mapIndex] ?? ''));
             $programRaw = trim((string) ($row[$mapProgram] ?? ''));
@@ -153,10 +471,6 @@ class StudentController extends Controller
             $classNameRaw = $mapClassName !== '' ? trim((string) ($row[$mapClassName] ?? '')) : '';
 
             $errors = [];
-
-            if ($email !== '' && User::query()->where('email', $email)->exists()) {
-                $errors[] = 'Email already exists.';
-            }
 
             $programLookupKey = Str::lower($programRaw);
             $program = $allowedPrograms[$programLookupKey] ?? Program::query()
@@ -232,7 +546,6 @@ class StudentController extends Controller
             $previewRow = [
                 'row_number' => $rowNumber + 2,
                 'name' => $name,
-                'email' => $email !== '' ? $email : null,
                 'phone' => $normalizedPhone,
                 'index_number' => $indexNumber,
                 'class_name' => $classNameRaw,
@@ -265,7 +578,155 @@ class StudentController extends Controller
             'validCount' => count($validRows),
             'invalidCount' => count($previewRows) - count($validRows),
             'year' => $year,
+            'lockedClassroom' => null,
+            'backUrl' => route('coordinator.students.upload'),
         ]);
+    }
+
+    public function classScopedUploadForm(Classroom $classroom): View
+    {
+        $this->authorize('viewStudentDirectory');
+        $this->authorize('view', $classroom);
+
+        return view('coordinator.classes.upload-students', [
+            'classroom' => $classroom->load(['program.department', 'level']),
+        ]);
+    }
+
+    public function previewImportForClassroom(Request $request, Classroom $classroom): View
+    {
+        $this->authorize('viewStudentDirectory');
+        $this->authorize('view', $classroom);
+
+        $validated = $request->validate([
+            'csv_file' => ['required', 'file', 'mimes:csv,txt', 'max:4096'],
+            'map_index_number' => ['required', 'string', 'max:64'],
+            'map_name' => ['nullable', 'string', 'max:64'],
+            'map_phone' => ['nullable', 'string', 'max:64'],
+            'year' => ['nullable', 'digits:4'],
+        ]);
+
+        $classroom->load(['program', 'level']);
+        $program = $classroom->program;
+        $level = $classroom->level;
+        abort_if($program === null || $level === null, 404);
+
+        $mapIndex = Str::lower(trim($validated['map_index_number']));
+        $mapName = Str::lower(trim((string) ($validated['map_name'] ?? '')));
+        $mapPhone = Str::lower(trim((string) ($validated['map_phone'] ?? '')));
+
+        $departmentIds = $this->departmentIds();
+        abort_unless($departmentIds->contains((int) $program->department_id), 403);
+
+        $year = (int) ($validated['year'] ?? now()->year);
+        $rows = $this->parseCsvFile($request->file('csv_file')->getRealPath());
+
+        if (empty($rows)) {
+            return back()->withErrors(['csv_file' => 'The uploaded CSV appears to be empty.']);
+        }
+
+        $universityId = (int) $program->university_id;
+        $previewRows = [];
+        $validRows = [];
+        $seenIndexes = [];
+        $seenPhones = [];
+
+        foreach ($rows as $rowNumber => $row) {
+            $name = $mapName !== '' ? trim((string) ($row[$mapName] ?? '')) : '';
+            $phoneRaw = $mapPhone !== '' ? trim((string) ($row[$mapPhone] ?? '')) : '';
+            $indexNumber = trim((string) ($row[$mapIndex] ?? ''));
+
+            $errors = [];
+
+            $normalizedPhone = $phoneRaw !== '' ? StudentPhone::normalize($phoneRaw) : null;
+            if ($phoneRaw !== '' && $normalizedPhone === null) {
+                $errors[] = 'Phone number could not be normalized.';
+            }
+            if ($normalizedPhone !== null && ! StudentPhone::isGhanaMobile($normalizedPhone)) {
+                $errors[] = 'Phone must be a valid Ghana mobile number when provided.';
+            }
+            if ($normalizedPhone !== null) {
+                $phoneKey = $universityId.'|'.$normalizedPhone;
+                if (isset($seenPhones[$phoneKey])) {
+                    $errors[] = 'Duplicate phone in file.';
+                }
+                $seenPhones[$phoneKey] = true;
+
+                if ($universityId > 0 && $this->universityHasStudentPhone($universityId, $normalizedPhone)) {
+                    $errors[] = 'Phone already exists for another student in this institution.';
+                }
+            }
+
+            if ($indexNumber !== '') {
+                $idxKey = $universityId.'|'.Str::upper($indexNumber);
+                if (isset($seenIndexes[$idxKey])) {
+                    $errors[] = 'Duplicate index number in file.';
+                }
+                $seenIndexes[$idxKey] = true;
+
+                if ($universityId > 0 && User::query()->where('university_id', $universityId)->where('index_number', $indexNumber)->exists()) {
+                    $errors[] = 'Index number already exists for this institution.';
+                }
+            }
+
+            $previewRow = [
+                'row_number' => $rowNumber + 2,
+                'name' => $name,
+                'phone' => $normalizedPhone,
+                'index_number' => $indexNumber,
+                'class_name' => $classroom->name,
+                'class_id' => $classroom->id,
+                'program' => $program->name,
+                'program_id' => $program->id,
+                'program_code' => $program->code,
+                'university_id' => $universityId,
+                'level' => $level->name,
+                'level_id' => $level->id,
+                'errors' => $errors,
+            ];
+
+            $previewRows[] = $previewRow;
+
+            if (empty($errors)) {
+                $validRows[] = $previewRow;
+            }
+        }
+
+        session([
+            'student_csv_import' => [
+                'year' => $year,
+                'rows' => $validRows,
+                'locked_classroom_id' => $classroom->id,
+            ],
+        ]);
+
+        return view('coordinator.students.preview', [
+            'previewRows' => $previewRows,
+            'validCount' => count($validRows),
+            'invalidCount' => count($previewRows) - count($validRows),
+            'year' => $year,
+            'lockedClassroom' => $classroom,
+            'backUrl' => route('coordinator.classes.students.upload', $classroom),
+        ]);
+    }
+
+    public function classScopedTemplate(Classroom $classroom): StreamedResponse
+    {
+        $this->authorize('viewStudentDirectory');
+        $this->authorize('view', $classroom);
+
+        $classroom->load('program');
+        $programCode = Str::upper(Str::limit(preg_replace('/[^A-Za-z0-9]/', '', (string) ($classroom->program?->code ?? 'CLS')), 6));
+        $programCode = $programCode !== '' ? $programCode : 'CLS';
+
+        $filename = Str::slug($classroom->name).'-students-template.csv';
+
+        return response()->streamDownload(function () use ($programCode): void {
+            $handle = fopen('php://output', 'wb');
+            fputcsv($handle, ['index_number', 'name', 'phone']);
+            fputcsv($handle, [$programCode.'/'.now()->year.'/001', 'Sample Student', '+233241112233']);
+            fclose($handle);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function import(Request $request): RedirectResponse
@@ -313,7 +774,7 @@ class StudentController extends Controller
                     'level_id' => $row['level_id'],
                     'class_id' => $classId,
                     'name' => ($row['name'] ?? '') !== '' ? $row['name'] : '',
-                    'email' => $row['email'] ?? null,
+                    'email' => null,
                     'phone' => $row['phone'] ?? null,
                     'index_number' => $indexNumber,
                     'role' => 'student',
@@ -334,11 +795,22 @@ class StudentController extends Controller
             }
         });
 
+        $lockedClassroomId = isset($payload['locked_classroom_id']) ? (int) $payload['locked_classroom_id'] : null;
+
         $request->session()->forget('student_csv_import');
 
         $message = "Imported {$imported} student(s) successfully.";
         if ($unassigned > 0) {
             $message .= " {$unassigned} student(s) were left unassigned and set inactive.";
+        }
+
+        if ($lockedClassroomId > 0) {
+            $targetClass = Classroom::query()->find($lockedClassroomId);
+            if ($targetClass !== null) {
+                $this->authorize('view', $targetClass);
+
+                return redirect()->route('coordinator.classes.show', $targetClass)->with('status', $message);
+            }
         }
 
         return redirect()->route('coordinator.students.index')->with('status', $message);
@@ -351,16 +823,41 @@ class StudentController extends Controller
         $validated = $request->validate([
             'student_ids' => ['required', 'array', 'min:1'],
             'student_ids.*' => ['integer', 'exists:users,id'],
-            'action' => ['required', 'in:activate,deactivate'],
+            'action' => ['required', 'in:activate,deactivate,delete'],
         ]);
 
         $departmentIds = $this->departmentIds();
-        $isActive = $validated['action'] === 'activate';
+        $action = $validated['action'];
+        $isActive = $action === 'activate';
 
         $query = User::query()
             ->whereIn('id', $validated['student_ids'])
             ->where('role', 'student')
             ->whereHas('program', fn ($query) => $query->whereIn('department_id', $departmentIds));
+
+        if ($action === 'delete') {
+            $students = (clone $query)->get(['id', 'class_id']);
+            $deleted = 0;
+            $skipped = 0;
+
+            foreach ($students as $student) {
+                if ((int) ($student->class_id ?? 0) > 0 || $this->studentHasAcademicData((int) $student->id)) {
+                    $skipped++;
+
+                    continue;
+                }
+
+                User::query()->whereKey($student->id)->delete();
+                $deleted++;
+            }
+
+            $message = __('Deleted :deleted student(s). :skipped skipped (assigned to class or has quiz/exam data).', [
+                'deleted' => $deleted,
+                'skipped' => $skipped,
+            ]);
+
+            return redirect()->route('coordinator.students.index')->with('status', $message);
+        }
 
         if ($isActive && (clone $query)->whereNull('class_id')->exists()) {
             return redirect()->route('coordinator.students.index')->withErrors([
@@ -373,54 +870,18 @@ class StudentController extends Controller
         return redirect()->route('coordinator.students.index')->with('status', 'Student statuses updated.');
     }
 
-    public function bulkAssignClass(Request $request): RedirectResponse
-    {
-        $this->authorize('viewStudentDirectory');
-
-        $validated = $request->validate([
-            'program_id' => ['required', 'integer', 'exists:programs,id'],
-            'level_id' => ['required', 'integer', 'exists:levels,id'],
-            'class_id' => ['required', 'integer', 'exists:classes,id'],
-        ]);
-
-        $departmentIds = $this->departmentIds();
-
-        $program = Program::query()->find((int) $validated['program_id']);
-        abort_if($program === null, 404);
-        $this->authorize('view', $program);
-
-        $classroom = Classroom::query()
-            ->where('id', $validated['class_id'])
-            ->where('program_id', $validated['program_id'])
-            ->where('level_id', $validated['level_id'])
-            ->first();
-        abort_if($classroom === null, 404);
-        $this->authorize('view', $classroom);
-
-        $updated = User::query()
-            ->where('role', 'student')
-            ->where('program_id', $validated['program_id'])
-            ->where('level_id', $validated['level_id'])
-            ->whereHas('program', fn ($query) => $query->whereIn('department_id', $departmentIds))
-            ->update([
-                'class_id' => $classroom->id,
-                'is_active' => true,
-            ]);
-
-        return redirect()->route('coordinator.students.index')->with('status', "Assigned class to {$updated} student(s).");
-    }
-
     public function template(): StreamedResponse
     {
         $this->authorize('viewStudentDirectory');
 
         return response()->streamDownload(function (): void {
             $handle = fopen('php://output', 'wb');
+            // Class rosters: Classes → group → Upload roster (index_number, name, phone only).
             fputcsv($handle, ['index_number', 'name', 'phone', 'program', 'level', 'class_name']);
             fputcsv($handle, ['BCS/2026/001', 'Akua Serwaa', '+233241112233', 'BCS', '100', '']);
-            fputcsv($handle, ['', 'Yaw Boateng', '', 'BCS', '100', 'A']);
+            fputcsv($handle, ['', 'Yaw Boateng', '', 'BCS', '100', 'Group A']);
             fclose($handle);
-        }, 'student-upload-template.csv', ['Content-Type' => 'text/csv']);
+        }, 'student-upload-template.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     private function parseCsvFile(string $path): array
@@ -494,6 +955,27 @@ class StudentController extends Controller
             ->where('phone', '!=', '')
             ->get(['phone'])
             ->contains(fn (User $u): bool => StudentPhone::normalize($u->phone) === $normalizedPhone);
+    }
+
+    private function universityHasConflictingStudentPhone(int $universityId, string $normalizedPhone, int $ignoreUserId): bool
+    {
+        return User::query()
+            ->where('university_id', $universityId)
+            ->where('role', 'student')
+            ->whereKeyNot($ignoreUserId)
+            ->whereNotNull('phone')
+            ->where('phone', '!=', '')
+            ->get(['phone'])
+            ->contains(fn (User $u): bool => StudentPhone::normalize($u->phone) === $normalizedPhone);
+    }
+
+    private function studentHasAcademicData(int $studentId): bool
+    {
+        return DB::table('exam_sessions')->where('student_id', $studentId)->exists()
+            || DB::table('results')->where('user_id', $studentId)->exists()
+            || DB::table('practice_quizzes')->where('student_id', $studentId)->exists()
+            || DB::table('practice_attempts')->where('student_id', $studentId)->exists()
+            || DB::table('practice_summaries')->where('student_id', $studentId)->exists();
     }
 
     private function departmentIds()

@@ -69,7 +69,7 @@ class BreakGlassEmergencyTest extends TestCase
         $student = User::query()->where('role', 'student')->firstOrFail();
 
         $this->post(route('breakglass.emergency.store'), [
-            'privileged_username' => (string) $student->email,
+            'privileged_username' => (string) $student->index_number,
             'emergency_secret' => 'correct-secret',
         ])
             ->assertSessionHasErrors('privileged_username');
@@ -99,7 +99,7 @@ class BreakGlassEmergencyTest extends TestCase
 
         $this->post(route('breakglass.emergency.verify'), [
             'otp' => '123456',
-        ])->assertRedirect(route('admin.dashboard', absolute: false));
+        ])->assertRedirect(route('dashboard', absolute: false));
 
         $this->assertAuthenticatedAs($owner);
 

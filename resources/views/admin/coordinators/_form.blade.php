@@ -16,14 +16,6 @@
     </div>
 
     <div>
-        <label for="index_number" class="block text-sm font-medium qs-heading">Index Number (Optional)</label>
-        <input id="index_number" name="index_number" type="text" value="{{ old('index_number', $coordinator->index_number ?? '') }}" class="mt-1 block w-full rounded-md border-qs-soft focus:border-qs-soft focus:ring-qs-accent/40 bg-qs-bg" />
-        @error('index_number')
-            <p class="mt-1 text-sm text-qs-danger">{{ $message }}</p>
-        @enderror
-    </div>
-
-    <div>
         <label for="password" class="block text-sm font-medium qs-heading">{{ isset($coordinator) ? 'Password (Leave blank to keep existing)' : 'Password' }}</label>
         <input id="password" name="password" type="password" {{ isset($coordinator) ? '' : 'required' }} class="mt-1 block w-full rounded-md border-qs-soft focus:border-qs-soft focus:ring-qs-accent/40 bg-qs-bg" />
         @error('password')

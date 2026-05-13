@@ -11,7 +11,6 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
 class CoordinatorController extends Controller
@@ -48,7 +47,6 @@ class CoordinatorController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:6'],
-            'index_number' => ['nullable', 'string', 'max:255', 'unique:users,index_number'],
             'department_ids' => ['required', 'array', 'min:1'],
             'department_ids.*' => ['integer', 'exists:departments,id'],
             'is_active' => ['nullable', 'boolean'],
@@ -58,8 +56,8 @@ class CoordinatorController extends Controller
             $coordinator = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
-                'password' => Hash::make($validated['password']),
-                'index_number' => $validated['index_number'] ?? null,
+                'password' => $validated['password'],
+                'index_number' => null,
                 'role' => 'coordinator',
                 'is_active' => $request->boolean('is_active', true),
                 'email_verified_at' => now(),
@@ -91,7 +89,6 @@ class CoordinatorController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'max:255', Rule::unique('users', 'email')->ignore($coordinator->id)],
             'password' => ['nullable', 'string', 'min:6'],
-            'index_number' => ['nullable', 'string', 'max:255', Rule::unique('users', 'index_number')->ignore($coordinator->id)],
             'department_ids' => ['required', 'array', 'min:1'],
             'department_ids.*' => ['integer', 'exists:departments,id'],
             'is_active' => ['nullable', 'boolean'],
@@ -101,12 +98,11 @@ class CoordinatorController extends Controller
             $payload = [
                 'name' => $validated['name'],
                 'email' => $validated['email'],
-                'index_number' => $validated['index_number'] ?? null,
                 'is_active' => $request->boolean('is_active'),
             ];
 
             if (! empty($validated['password'])) {
-                $payload['password'] = Hash::make($validated['password']);
+                $payload['password'] = $validated['password'];
             }
 
             $coordinator->update($payload);

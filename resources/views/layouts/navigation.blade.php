@@ -15,7 +15,7 @@
                             {{ __('Results') }}
                         </x-nav-link>
                         @if (! empty($studentPracticeNavEnabled))
-                            <x-nav-link :href="route('student.practice.index')" :active="request()->routeIs('student.practice.*')">
+                            <x-nav-link :href="route('student.practice.revision')" :active="request()->routeIs('student.practice.*')">
                                 {{ __('Practice') }}
                             </x-nav-link>
                         @endif
@@ -73,7 +73,7 @@
                     {{ __('Results') }}
                 </x-responsive-nav-link>
                 @if (! empty($studentPracticeNavEnabled))
-                    <x-responsive-nav-link :href="route('student.practice.index')" :active="request()->routeIs('student.practice.*')">
+                    <x-responsive-nav-link :href="route('student.practice.revision')" :active="request()->routeIs('student.practice.*')">
                         {{ __('Practice') }}
                     </x-responsive-nav-link>
                 @endif

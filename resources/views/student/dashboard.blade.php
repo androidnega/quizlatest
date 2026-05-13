@@ -6,6 +6,7 @@
         $parts = \Illuminate\Support\Str::of((string) ($user->name ?? ''))->trim()->explode(' ')->filter();
         $firstName = $parts->first() ?: $user->name;
         $sessionExam = $activeSession?->exam;
+        $examSessionPaused = $activeSession !== null && $activeSession->status === 'paused';
         $highlightExam = $availableExams->first();
         $nextUpcomingExam = $upcomingExams->first();
         $examInProgressHere = $activeSession !== null && $sessionExam !== null;
@@ -25,6 +26,7 @@
             ? (int) round(min(100, ($graded / $submitted) * 100))
             : ($graded > 0 ? 100 : 0);
         $heroBadge = match (true) {
+            $examSessionPaused => __('Timer paused'),
             $examInProgressHere => __('In progress'),
             $highlightExam !== null => __('Open now'),
             $nextUpcomingExam !== null => __('Up next'),
@@ -48,6 +50,21 @@
             <div class="flex items-start gap-2.5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
                 <i class="fa-solid fa-circle-exclamation mt-0.5 shrink-0" aria-hidden="true"></i>
                 <span>{{ $errors->first('exam') }}</span>
+            </div>
+        @endif
+
+        @if ($examSessionPaused && $sessionExam)
+            <div class="flex items-start gap-2.5 rounded-2xl border border-amber-300/90 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
+                <i class="fa-solid fa-pause mt-0.5 shrink-0 text-amber-700" aria-hidden="true"></i>
+                <div class="min-w-0">
+                    <p class="font-semibold">{{ __('Your exam timer is paused') }}</p>
+                    <p class="mt-1 text-xs leading-relaxed text-amber-900/90">
+                        {{ __('We detected that you went offline or closed the exam tab. Time is frozen until you return and tap Resume inside the exam.') }}
+                    </p>
+                    <a href="{{ route('student.exam.take', $activeSession) }}" class="mt-3 inline-flex items-center rounded-xl bg-amber-800 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-900">
+                        {{ __('Open exam to resume') }}
+                    </a>
+                </div>
             </div>
         @endif
 
@@ -158,9 +175,15 @@
                             <h2 class="mt-3 max-w-xl text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
                                 {{ $sessionExam->title }}
                             </h2>
-                            <p class="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
-                                {{ __('You have an exam in progress. Continue when you are ready.') }}
-                            </p>
+                            @if ($examSessionPaused)
+                                <p class="mt-3 max-w-md text-sm leading-relaxed text-amber-200">
+                                    {{ __('Timer paused — your attempt is safe. Open the exam and press Resume to continue.') }}
+                                </p>
+                            @else
+                                <p class="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
+                                    {{ __('You have an exam in progress. Continue when you are ready.') }}
+                                </p>
+                            @endif
                         @elseif ($highlightExam)
                             <h2 class="mt-3 max-w-xl text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
                                 {{ $highlightExam->title }}
@@ -239,7 +262,7 @@
                             href="{{ route('student.exam.take', $activeSession) }}"
                             class="inline-flex items-center justify-center rounded-2xl bg-[var(--qs-primary)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[var(--qs-primary)] focus:ring-offset-2 focus:ring-offset-slate-950"
                         >
-                            {{ __('Continue exam') }}
+                            {{ $examSessionPaused ? __('Resume exam') : __('Continue exam') }}
                         </a>
                     @elseif ($highlightExam)
                         <a
@@ -433,7 +456,7 @@
                             <p class="mt-1 text-xs leading-snug text-slate-500">{{ __('Open and upcoming quizzes from your classes.') }}</p>
                         </div>
                     </div>
-                    <a href="{{ route('student.results.index') }}" class="shrink-0 text-sm font-medium text-[var(--qs-primary)] hover:underline">
+                    <a href="{{ route('student.assignments.index') }}" class="shrink-0 text-sm font-medium text-[var(--qs-primary)] hover:underline">
                         {{ __('View all') }}
                     </a>
                 </div>

@@ -1,4 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Antonio:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import '@fortawesome/fontawesome-free/css/fontawesome.css';
+@import '@fortawesome/fontawesome-free/css/solid.css';
 
 @tailwind base;
 @tailwind components;
@@ -10,20 +13,27 @@
     }
     :root {
         --qs-bg: #ffffff;
-        --qs-primary: #166534;
-        --qs-soft: #dce8e0;
-        --qs-card: #faf7f2;
-        --qs-surface: #faf7f2;
-        --qs-text: #0f2918;
-        --qs-muted: #5c6b62;
-        --qs-accent: #166534;
-        --qs-danger: #9f1239;
-        --qs-danger-soft: #ffe4e9;
+        --qs-primary: #56aebb;
+        --qs-soft: #d5e7ea;
+        --qs-card: #ffffff;
+        --qs-surface: #ffffff;
+        --qs-text: #15343a;
+        --qs-muted: #5f7478;
+        --qs-accent: #56aebb;
+        --qs-danger: #e46f2e;
+        --qs-danger-soft: #fff0e7;
     }
 
     body {
         background-color: var(--qs-bg);
         color: var(--qs-text);
+    }
+
+    /** Sidebar + mobile dock: stable taps (no highlight flash / pressed “toggle”) */
+    .qs-sidebar-nav-link,
+    .qs-app-shell .qs-student-nav-dock a[href] {
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
     }
 }
 
@@ -58,6 +68,894 @@
 
     .qs-btn-danger-sm {
         @apply inline-flex items-center justify-center rounded-lg border border-qs-danger bg-qs-danger px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-qs-danger/45 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+    }
+
+    /** App shell: main column scrolls; sidebar stays fixed */
+    .qs-app-shell {
+        @apply flex h-[100dvh] w-full max-w-full overflow-hidden bg-qs-bg;
+    }
+
+    /**
+     * Avoid sidebar/main “flash” before Alpine hydrates: match localStorage in shell-sidebar-head.blade.php.
+     * Desktop sidebar uses static w-56 + this override when collapsed.
+     */
+    @media (min-width: 768px) {
+        html.qs-shell-sidebar-collapsed .qs-app-shell > aside.qs-desktop-sidebar {
+            width: 4.25rem !important;
+            min-width: 4.25rem !important;
+            max-width: 4.25rem !important;
+        }
+
+        /**
+         * Sidebar brand strip — same pattern as nav links: no x-show/x-cloak (avoids flash before Alpine).
+         */
+        html.qs-shell-sidebar-collapsed .qs-app-shell > aside.qs-desktop-sidebar .qs-sidebar-brand-row {
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+        }
+
+        html.qs-shell-sidebar-collapsed .qs-app-shell > aside.qs-desktop-sidebar .qs-shell-sidebar-brand {
+            display: none;
+        }
+    }
+
+    /** Collapse control icons: correct chevron before Alpine (localStorage + html class only toggles visibility). */
+    .qs-sidebar-collapse-btn .qs-sidebar-collapse-icon-collapsed {
+        display: none;
+    }
+
+    @media (min-width: 768px) {
+        html.qs-shell-sidebar-collapsed .qs-app-shell > aside.qs-desktop-sidebar .qs-sidebar-collapse-btn .qs-sidebar-collapse-icon-expanded {
+            display: none;
+        }
+
+        html.qs-shell-sidebar-collapsed .qs-app-shell > aside.qs-desktop-sidebar .qs-sidebar-collapse-btn .qs-sidebar-collapse-icon-collapsed {
+            display: inline-block;
+        }
+    }
+
+    @media (min-width: 768px) {
+        html.qs-shell-workspace-focus .qs-app-shell > aside.qs-desktop-sidebar {
+            display: none !important;
+        }
+
+        html.qs-shell-workspace-focus .qs-coordinator-main {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            max-width: none !important;
+            padding-left: 1.25rem;
+            padding-right: 1.25rem;
+        }
+
+        @media (min-width: 640px) {
+            html.qs-shell-workspace-focus .qs-coordinator-main {
+                padding-left: 2rem;
+                padding-right: 2rem;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            html.qs-shell-workspace-focus .qs-coordinator-main {
+                padding-left: 3rem;
+                padding-right: 3rem;
+            }
+        }
+    }
+
+    /** Sidebar nav links (admin / coordinator / examiner / student desktop): no motion, stable tap */
+    .qs-app-shell aside nav .qs-sidebar-nav-link {
+        transition: none !important;
+        outline: none;
+    }
+
+    .qs-app-shell aside nav .qs-sidebar-nav-link:focus-visible {
+        @apply outline-none ring-2 ring-qs-primary/35 ring-offset-2;
+    }
+
+    .qs-app-shell:not(.qs-app-shell--white) aside nav .qs-sidebar-nav-link:focus-visible {
+        @apply ring-offset-[var(--qs-bg)];
+    }
+
+    .qs-app-shell.qs-app-shell--white aside nav .qs-sidebar-nav-link:focus-visible {
+        @apply ring-offset-white;
+    }
+
+    /**
+     * Desktop collapsed sidebar: driven only by html.qs-shell-sidebar-collapsed (set in head).
+     * Avoids Alpine x-bind/x-show on links so navigation does not flash wrong padding or hidden labels before hydration.
+     */
+    @media (min-width: 768px) {
+        html.qs-shell-sidebar-collapsed .qs-app-shell aside.qs-desktop-sidebar nav .qs-sidebar-nav-link {
+            justify-content: center;
+            gap: 0;
+            padding-left: 0;
+            padding-right: 0;
+        }
+
+        html.qs-shell-sidebar-collapsed .qs-app-shell aside.qs-desktop-sidebar nav .qs-sidebar-nav-link > span:first-child {
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        html.qs-shell-sidebar-collapsed .qs-app-shell aside.qs-desktop-sidebar nav .qs-sidebar-nav-label {
+            display: none;
+        }
+    }
+
+    /** Student mobile dock matches sidebar tap behavior */
+    .qs-app-shell .qs-student-nav-dock a[href] {
+        transition: none !important;
+        outline: none;
+    }
+
+    .qs-app-shell .qs-student-nav-dock a[href]:focus-visible {
+        @apply outline-none ring-2 ring-qs-primary/35 ring-offset-2 ring-offset-white;
+    }
+
+    /** Coordinator workspace — neutral white shell (reference dashboard) */
+    .qs-app-shell.qs-app-shell--white {
+        background-color: #ffffff;
+    }
+
+    /** Coordinator top bar + page heading icon buttons */
+    .qs-coord-header-icon {
+        @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200/90 bg-white text-slate-500 shadow-sm;
+    }
+
+    .qs-coord-header-icon:hover:not(:disabled) {
+        @apply border-qs-primary/40 bg-qs-soft text-qs-primary;
+    }
+
+    .qs-coord-header-icon:focus-visible {
+        @apply outline-none ring-2 ring-qs-primary/35 ring-offset-2 ring-offset-white;
+    }
+
+    .qs-coord-header-icon:disabled {
+        @apply cursor-not-allowed opacity-35;
+    }
+
+    .qs-coord-header-icon--quiet {
+        @apply border-transparent bg-transparent shadow-none;
+    }
+
+    .qs-coord-header-icon--quiet:hover:not(:disabled) {
+        @apply border-qs-primary/30 bg-qs-soft/90 text-qs-primary shadow-sm;
+    }
+
+    /** Coordinator classes index — soft tint + solid hover (--qs-class-accent from inline style) */
+    .qs-co-class-card {
+        --ca: var(--qs-class-accent);
+        background-color: color-mix(in srgb, var(--ca) 17%, white);
+        border-color: color-mix(in srgb, var(--ca) 36%, rgb(226 232 240));
+        transition:
+            background-color 0.2s ease,
+            border-color 0.2s ease,
+            box-shadow 0.2s ease;
+    }
+
+    .qs-co-class-card:hover {
+        background-color: var(--ca);
+        border-color: color-mix(in srgb, var(--ca) 78%, rgb(15 23 42));
+        box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+    }
+
+    .qs-co-class-card[data-hover-fg='light']:hover .qs-co-class-card-fg {
+        color: rgb(255 255 255 / 0.94) !important;
+    }
+
+    .qs-co-class-card[data-hover-fg='dark']:hover .qs-co-class-card-fg {
+        color: rgb(15 23 42) !important;
+    }
+
+    .qs-co-class-card[data-hover-fg='light']:hover .qs-co-class-card-muted {
+        color: rgb(255 255 255 / 0.58) !important;
+    }
+
+    .qs-co-class-card[data-hover-fg='dark']:hover .qs-co-class-card-muted {
+        color: rgb(100 116 139) !important;
+    }
+
+    .qs-co-class-card[data-hover-fg='light']:hover .qs-co-class-card-tool {
+        color: rgb(255 255 255 / 0.88) !important;
+    }
+
+    .qs-co-class-card[data-hover-fg='dark']:hover .qs-co-class-card-tool {
+        color: rgb(71 85 105) !important;
+    }
+
+    .qs-co-class-card[data-hover-fg='light']:hover .qs-co-class-card-divider {
+        border-color: rgb(255 255 255 / 0.22) !important;
+    }
+
+    .qs-co-class-card[data-hover-fg='dark']:hover .qs-co-class-card-divider {
+        border-color: rgb(15 23 42 / 0.12) !important;
+    }
+
+    .qs-co-class-card[data-hover-fg='light']:hover .qs-co-class-chip {
+        background-color: rgb(255 255 255 / 0.14) !important;
+        color: rgb(255 255 255 / 0.92) !important;
+    }
+
+    .qs-co-class-card[data-hover-fg='dark']:hover .qs-co-class-chip {
+        background-color: rgb(255 255 255 / 0.72) !important;
+        color: rgb(30 41 59) !important;
+    }
+
+    .qs-co-class-card-icon {
+        background: linear-gradient(
+            145deg,
+            color-mix(in srgb, var(--qs-class-accent) 42%, white) 0%,
+            white 55%,
+            rgb(248 250 252) 100%
+        );
+        color: var(--qs-class-accent);
+        box-shadow:
+            inset 0 1px 0 rgb(255 255 255 / 0.65),
+            0 0 0 1px color-mix(in srgb, var(--qs-class-accent) 22%, transparent);
+    }
+
+    .qs-co-class-card[data-hover-fg='light']:hover .qs-co-class-card-icon {
+        background: rgb(255 255 255 / 0.16);
+        color: rgb(255 255 255 / 0.95);
+        box-shadow: 0 0 0 1px rgb(255 255 255 / 0.35);
+    }
+
+    .qs-co-class-card[data-hover-fg='dark']:hover .qs-co-class-card-icon {
+        background: rgb(255 255 255 / 0.58);
+        color: var(--qs-class-accent);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--qs-class-accent) 38%, transparent);
+    }
+
+    .qs-co-class-show-accent {
+        border-color: color-mix(in srgb, var(--qs-class-accent) 20%, rgb(226 232 240));
+        background-color: color-mix(in srgb, var(--qs-class-accent) 9%, white);
+    }
+
+    @keyframes qs-sparkline-reveal-x {
+        from {
+            clip-path: inset(0 100% 0 0);
+            opacity: 0.2;
+        }
+
+        to {
+            clip-path: inset(0 0 0 0);
+            opacity: 1;
+        }
+    }
+
+    .qs-coordinator-overview-metrics .qs-sparkline-reveal {
+        animation: qs-sparkline-reveal-x 0.95s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        will-change: clip-path, opacity;
+    }
+
+    .qs-coordinator-overview-metrics .grid > article:nth-child(1) .qs-sparkline-reveal {
+        animation-delay: 0.04s;
+    }
+
+    .qs-coordinator-overview-metrics .grid > article:nth-child(2) .qs-sparkline-reveal {
+        animation-delay: 0.1s;
+    }
+
+    .qs-coordinator-overview-metrics .grid > article:nth-child(3) .qs-sparkline-reveal {
+        animation-delay: 0.16s;
+    }
+
+    .qs-coordinator-overview-metrics .grid > article:nth-child(4) .qs-sparkline-reveal {
+        animation-delay: 0.22s;
+    }
+
+    .qs-coordinator-overview-metrics .grid > article:nth-child(5) .qs-sparkline-reveal {
+        animation-delay: 0.28s;
+    }
+
+    .qs-coordinator-overview-metrics .grid > article:nth-child(6) .qs-sparkline-reveal {
+        animation-delay: 0.34s;
+    }
+
+    .qs-coordinator-overview-metrics .grid > article:nth-child(7) .qs-sparkline-reveal {
+        animation-delay: 0.4s;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .qs-coordinator-overview-metrics .qs-sparkline-reveal {
+            animation: none !important;
+            clip-path: none !important;
+            opacity: 1 !important;
+        }
+    }
+
+    .qs-app-main-scroll {
+        @apply min-h-0 flex-1 overflow-y-auto overscroll-y-contain;
+    }
+
+    /** Student app: comfortable mobile scroll; desktop aligns with sidebar column */
+    .qs-student-main {
+        -webkit-overflow-scrolling: touch;
+    }
+
+    @media (max-width: 767px) {
+        .qs-student-main {
+            scroll-padding-bottom: max(5.5rem, env(safe-area-inset-bottom, 0px));
+        }
+    }
+
+    /** Admin workspace — neutral canvas (no gradients) */
+    .qs-admin-workspace {
+        background-color: #f3f4f6;
+    }
+
+    /** Reference dashboard shell (light border, solid white surfaces) */
+    .qs-refdash {
+        font-family: Inter, ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif;
+    }
+
+    .qs-refdash-shell {
+        @apply rounded-xl border bg-white p-5 shadow-sm sm:p-6;
+        border-color: #e5e7eb;
+    }
+
+    .qs-refdash-title {
+        @apply text-lg font-bold leading-none text-black;
+    }
+
+    .qs-refdash-refresh {
+        @apply inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-xs font-semibold text-black shadow-sm transition;
+        border-color: #e5e7eb;
+    }
+
+    .qs-refdash-refresh:hover {
+        border-color: #d1d5db;
+    }
+
+    .qs-refdash-kpi {
+        @apply flex min-h-[5.25rem] items-center justify-between gap-3 rounded-lg border bg-white p-4 sm:p-5;
+        border-color: #e5e7eb;
+    }
+
+    .qs-refdash-kpi__label {
+        @apply text-sm font-normal text-[#6b7280];
+    }
+
+    .qs-refdash-kpi__value {
+        @apply mt-1 text-2xl font-bold tabular-nums leading-none tracking-tight text-black sm:text-[1.7rem];
+    }
+
+    .qs-refdash-kpi__icon {
+        @apply flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg;
+    }
+
+    .qs-refdash-kpi--universities {
+        @apply border-emerald-200 bg-emerald-50 text-emerald-950;
+    }
+
+    .qs-refdash-kpi--universities .qs-refdash-kpi__label {
+        @apply text-emerald-700;
+    }
+
+    .qs-refdash-kpi--universities .qs-refdash-kpi__value {
+        @apply text-emerald-950;
+    }
+
+    .qs-refdash-kpi--universities .qs-refdash-kpi__icon {
+        @apply bg-white text-emerald-700 ring-1 ring-emerald-200;
+    }
+
+    .qs-refdash-kpi--coordinators {
+        @apply border-teal-200 bg-teal-50 text-teal-950;
+    }
+
+    .qs-refdash-kpi--coordinators .qs-refdash-kpi__label {
+        @apply text-teal-700;
+    }
+
+    .qs-refdash-kpi--coordinators .qs-refdash-kpi__value {
+        @apply text-teal-950;
+    }
+
+    .qs-refdash-kpi--coordinators .qs-refdash-kpi__icon {
+        @apply bg-white text-teal-700 ring-1 ring-teal-200;
+    }
+
+    .qs-refdash-kpi--students {
+        @apply border-sky-200 bg-sky-50 text-sky-950;
+    }
+
+    .qs-refdash-kpi--students .qs-refdash-kpi__label {
+        @apply text-sky-700;
+    }
+
+    .qs-refdash-kpi--students .qs-refdash-kpi__value {
+        @apply text-sky-950;
+    }
+
+    .qs-refdash-kpi--students .qs-refdash-kpi__icon {
+        @apply bg-white text-sky-700 ring-1 ring-sky-200;
+    }
+
+    .qs-refdash-kpi--exams {
+        @apply border-violet-200 bg-violet-50 text-violet-950;
+    }
+
+    .qs-refdash-kpi--exams .qs-refdash-kpi__label {
+        @apply text-violet-700;
+    }
+
+    .qs-refdash-kpi--exams .qs-refdash-kpi__value {
+        @apply text-violet-950;
+    }
+
+    .qs-refdash-kpi--exams .qs-refdash-kpi__icon {
+        @apply bg-white text-violet-700 ring-1 ring-violet-200;
+    }
+
+    .qs-refdash-card {
+        @apply flex min-h-0 flex-col overflow-hidden rounded-lg border bg-white shadow-sm;
+        border-color: #e5e7eb;
+    }
+
+    .qs-refdash-card__head {
+        @apply flex items-center gap-2 border-b px-5 py-4 text-sm font-bold text-black;
+        border-color: #e5e7eb;
+    }
+
+    .qs-refdash-card__head i {
+        @apply text-[#6b7280];
+    }
+
+    .qs-refdash-card__body {
+        @apply flex flex-1 flex-col gap-0 px-5 py-4 text-sm;
+    }
+
+    .qs-refdash-row {
+        @apply flex items-center justify-between gap-3 border-b py-2.5 last:border-b-0;
+        border-color: #e5e7eb;
+    }
+
+    .qs-refdash-row__label {
+        @apply text-[#6b7280];
+    }
+
+    .qs-refdash-row__value {
+        @apply text-right text-sm font-bold text-black;
+    }
+
+    .qs-refdash-badge {
+        @apply inline-flex min-w-[1.75rem] items-center justify-center rounded-md border px-2 py-0.5 text-xs font-semibold text-black;
+        border-color: #e5e7eb;
+        background-color: #f3f4f6;
+    }
+
+    .qs-refdash-bar {
+        @apply mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#e5e7eb];
+    }
+
+    .qs-refdash-bar__fill {
+        @apply h-full rounded-full bg-[#10b981];
+    }
+
+    .qs-refdash-link {
+        @apply mt-auto inline-flex items-center gap-1 pt-4 text-sm font-medium text-[#10b981] transition hover:underline;
+    }
+
+    .qs-refdash-link-stack .qs-refdash-link {
+        @apply mt-0 pt-0;
+    }
+
+    .qs-refdash-muted-foot {
+        @apply mt-1 text-[11px] font-normal text-[#6b7280];
+    }
+
+    /** Dense platform health (shorter card) */
+    .qs-refdash-card__head--dense {
+        @apply px-3 py-2.5 text-xs font-bold;
+    }
+
+    .qs-refdash-card__body--dense {
+        @apply gap-0 px-3 py-2 text-xs;
+    }
+
+    .qs-refdash-health-grid {
+        @apply grid gap-x-4 gap-y-0 sm:grid-cols-2;
+    }
+
+    .qs-refdash-row--dense {
+        @apply border-b py-1.5 last:border-b-0 sm:min-h-0;
+        border-color: #e5e7eb;
+    }
+
+    .qs-refdash-row--dense .qs-refdash-row__label {
+        @apply text-[11px] leading-tight;
+    }
+
+    .qs-refdash-row--dense .qs-refdash-row__value {
+        @apply text-[11px] font-semibold leading-tight;
+    }
+
+    .qs-refdash-row--dense .qs-refdash-badge {
+        @apply px-1.5 py-0 text-[10px];
+    }
+
+    /** Quick actions — compact chip row */
+    .qs-refdash-quick {
+        @apply flex flex-wrap gap-1.5;
+    }
+
+    .qs-refdash-quick__a {
+        @apply inline-flex items-center gap-1.5 rounded-md border border-[#e5e7eb] bg-[#fafafa] px-2.5 py-1.5 text-[11px] font-semibold text-black transition hover:border-[#10b981]/40 hover:bg-emerald-50/60 hover:text-emerald-900;
+    }
+
+    .qs-refdash-quick__a span[aria-hidden='true'] {
+        @apply text-[#10b981] opacity-80;
+    }
+
+    /** Platform health — “status overview” two-column widget */
+    .qs-health-overview {
+        @apply flex flex-col overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm;
+    }
+
+    .qs-health-overview__head {
+        @apply flex flex-wrap items-center gap-2 border-b border-[#e5e7eb] px-5 py-4;
+    }
+
+    .qs-health-overview__head i {
+        @apply text-[#6b7280];
+    }
+
+    .qs-health-overview__title {
+        @apply flex-1 text-base font-bold tracking-tight text-black;
+    }
+
+    .qs-health-overview__count-pill {
+        @apply inline-flex items-center rounded-full border border-[#e5e7eb] bg-[#f9fafb] px-2.5 py-0.5 text-[11px] font-semibold text-[#6b7280];
+    }
+
+    .qs-health-overview__intro {
+        @apply border-b border-[#e5e7eb] px-5 py-2 text-xs leading-relaxed text-[#6b7280];
+    }
+
+    .qs-health-overview__grid {
+        @apply grid gap-6 px-5 py-5 lg:grid-cols-2;
+    }
+
+    .qs-health-overview__col-head {
+        @apply mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-[#6b7280];
+    }
+
+    .qs-health-overview__rows {
+        @apply flex flex-col gap-2;
+    }
+
+    .qs-health-row {
+        @apply flex items-start gap-3 rounded-lg px-3 py-2.5 transition;
+    }
+
+    .qs-health-row--live {
+        animation: qs-health-breathe 3.8s ease-in-out infinite;
+    }
+
+    .qs-health-row__dot {
+        @apply mt-1.5 h-2 w-2 shrink-0 rounded-full;
+    }
+
+    .qs-health-row__main {
+        @apply min-w-0 flex-1;
+    }
+
+    .qs-health-row__label {
+        @apply text-sm font-medium text-black;
+    }
+
+    .qs-health-row__detail {
+        @apply mt-0.5 text-xs leading-snug text-[#6b7280];
+    }
+
+    .qs-health-row__pill {
+        @apply mt-0.5 shrink-0 rounded-lg border px-2.5 py-1 text-center text-xs font-bold tabular-nums;
+    }
+
+    .qs-health-row--ok {
+        @apply bg-emerald-50/80;
+    }
+
+    .qs-health-row--ok .qs-health-row__dot {
+        @apply bg-emerald-500;
+    }
+
+    .qs-health-row--ok .qs-health-row__pill {
+        @apply border-emerald-200/80 bg-white text-emerald-900;
+    }
+
+    .qs-health-row--info {
+        @apply bg-sky-50/80;
+    }
+
+    .qs-health-row--info .qs-health-row__dot {
+        @apply bg-sky-500;
+    }
+
+    .qs-health-row--info .qs-health-row__pill {
+        @apply border-sky-200/80 bg-white text-sky-900;
+    }
+
+    .qs-health-row--warn {
+        @apply bg-amber-50/85;
+    }
+
+    .qs-health-row--warn .qs-health-row__dot {
+        @apply bg-amber-500;
+    }
+
+    .qs-health-row--warn .qs-health-row__pill {
+        @apply border-amber-200/80 bg-white text-amber-950;
+    }
+
+    .qs-health-row--muted {
+        @apply bg-slate-50/90;
+    }
+
+    .qs-health-row--muted .qs-health-row__dot {
+        @apply bg-slate-400;
+    }
+
+    .qs-health-row--muted .qs-health-row__pill {
+        @apply border-slate-200/80 bg-white text-slate-800;
+    }
+
+    .qs-health-row--danger {
+        @apply bg-rose-50/90;
+    }
+
+    .qs-health-row--danger .qs-health-row__dot {
+        @apply bg-rose-500;
+    }
+
+    .qs-health-row--danger .qs-health-row__pill {
+        @apply border-rose-200 bg-rose-600 text-white;
+    }
+
+    .qs-health-overview__progress {
+        @apply border-t border-[#e5e7eb] px-5 py-4;
+    }
+
+    .qs-health-overview__progress-top {
+        @apply mb-2 flex items-center justify-between text-xs font-medium text-[#6b7280];
+    }
+
+    .qs-health-overview__progress-bar {
+        @apply h-2 w-full overflow-hidden rounded-full bg-[#e5e7eb];
+    }
+
+    .qs-health-overview__progress-fill {
+        @apply h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-500 transition-[width] duration-500 ease-out;
+    }
+
+    .qs-health-overview__foot {
+        @apply flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-[#e5e7eb] px-5 py-3;
+    }
+
+    .qs-health-overview__foot a {
+        @apply inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 transition hover:text-emerald-900 hover:underline;
+    }
+
+    .qs-health-overview__foot a i {
+        @apply text-emerald-600/90;
+    }
+
+    /** KPI strip — label + bold metric + circular icon */
+    .qs-dash-kpi {
+        @apply flex min-h-[5.25rem] items-center justify-between gap-3 rounded-xl border border-qs-soft/70 bg-white p-3.5 shadow-sm sm:p-4;
+    }
+
+    .qs-dash-kpi__meta {
+        @apply min-w-0 flex-1;
+    }
+
+    .qs-dash-kpi__label {
+        @apply text-[11px] font-semibold uppercase tracking-[0.12em] text-qs-muted;
+    }
+
+    .qs-dash-kpi__value {
+        @apply mt-0.5 text-2xl font-bold tabular-nums leading-none tracking-tight text-qs-text sm:text-[1.7rem];
+    }
+
+    .qs-dash-kpi__ring {
+        @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm sm:h-12 sm:w-12 sm:text-base;
+    }
+
+    .qs-dash-kpi__ring--primary {
+        @apply bg-emerald-100 text-emerald-700;
+    }
+
+    .qs-dash-kpi__ring--forest {
+        @apply bg-emerald-100 text-emerald-800;
+    }
+
+    .qs-dash-kpi__ring--sage {
+        @apply bg-teal-100 text-teal-700;
+    }
+
+    .qs-dash-kpi__ring--slate {
+        @apply bg-slate-200 text-slate-700;
+    }
+
+    .qs-dash-kpi--deep {
+        @apply border-[#e5e7eb] bg-white text-qs-text shadow-sm;
+    }
+
+    .qs-dash-kpi--deep .qs-dash-kpi__label {
+        @apply text-qs-muted;
+    }
+
+    .qs-dash-kpi--deep .qs-dash-kpi__value {
+        @apply text-qs-text;
+    }
+
+    .qs-dash-kpi--deep .qs-dash-kpi__ring {
+        @apply border-0 bg-emerald-100 text-emerald-800 shadow-none;
+    }
+
+    .qs-dash-kpi--wash {
+        @apply border-[#e5e7eb] bg-white;
+    }
+
+    /** Content panels */
+    .qs-dash-panel {
+        @apply flex flex-col rounded-xl border border-qs-soft/80 bg-white shadow-sm;
+    }
+
+    .qs-dash-panel__head {
+        @apply flex items-center gap-2 border-b border-qs-soft/70 px-4 py-3 sm:px-5;
+    }
+
+    .qs-dash-panel__title {
+        @apply text-sm font-semibold tracking-tight text-qs-text;
+    }
+
+    .qs-dash-panel__icon {
+        @apply flex h-8 w-8 items-center justify-center rounded-lg bg-qs-soft/80 text-qs-primary;
+    }
+
+    .qs-dash-panel__body {
+        @apply flex flex-1 flex-col px-4 py-3 sm:px-5 sm:py-4;
+    }
+
+    .qs-dash-row {
+        @apply flex items-start justify-between gap-3 border-b border-qs-soft/60 py-2.5 text-sm last:border-b-0;
+    }
+
+    .qs-dash-row__label {
+        @apply text-qs-muted;
+    }
+
+    .qs-dash-row__value {
+        @apply max-w-[65%] text-right text-xs font-semibold leading-snug text-qs-text sm:text-sm;
+    }
+
+    .qs-dash-pill {
+        @apply inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide;
+    }
+
+    .qs-dash-pill--ok {
+        @apply border border-emerald-200/80 bg-emerald-50 text-emerald-900;
+    }
+
+    .qs-dash-pill--warn {
+        @apply border border-amber-200/90 bg-amber-50 text-amber-950;
+    }
+
+    .qs-dash-pill--bad {
+        @apply border border-rose-200/90 bg-rose-50 text-rose-950;
+    }
+
+    .qs-dash-pill--muted {
+        @apply border border-qs-soft bg-qs-card text-qs-muted;
+    }
+
+    .qs-dash-quick {
+        @apply flex items-center justify-between gap-3 rounded-lg border border-transparent px-2 py-2.5 text-sm font-medium text-qs-text hover:border-qs-soft hover:bg-qs-card/90;
+    }
+
+    .qs-dash-quick__icon {
+        @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-qs-soft/70 text-qs-primary;
+    }
+
+    .qs-dash-quick__chevron {
+        @apply text-qs-muted;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+        .qs-dash-quick:hover .qs-dash-quick__icon {
+            @apply bg-qs-primary/10;
+        }
+
+        .qs-dash-quick:hover .qs-dash-quick__chevron {
+            @apply translate-x-0.5 text-qs-primary;
+        }
+    }
+
+    .qs-dash-activity {
+        @apply rounded-lg border border-qs-soft/60 bg-[#f8faf9] px-3 py-2.5;
+    }
+
+    .qs-dash-refresh {
+        @apply inline-flex items-center gap-2 rounded-lg border border-qs-soft bg-white px-3 py-2 text-xs font-semibold text-qs-text shadow-sm hover:border-qs-primary/25 hover:text-qs-primary;
+    }
+
+    /** Marketing strip on public home */
+    .qs-home-band {
+        background: linear-gradient(180deg, #eef3f0 0%, #f6f8f7 100%);
+    }
+
+    .qs-home-feature {
+        @apply flex flex-col gap-3 rounded-xl border border-qs-soft/70 bg-white p-5 shadow-sm transition hover:border-qs-primary/20 hover:shadow-md;
+    }
+
+    .qs-home-feature__ring {
+        @apply flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-qs-primary to-emerald-900 text-sm text-white shadow-inner;
+    }
+
+    /** General tiles (lists, panels) — compact by default */
+    .qs-tile {
+        @apply rounded-xl border border-qs-soft bg-qs-bg p-4 shadow-sm transition hover:border-qs-primary/20 hover:shadow;
+    }
+
+    .qs-tile-icon {
+        @apply mb-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-qs-soft/90 text-sm text-qs-primary;
+    }
+
+    /** Sleek metric cards (coordinator / examiner / student dashboards) */
+    .qs-stat-card {
+        @apply flex items-start gap-3 rounded-xl border border-qs-soft/90 bg-qs-bg p-3.5 shadow-sm transition hover:border-qs-primary/25 hover:shadow-md sm:p-4;
+    }
+
+    .qs-stat-card--deep {
+        @apply border-emerald-900/35 bg-gradient-to-br from-[#0f2918] to-[#14532d] text-white shadow-md;
+    }
+
+    .qs-stat-card--deep .qs-stat-card__icon {
+        @apply border border-white/15 bg-white/10 text-emerald-50;
+    }
+
+    .qs-stat-card--deep .qs-stat-card__label {
+        @apply text-emerald-100/90;
+    }
+
+    .qs-stat-card--deep .qs-stat-card__value {
+        @apply text-white;
+    }
+
+    .qs-stat-card--deep .qs-stat-card__hint {
+        @apply text-emerald-100/75;
+    }
+
+    .qs-stat-card--wash {
+        @apply border-qs-primary/25 bg-gradient-to-br from-[#14532d]/[0.09] via-qs-bg to-qs-soft/30;
+    }
+
+    .qs-stat-card__icon {
+        @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-qs-soft/90 text-sm text-qs-primary;
+    }
+
+    .qs-stat-card__body {
+        @apply min-w-0 flex-1;
+    }
+
+    .qs-stat-card__label {
+        @apply text-[11px] font-semibold uppercase tracking-wide text-qs-muted;
+    }
+
+    .qs-stat-card__value {
+        @apply mt-0.5 text-2xl font-semibold tabular-nums leading-tight text-qs-text sm:text-[1.65rem];
+    }
+
+    .qs-stat-card__hint {
+        @apply mt-1 text-[11px] leading-snug text-qs-muted;
+    }
+
+    /** Subtle brand wash for secondary panels */
+    .qs-panel-warm {
+        @apply rounded-xl border border-qs-primary/15 bg-gradient-to-br from-qs-primary/[0.06] to-qs-card/80;
     }
 
     .qs-input {
@@ -100,7 +998,7 @@
     }
 
     .brand-logo--interactive .brand-logo__char--snap {
-        color: #1e5a3a;
+        color: var(--qs-text);
     }
 
     @media (hover: hover) and (pointer: fine) {
@@ -139,6 +1037,287 @@
         color: var(--qs-primary);
     }
 
+    /** Student hub — light “learning app” cards (inspired layout, QuizSnap content) */
+    .qs-student-hub {
+        --qs-student-canvas: #eef1f4;
+        --qs-student-card: #ffffff;
+        --qs-student-ring: #0d9488;
+        --qs-student-ring-track: #e5e7eb;
+    }
+
+    .qs-student-hub {
+        @apply rounded-2xl sm:rounded-3xl;
+        background: var(--qs-student-canvas);
+        padding: 1rem 0.75rem 1.25rem;
+    }
+
+    .qs-student-shell {
+        @apply rounded-[1.75rem] border border-[#d9e5dd] bg-white shadow-[0_18px_42px_rgba(15,41,24,0.06)];
+    }
+
+    .qs-student-mini-tab {
+        @apply inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm backdrop-blur transition hover:border-emerald-200 hover:bg-white hover:text-emerald-900;
+    }
+
+    @media (min-width: 640px) {
+        .qs-student-hub {
+            padding: 1.25rem 1.25rem 1.5rem;
+        }
+    }
+
+    .qs-student-hero {
+        @apply relative overflow-hidden rounded-[1.75rem] border-0 shadow-none sm:rounded-[1.75rem];
+        background:
+            radial-gradient(circle at top right, rgb(252 211 77 / 0.22), transparent 28%),
+            linear-gradient(135deg, #f7fbf8 0%, #edf6ef 48%, #fef8e6 100%);
+    }
+
+    .qs-student-hero__eyebrow {
+        @apply text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-800/75;
+    }
+
+    .qs-student-hero__title {
+        @apply mt-2 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl;
+    }
+
+    .qs-student-hero__subtitle {
+        @apply mt-2 max-w-2xl text-sm leading-relaxed text-slate-600;
+    }
+
+    .qs-student-hero__avatar {
+        @apply flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/70 bg-white/70 text-lg font-bold text-emerald-900 shadow-md backdrop-blur;
+    }
+
+    .qs-student-hero__stats {
+        @apply grid grid-cols-2 divide-x divide-y divide-white/70 border-t border-white/70 bg-white/55 backdrop-blur sm:grid-cols-4 sm:divide-y-0;
+    }
+
+    .qs-student-hero__stat {
+        @apply px-3 py-3 text-center sm:px-4;
+    }
+
+    .qs-student-hero__stat-val {
+        @apply text-lg font-bold tabular-nums text-slate-950 sm:text-2xl;
+    }
+
+    .qs-student-hero__stat-lab {
+        @apply mt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 sm:text-[11px];
+    }
+
+    .qs-student-card {
+        @apply rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm sm:p-5;
+    }
+
+    .qs-student-pill {
+        @apply inline-flex items-center justify-center rounded-full border border-teal-200/80 bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-900 transition hover:border-teal-300 hover:bg-teal-100/80;
+    }
+
+    .qs-student-course-head {
+        @apply flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-left shadow-sm transition hover:border-teal-200/60 hover:shadow;
+    }
+
+    .qs-student-course-head__code {
+        @apply inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-sm font-bold text-emerald-800 ring-1 ring-emerald-100;
+    }
+
+    .qs-student-timeline {
+        @apply relative pl-6;
+    }
+
+    .qs-student-timeline::before {
+        content: '';
+        @apply absolute bottom-1 left-[7px] top-2 w-px bg-slate-200;
+    }
+
+    .qs-student-timeline__row {
+        @apply relative flex flex-wrap items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2.5 sm:flex-nowrap sm:justify-between;
+    }
+
+    .qs-student-timeline__dot {
+        @apply absolute left-[-17px] top-1/2 z-[1] h-2.5 w-2.5 -translate-y-1/2 rounded-full border-2 border-white bg-teal-500 shadow-sm;
+    }
+
+    .qs-student-ring {
+        @apply relative grid h-12 w-12 shrink-0 place-items-center rounded-full;
+        background: conic-gradient(var(--qs-student-ring) calc(var(--qs-p, 0) * 1%), var(--qs-student-ring-track) 0);
+    }
+
+    .qs-student-ring__hole {
+        @apply flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-600 shadow-inner;
+    }
+
+    .qs-student-action {
+        @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-teal-200 bg-teal-50 text-teal-700 shadow-sm transition hover:bg-teal-100 hover:text-teal-900;
+    }
+
+    .qs-student-action--muted {
+        @apply border-slate-200 bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-500;
+    }
+
+    .qs-student-badge {
+        @apply inline-flex items-center gap-2 rounded-full border border-white/75 bg-white/80 px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm backdrop-blur;
+    }
+
+    .qs-student-cta {
+        @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800;
+    }
+
+    .qs-student-cta--soft {
+        @apply border border-emerald-200 bg-white text-emerald-900 hover:bg-emerald-50;
+    }
+
+    .qs-student-spotlight {
+        @apply flex flex-col gap-4 rounded-[1.35rem] border border-emerald-200/70 bg-white/80 p-4 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between;
+    }
+
+    .qs-student-spotlight__icon {
+        @apply inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800;
+    }
+
+    .qs-student-spotlight__eyebrow {
+        @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700;
+    }
+
+    .qs-student-spotlight__title {
+        @apply mt-1 text-base font-bold text-slate-950;
+    }
+
+    .qs-student-spotlight__meta {
+        @apply mt-1 text-xs text-slate-500;
+    }
+
+    .qs-student-highlight-card {
+        @apply rounded-[1.5rem] border border-white/75 p-4 shadow-sm backdrop-blur;
+    }
+
+    .qs-student-highlight-card--mint {
+        @apply bg-gradient-to-br from-emerald-100 via-white to-emerald-50;
+    }
+
+    .qs-student-highlight-card--sky {
+        @apply bg-gradient-to-br from-sky-100 via-white to-cyan-50;
+    }
+
+    .qs-student-highlight-card--amber {
+        @apply bg-gradient-to-br from-amber-100 via-white to-yellow-50;
+    }
+
+    .qs-student-highlight-card__icon {
+        @apply inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white/80 text-slate-800 shadow-sm;
+    }
+
+    .qs-student-highlight-card__label {
+        @apply mt-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500;
+    }
+
+    .qs-student-highlight-card__value {
+        @apply mt-2 text-3xl font-bold tracking-tight text-slate-950;
+    }
+
+    .qs-student-highlight-card__meta {
+        @apply mt-1 text-xs leading-relaxed text-slate-600;
+    }
+
+    .qs-student-feature-card {
+        @apply flex items-start gap-3 rounded-[1.5rem] border border-[#d9e5dd] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-md;
+    }
+
+    .qs-student-feature-card__icon {
+        @apply inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl;
+    }
+
+    .qs-student-feature-card__title {
+        @apply text-sm font-bold text-slate-900;
+    }
+
+    .qs-student-feature-card__meta {
+        @apply mt-1 text-xs leading-relaxed text-slate-500;
+    }
+
+    .qs-student-feature-card__chev {
+        @apply ml-auto mt-1 shrink-0 text-xs text-slate-400;
+    }
+
+    .qs-student-section-eyebrow {
+        @apply text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700/75;
+    }
+
+    .qs-student-glance-card {
+        @apply rounded-[1.4rem] border border-slate-200/80 bg-[#f8fbf9] p-4 shadow-sm;
+    }
+
+    .qs-student-glance-card__icon {
+        @apply inline-flex h-10 w-10 items-center justify-center rounded-2xl;
+    }
+
+    .qs-student-glance-card__value {
+        @apply mt-4 text-2xl font-bold tracking-tight text-slate-950;
+    }
+
+    .qs-student-glance-card__label {
+        @apply mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500;
+    }
+
+    .qs-student-quick-link {
+        @apply flex items-center gap-3 rounded-[1.25rem] border border-slate-200/80 bg-white px-4 py-3 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50/30;
+    }
+
+    .qs-student-quick-link__icon {
+        @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-800;
+    }
+
+    .qs-student-side-icon {
+        @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl;
+    }
+
+    .qs-student-status-block {
+        @apply rounded-[1.25rem] border p-3.5;
+    }
+
+    .qs-student-status-block--warn {
+        @apply border-amber-200 bg-amber-50/85;
+    }
+
+    .qs-student-status-block--muted {
+        @apply border-slate-200 bg-slate-50/90;
+    }
+
+    .qs-student-score-row {
+        @apply flex items-center justify-between gap-3 rounded-[1.05rem] border border-slate-200/80 bg-[#f8fbf9] px-3 py-2.5;
+    }
+
+    .qs-student-score-pill {
+        @apply inline-flex min-w-[4.5rem] items-center justify-center rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-bold text-emerald-900;
+    }
+
+    .qs-student-agenda-card {
+        @apply rounded-[1.25rem] border border-slate-200/80 bg-white p-3.5 shadow-sm;
+    }
+
+    .qs-student-nav-dock {
+        @apply fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200/90 bg-white/95 pb-[env(safe-area-inset-bottom)] pt-1.5 shadow-[0_-6px_28px_rgba(21,52,58,0.09)] backdrop-blur-md md:hidden;
+    }
+
+    .qs-student-nav-dock__inner {
+        @apply mx-auto flex w-full max-w-none items-stretch justify-around gap-0.5 px-2;
+    }
+
+    .qs-student-nav-dock__a {
+        @apply flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-50 hover:text-teal-800;
+    }
+
+    .qs-student-nav-dock__a--active {
+        @apply text-teal-800;
+    }
+
+    .qs-student-nav-dock__a--active .qs-student-nav-dock__icon {
+        @apply text-teal-600;
+    }
+
+    .qs-student-nav-dock__icon {
+        @apply text-base text-slate-400;
+    }
+
     @media (hover: hover) and (pointer: fine) {
         .animated-word--hero:hover .animated-word__char {
             animation: qs-hero-letter-hover 0.52s ease forwards;
@@ -151,6 +1330,9 @@
         .animated-word--hero:hover .animated-word__char {
             animation: none !important;
         }
+        .qs-health-row--live {
+            animation: none !important;
+        }
 
         @media (hover: hover) {
             .brand-logo--interactive:hover .brand-logo__char--quiz,
@@ -159,7 +1341,7 @@
             }
 
             .brand-logo--interactive:hover .brand-logo__char--snap {
-                color: #1e5a3a;
+                color: var(--qs-text);
             }
         }
     }
@@ -177,6 +1359,18 @@
     }
 }
 
+@keyframes qs-health-breathe {
+    0%,
+    100% {
+        transform: translateY(0);
+        box-shadow: 0 0 0 rgba(16, 185, 129, 0);
+    }
+    50% {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(16, 185, 129, 0.08);
+    }
+}
+
 @keyframes qs-hero-letter-hover {
     0%,
     100% {
@@ -186,7 +1380,7 @@
 
     35% {
         transform: translateY(-1px);
-        color: #1e5a3a;
+        color: var(--qs-text);
     }
 
     70% {

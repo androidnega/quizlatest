@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityLog;
 use App\Models\ExamSession;
 use App\Models\ExamSessionAnswer;
 use App\Models\ExamSessionQuestion;
@@ -15,6 +16,7 @@ use App\Services\ExamAnswerSynthesisService;
 use App\Services\ExamEntryPipelineService;
 use App\Services\ExamOtpService;
 use App\Services\ExamRedisService;
+use App\Services\ExamSessionInvalidateForRetakeService;
 use App\Services\ProctoringGlobalControlService;
 use App\Services\ProctoringOrchestratorService;
 use App\Services\ResultFinalizationService;
@@ -22,8 +24,10 @@ use App\Services\SensitiveStorageService;
 use App\Services\SystemExamPolicyService;
 use App\Support\ExamRuntimeStateExtension;
 use App\Support\ExamSessionStateResolver;
+use App\Support\ExamSessionTimer;
 use App\Support\ProctoringCapabilityResolver;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -105,12 +109,48 @@ class ExamSessionController extends Controller
         $fresh = $examSession->fresh();
         abort_if($fresh === null, 404);
 
+        if ($fresh->status === 'active') {
+            $fresh->forceFill(['last_seen_at' => now()])->save();
+            $fresh = $examSession->fresh();
+        }
+
         return response()->json($this->mergeStudentExamStatePayload($fresh));
+    }
+
+    public function resume(Request $request, ExamSession $examSession): JsonResponse
+    {
+        $this->authorizeStudentOwnsSession($request, $examSession);
+
+        $row = $examSession->fresh();
+        abort_if($row === null, 404);
+        abort_unless($row->status === 'paused', 422, 'Session is not paused.');
+
+        $row->loadMissing('exam');
+        abort_if($row->exam === null, 422);
+        abort_unless($row->exam->isAvailableForStudentToStart(now()), 422, 'This exam is no longer in its scheduled window.');
+
+        $segmentStart = $row->pause_segment_started_at ?? now();
+        $add = max(0, $segmentStart->diffInSeconds(now()));
+
+        $row->update([
+            'status' => 'active',
+            'accumulated_pause_seconds' => (int) ($row->accumulated_pause_seconds ?? 0) + $add,
+            'pause_segment_started_at' => null,
+            'last_seen_at' => now(),
+        ]);
+
+        $out = $row->fresh();
+        abort_if($out === null, 404);
+
+        return response()->json(array_merge(
+            ['status' => 'resumed'],
+            $this->mergeStudentExamStatePayload($out),
+        ));
     }
 
     public function storeVerificationImage(Request $request, ExamSession $examSession): JsonResponse
     {
-        $this->authorizeStudentSession($request, $examSession);
+        $this->authorizeStudentProctoringSession($request, $examSession);
 
         if ($examSession->verification_image_path !== null && $examSession->verification_image_path !== '') {
             return response()->json(['status' => 'already_stored']);
@@ -212,6 +252,8 @@ class ExamSessionController extends Controller
             ],
         );
 
+        $examSession->forceFill(['last_seen_at' => now()])->save();
+
         return response()->json([
             'status' => 'saved',
             'client_revision' => $storedRevision,
@@ -226,7 +268,12 @@ class ExamSessionController extends Controller
             return response()->json(['status' => 'submitted', 'reason' => 'timeout']);
         }
 
-        return response()->json(['status' => $examSession->status]);
+        $fresh = $examSession->fresh();
+        if ($fresh && $fresh->status === 'active') {
+            $fresh->forceFill(['last_seen_at' => now()])->save();
+        }
+
+        return response()->json(['status' => $fresh?->status ?? $examSession->status]);
     }
 
     public function proctoringCapability(Request $request): JsonResponse
@@ -245,7 +292,7 @@ class ExamSessionController extends Controller
 
     public function logProctoringEvent(Request $request, ExamSession $examSession): JsonResponse
     {
-        $this->authorizeStudentSession($request, $examSession);
+        $this->authorizeStudentProctoringSession($request, $examSession);
         if ($this->autoExpireIfTimedOut($examSession)) {
             return response()->json(['status' => 'submitted', 'reason' => 'timeout']);
         }
@@ -309,7 +356,7 @@ class ExamSessionController extends Controller
 
     public function logProctoringEventBatch(Request $request, ExamSession $examSession): JsonResponse
     {
-        $this->authorizeStudentSession($request, $examSession);
+        $this->authorizeStudentProctoringSession($request, $examSession);
         if ($this->autoExpireIfTimedOut($examSession)) {
             return response()->json(['status' => 'submitted', 'reason' => 'timeout']);
         }
@@ -434,6 +481,25 @@ class ExamSessionController extends Controller
         $this->submitSession($examSession, 'submitted_held', 'force_submit');
 
         return response()->json(['status' => 'submitted_held', 'reason' => 'force_submit']);
+    }
+
+    /**
+     * Examiner-only (via route): delete all attempts for this student on this quiz so they may retake.
+     */
+    public function invalidateForRetake(
+        Request $request,
+        ExamSession $examSession,
+        ExamSessionInvalidateForRetakeService $invalidator,
+    ): RedirectResponse {
+        $quiz = Quiz::query()->find((int) $examSession->exam_id);
+        abort_if($quiz === null, 404);
+        $this->authorize('manageResults', $quiz);
+
+        $invalidator->invalidate((int) $examSession->student_id, (int) $examSession->exam_id);
+
+        return redirect()
+            ->back()
+            ->with('status', __('This attempt was cleared. The student can start the exam again.'));
     }
 
     public function reviewTimeline(Request $request, ExamSession $examSession, SensitiveStorageService $sensitiveStorage): JsonResponse
@@ -592,6 +658,12 @@ class ExamSessionController extends Controller
     private function authorizeStudentSession(Request $request, ExamSession $examSession): void
     {
         $this->authorizeStudentOwnsSession($request, $examSession);
+        abort_unless($examSession->status === 'active', 422, 'Session is not active.');
+    }
+
+    private function authorizeStudentProctoringSession(Request $request, ExamSession $examSession): void
+    {
+        $this->authorizeStudentOwnsSession($request, $examSession);
         abort_unless(in_array($examSession->status, ['active', 'paused'], true), 422, 'Session is not active.');
     }
 
@@ -660,13 +732,17 @@ class ExamSessionController extends Controller
     {
         $examSession->loadMissing('exam');
 
+        if ($examSession->exam?->isAssignment()) {
+            return false;
+        }
+
         $durationMinutes = (int) ($examSession->exam?->duration_minutes ?? 0);
         if ($durationMinutes <= 0) {
             return false;
         }
 
-        $expiresAt = $examSession->start_time?->copy()->addMinutes($durationMinutes);
-        if ($expiresAt && now()->greaterThanOrEqualTo($expiresAt) && $examSession->status !== 'submitted') {
+        $remaining = ExamSessionTimer::timeRemainingSeconds($examSession, $examSession->exam, now());
+        if ($remaining <= 0 && $examSession->status !== 'submitted') {
             $this->submitSession($examSession, 'submitted', 'timeout');
 
             return true;
@@ -681,21 +757,38 @@ class ExamSessionController extends Controller
             return;
         }
 
+        $examSession->loadMissing('exam');
+        $exam = $examSession->exam;
+
+        $submittedLate = false;
+        if ($exam !== null && $exam->isAssignment() && $exam->due_at !== null) {
+            $submittedLate = now()->isAfter($exam->due_at);
+        }
+
         $examId = (int) $examSession->exam_id;
+
+        $accum = (int) ($examSession->accumulated_pause_seconds ?? 0);
+        if ($examSession->pause_segment_started_at !== null) {
+            $accum += max(0, $examSession->pause_segment_started_at->diffInSeconds(now()));
+        }
 
         $examSession->update([
             'status' => 'submitted',
             'end_time' => now(),
             'exam_status' => $examStatus,
             'risk_state' => $examStatus === 'submitted_held' ? 'locked' : $examSession->risk_state,
+            'accumulated_pause_seconds' => $accum,
+            'pause_segment_started_at' => null,
+            'submitted_late' => $submittedLate,
         ]);
 
         $this->examRedis->decrementActiveSessions($examId);
 
-        $submitted = $examSession->fresh();
+        $submitted = $examSession->fresh(['exam']);
         $this->answerSynthesis->ensureEveryQuestionHasAnswer($submitted);
 
-        $timeTaken = max(0, $submitted->start_time?->diffInSeconds($submitted->end_time ?? now()) ?? 0);
+        $endAt = $submitted->end_time ?? now();
+        $timeTaken = ExamSessionTimer::activeWritingSeconds($submitted, $endAt);
 
         $gradedSession = $submitted->fresh(['exam.questions', 'answers']);
         $this->answerEvaluation->evaluateAndPersist($gradedSession);
@@ -706,6 +799,21 @@ class ExamSessionController extends Controller
             $timeTaken,
             $reason,
         );
+
+        if ($exam !== null && $exam->isAssignment()) {
+            ActivityLog::query()->create([
+                'user_id' => $examSession->student_id,
+                'quiz_id' => $exam->id,
+                'event_type' => 'assignment_submitted',
+                'event_data' => [
+                    'exam_session_id' => $examSession->id,
+                    'session_id' => $examSession->session_id,
+                    'submitted_late' => $submittedLate,
+                    'reason' => $reason,
+                ],
+                'created_at' => now(),
+            ]);
+        }
     }
 
     private function applyReviewDecision(ExamSession $examSession, string $decision, string $note): void

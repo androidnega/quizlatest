@@ -1,10 +1,7 @@
-<x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl qs-heading leading-tight">{{ __('Generate practice quiz') }}</h2>
-    </x-slot>
+<x-layouts.student>
+    <x-slot name="title">{{ __('Generate practice quiz') }}</x-slot>
 
-    <div class="py-10">
-        <div class="mx-auto max-w-3xl space-y-6 px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-3xl space-y-6 py-2">
             @if ($errors->any())
                 <div class="rounded-xl border border-qs-danger/35 bg-qs-danger-soft px-4 py-3 text-sm text-qs-danger">
                     <ul class="list-disc ps-5">
@@ -55,6 +52,5 @@
                     <button type="submit" class="qs-btn-primary min-h-[44px] px-4 text-sm font-semibold">{{ __('Generate') }}</button>
                 </form>
             @endif
-        </div>
     </div>
-</x-app-layout>
+</x-layouts.student>

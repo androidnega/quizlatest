@@ -13,6 +13,8 @@ class GuestLayout extends Component
         public ?string $pageTitle = null,
         public ?string $eyebrow = null,
         public string $contentMax = 'max-w-md',
+        public bool $compact = false,
+        public bool $showHeader = true,
     ) {}
 
     /**

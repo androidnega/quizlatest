@@ -127,7 +127,7 @@ class ExaminerAccessTest extends TestCase
 
         $this->actingAs($ctx['examiner'])
             ->get(route('examiner.exams.sessions.index', $ctx['exam']))
-            ->assertOk();
+            ->assertRedirect(route('examiner.quizzes.workspace', ['exam' => $ctx['exam'], 'tab' => 'sessions']));
     }
 
     public function test_coordinator_cannot_access_examiner_dashboard_even_when_seeded_as_coordinator(): void

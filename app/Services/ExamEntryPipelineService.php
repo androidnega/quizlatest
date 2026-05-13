@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ExamSession;
 use App\Models\Quiz;
+use App\Support\AssessmentProctoringDefaults;
 use App\Support\ProctoringCapabilityResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -65,6 +66,11 @@ class ExamEntryPipelineService
                 ->exists();
             abort_unless($classHasExamCourse, 422, 'Exam is not assigned to your class.');
 
+            if ($exam->targetClassrooms()->exists()) {
+                $inTargetClass = $exam->targetClassrooms()->where('classes.id', (int) $student->class_id)->exists();
+                abort_unless($inTargetClass, 422, 'Exam is not assigned to your class group.');
+            }
+
             // 3. Session rules (before OTP / SMS cost)
             $existingSubmitted = ExamSession::query()
                 ->where('student_id', $student->id)
@@ -78,6 +84,86 @@ class ExamEntryPipelineService
                 ->whereIn('status', ['active', 'paused'])
                 ->exists();
             abort_unless(! $activeSessionExists, 422, 'Another active session already exists.');
+
+            if ($exam->isAssignment()) {
+                $snapshotFile = null;
+                $normalizedSettings = AssessmentProctoringDefaults::enforceAssignmentCaps(
+                    is_array($exam->proctoring_settings) ? $exam->proctoring_settings : [],
+                );
+                $effectiveForOrchestrator = $this->globalControl->mergeExamSettingsForOrchestrator(
+                    ProctoringOrchestratorService::mergeInternalBandsWithNormalized($normalizedSettings),
+                );
+                $effectiveForOrchestrator['phone_detection_enabled'] = false;
+                $effectiveForOrchestrator['fullscreen_enforced'] = false;
+                $effectiveForOrchestrator['auto_submit_enabled'] = false;
+
+                $clientProctoringSettings = [
+                    'require_camera_monitoring' => false,
+                    'tab_switch_rules' => $effectiveForOrchestrator['tab_switch_rules'],
+                    'phone_detection_enabled' => false,
+                    'fullscreen_enforced' => false,
+                    'auto_submit_enabled' => false,
+                    'violation_weights' => $effectiveForOrchestrator['violation_weights'],
+                    'cooldown_seconds' => $effectiveForOrchestrator['cooldown_seconds'],
+                    'auto_submit_score_effective' => (int) ($effectiveForOrchestrator['auto_submit_score'] ?? 90),
+                ];
+
+                $capabilityHints = [
+                    'hardware_concurrency' => $validated['hardware_concurrency'] ?? null,
+                    'device_memory_gb' => $validated['device_memory_gb'] ?? null,
+                    'network_effective_type' => $validated['network_effective_type'] ?? null,
+                    'save_data' => $validated['save_data'] ?? null,
+                ];
+                $performanceProfile = ProctoringCapabilityResolver::resolve($capabilityHints);
+
+                $session = DB::transaction(function () use ($student, $exam) {
+                    $existingSubmitted = ExamSession::query()
+                        ->where('student_id', $student->id)
+                        ->where('exam_id', $exam->id)
+                        ->where('status', 'submitted')
+                        ->lockForUpdate()
+                        ->exists();
+                    abort_unless(! $existingSubmitted, 422, 'Re-entry is not allowed after submission.');
+
+                    $activeSessionExists = ExamSession::query()
+                        ->where('student_id', $student->id)
+                        ->whereIn('status', ['active', 'paused'])
+                        ->lockForUpdate()
+                        ->exists();
+                    abort_unless(! $activeSessionExists, 422, 'Another active session already exists.');
+
+                    return ExamSession::create([
+                        'student_id' => $student->id,
+                        'class_id' => $student->class_id,
+                        'exam_id' => $exam->id,
+                        'session_id' => (string) Str::uuid(),
+                        'status' => 'active',
+                        'start_time' => now(),
+                        'end_time' => null,
+                        'violation_count' => 0,
+                        'violation_score' => 0,
+                        'violation_events' => [],
+                        'last_event_time' => null,
+                        'risk_state' => 'normal',
+                        'exam_status' => 'active',
+                        'last_seen_at' => now(),
+                        'submitted_late' => false,
+                    ]);
+                });
+
+                $this->examRedis->incrementActiveSessions((int) $exam->id);
+                $this->examOtp->forgetVerifiedFlag((int) $student->id, (int) $exam->id);
+
+                return [
+                    'session_id' => $session->session_id,
+                    'status' => $session->status,
+                    'start_time' => $session->start_time?->toISOString(),
+                    'verification_image_stored' => false,
+                    'proctoring_settings_effective' => $clientProctoringSettings,
+                    'performance_profile' => $performanceProfile,
+                    'global_control_revision' => (int) ($this->globalControl->getControl()['revision'] ?? 0),
+                ];
+            }
 
             // 4. OTP gate (SMS / phone verification)
             if ($this->examPolicy->isOtpEnabled()) {
@@ -137,7 +223,7 @@ class ExamEntryPipelineService
 
             // Strip internal bands from client-facing payload — expose copy without INTERNAL_* leakage patterns
             $clientProctoringSettings = [
-                'require_camera_monitoring' => $this->examPolicy->isCameraMonitoringRequired(),
+                'require_camera_monitoring' => $this->examPolicy->isCameraMonitoringRequiredForQuiz($exam),
                 'tab_switch_rules' => $effectiveForOrchestrator['tab_switch_rules'],
                 'phone_detection_enabled' => $effectiveForOrchestrator['phone_detection_enabled'],
                 'fullscreen_enforced' => $effectiveForOrchestrator['fullscreen_enforced'],
@@ -188,6 +274,8 @@ class ExamEntryPipelineService
                     'last_event_time' => null,
                     'risk_state' => 'normal',
                     'exam_status' => 'active',
+                    'last_seen_at' => now(),
+                    'submitted_late' => false,
                 ]);
 
                 if ($snapshotFile !== null && $snapshotFile->isValid()) {

@@ -1,10 +1,7 @@
-<x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl qs-heading leading-tight">{{ __('Practice results') }}</h2>
-    </x-slot>
+<x-layouts.student>
+    <x-slot name="title">{{ __('Practice results') }}</x-slot>
 
-    <div class="py-10">
-        <div class="mx-auto max-w-3xl space-y-6 px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-3xl space-y-6 py-2">
             <div class="rounded-xl border border-qs-accent/40 bg-qs-accent/10 p-5">
                 <p class="text-sm text-qs-muted">{{ __('Score') }}</p>
                 <p class="mt-1 text-3xl font-semibold text-qs-text">
@@ -31,6 +28,5 @@
             </div>
 
             <a href="{{ route('student.practice.quizzes.show', $quiz) }}" class="qs-btn-secondary inline-flex text-sm">{{ __('Back to quiz') }}</a>
-        </div>
     </div>
-</x-app-layout>
+</x-layouts.student>

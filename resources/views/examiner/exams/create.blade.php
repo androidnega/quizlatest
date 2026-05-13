@@ -35,7 +35,7 @@
                 </div>
                 <div>
                     <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Assessment type') }} <span class="text-qs-danger">*</span></label>
-                    <select name="assessment_type" required class="qs-input mt-1 w-full py-2.5">
+                    <select name="assessment_type" x-model="assessmentType" required class="qs-input mt-1 w-full py-2.5">
                         @foreach (['quiz' => __('Quiz'), 'mid' => __('Midterm'), 'exam' => __('End of semester'), 'assignment' => __('Assignment')] as $value => $label)
                             <option value="{{ $value }}" @selected(old('assessment_type', 'quiz') === $value)>{{ $label }}</option>
                         @endforeach
@@ -82,8 +82,9 @@
                     <div id="classroom-ids-mount"></div>
                 </fieldset>
                 <div>
-                    <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Description (optional)') }}</label>
+                    <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Description') }} <span class="text-qs-danger" x-show="assessmentType === 'assignment'">*</span></label>
                     <textarea name="description" rows="3" class="qs-input mt-1 w-full py-2.5">{{ old('description') }}</textarea>
+                    <p class="mt-1 text-xs text-qs-muted" x-show="assessmentType === 'assignment'">{{ __('Instructions are required for assignments and are shown to students before they submit.') }}</p>
                 </div>
             </section>
 
@@ -92,7 +93,16 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Duration (minutes)') }} <span class="text-qs-danger">*</span></label>
-                        <input type="number" name="duration_minutes" value="{{ old('duration_minutes', 30) }}" min="1" max="600" required class="qs-input mt-1 w-full py-2.5" />
+                        <input
+                            type="number"
+                            name="duration_minutes"
+                            value="{{ old('duration_minutes', 30) }}"
+                            :min="assessmentType === 'assignment' ? 60 : 1"
+                            :max="assessmentType === 'assignment' ? 20160 : 600"
+                            required
+                            class="qs-input mt-1 w-full py-2.5"
+                        />
+                        <p class="mt-1 text-xs text-qs-muted" x-show="assessmentType === 'assignment'">{{ __('Assignments use a generous time budget (no countdown auto-submit); keep this aligned with how long students should need.') }}</p>
                     </div>
                     <div>
                         <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Questions per student') }}</label>
@@ -315,6 +325,11 @@
                         <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Closes at (optional)') }}</label>
                         <input type="datetime-local" name="end_time" value="{{ old('end_time') }}" class="qs-input mt-1 w-full py-2.5" />
                     </div>
+                    <div class="sm:col-span-2" x-show="assessmentType === 'assignment'" x-cloak>
+                        <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Due date') }} <span class="text-qs-danger">*</span></label>
+                        <input type="datetime-local" name="due_at" value="{{ old('due_at') }}" class="qs-input mt-1 w-full max-w-md py-2.5" :required="assessmentType === 'assignment'" />
+                        <p class="mt-1 text-xs text-qs-muted">{{ __('Late work may still be accepted until the assignment closes, based on the late window set when the assignment is published.') }}</p>
+                    </div>
                 </div>
                 <label class="inline-flex items-center gap-2 text-sm text-qs-text">
                     <input type="checkbox" name="activate_now" value="1" class="size-4 rounded border-qs-soft text-qs-accent" @checked(old('activate_now')) />
@@ -343,6 +358,11 @@
             </div>
 
             <div x-show="wizardStep === 2" x-cloak class="space-y-6">
+                <div x-show="assessmentType === 'assignment'" x-cloak class="rounded-xl border border-sky-200 bg-sky-50/80 px-4 py-4 text-sm text-slate-800">
+                    <p class="font-semibold text-slate-900">{{ __('Coursework proctoring') }}</p>
+                    <p class="mt-2 leading-relaxed">{{ __('Live camera, audio, and violation auto-submit stay off for assignments. Students type answers in-app with copy and paste blocked in text fields. You can fine-tune release of grades after marking from the builder once questions exist.') }}</p>
+                </div>
+                <div x-show="assessmentType !== 'assignment'" x-cloak class="space-y-6">
                 <p class="text-sm leading-relaxed text-qs-muted">
                     {{ __('Choose proctoring options for this assessment, then continue to the builder to add or review questions.') }}
                 </p>
@@ -351,6 +371,7 @@
                     'examProctoringControls' => $examProctoringControls,
                     'variant' => 'embedded',
                 ])
+                </div>
                 <div class="flex flex-wrap gap-3 border-t border-qs-soft pt-4">
                     <button type="button" class="qs-btn-secondary min-h-[44px] px-5 text-sm font-semibold" @click="wizardBack()">
                         {{ __('Back') }}
@@ -512,6 +533,7 @@
                     rows: cfg.rows,
                     courseId: cfg.courseId,
                     selectedClassIds: cfg.selectedClassIds,
+                    assessmentType: cfg.assessmentType || 'quiz',
                     source: cfg.source,
                     pasteTopicTags: parseInitialPasteTopicTags(cfg.pastePromptTopics),
                     pasteTopicInput: '',

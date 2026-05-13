@@ -127,10 +127,10 @@ class CoordinatorExamSessionReviewTest extends TestCase
         $ctx = $this->seedScopedExamContext();
 
         $this->actingAs($ctx['examiner']);
-        $this->get(route('examiner.exams.sessions.index', $ctx['exam']))
+        $this->get(route('examiner.quizzes.workspace', ['exam' => $ctx['exam'], 'tab' => 'sessions']))
             ->assertOk()
-            ->assertSeeText('Exam analytics')
-            ->assertSeeText('Risk distribution')
+            ->assertSeeText('Question analytics')
+            ->assertSeeText('Student results')
             ->assertSeeText($ctx['session']->student->name);
     }
 

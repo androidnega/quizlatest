@@ -1,10 +1,7 @@
-<x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl qs-heading leading-tight">{{ __('Practice attempt') }}</h2>
-    </x-slot>
+<x-layouts.student>
+    <x-slot name="title">{{ __('Practice attempt') }}</x-slot>
 
-    <div class="py-10">
-        <div class="mx-auto max-w-3xl space-y-8 px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-3xl space-y-8 py-2">
             <p class="text-sm text-qs-muted">{{ __('Unofficial practice — not proctored or graded officially.') }}</p>
 
             <form method="POST" action="{{ route('student.practice.quizzes.submit', $quiz) }}" class="space-y-8">
@@ -36,6 +33,5 @@
 
                 <button type="submit" class="qs-btn-primary min-h-[44px] px-4 text-sm font-semibold">{{ __('Submit answers') }}</button>
             </form>
-        </div>
     </div>
-</x-app-layout>
+</x-layouts.student>

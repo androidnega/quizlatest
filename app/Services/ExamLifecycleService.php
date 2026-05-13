@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ExamSection;
 use App\Models\Question;
 use App\Models\Quiz;
+use App\Support\AssessmentProctoringDefaults;
 use App\Support\AssessmentQuestionTypes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -109,6 +110,12 @@ final class ExamLifecycleService
             }
         }
 
+        if ($exam->assessment_type === 'assignment') {
+            foreach (AssessmentProctoringDefaults::assignmentPublishErrors($exam) as $msg) {
+                $errors[] = $msg;
+            }
+        }
+
         return array_values(array_unique($errors));
     }
 
@@ -199,6 +206,8 @@ final class ExamLifecycleService
                 'proctoring_settings' => $source->proctoring_settings,
                 'start_time' => null,
                 'end_time' => null,
+                'due_at' => $source->due_at,
+                'grades_released_at' => null,
             ]);
 
             $totalMarks = 0.0;

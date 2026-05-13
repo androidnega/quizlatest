@@ -59,4 +59,20 @@ class UserPolicy
     {
         return $admin->role === 'admin' && $coordinator->role === 'coordinator';
     }
+
+    /**
+     * Super admin: browse staff accounts (admins, coordinators, examiners). Single rule: `is_super_admin` on the user.
+     */
+    public function manageGlobalUserAccounts(User $user): bool
+    {
+        return $user->isSuperAdmin();
+    }
+
+    /**
+     * Super admin: view or update any staff account (not students).
+     */
+    public function manageUserAsAdmin(User $admin, User $target): bool
+    {
+        return $admin->isSuperAdmin() && $target->role !== 'student';
+    }
 }

@@ -23,6 +23,10 @@ class ExamSession extends Model
         'last_event_time',
         'risk_state',
         'exam_status',
+        'last_seen_at',
+        'pause_segment_started_at',
+        'accumulated_pause_seconds',
+        'submitted_late',
     ];
 
     protected $casts = [
@@ -32,6 +36,10 @@ class ExamSession extends Model
         'violation_score' => 'integer',
         'violation_events' => 'array',
         'last_event_time' => 'datetime',
+        'last_seen_at' => 'datetime',
+        'pause_segment_started_at' => 'datetime',
+        'accumulated_pause_seconds' => 'integer',
+        'submitted_late' => 'boolean',
     ];
 
     public function student(): BelongsTo

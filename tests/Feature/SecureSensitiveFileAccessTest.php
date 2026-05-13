@@ -541,6 +541,7 @@ class SecureSensitiveFileAccessTest extends TestCase
             'class_id' => $restrictMaterialToAltClass ? $classB : null,
             'uploaded_by' => $examiner->id,
             'title' => 'Lecture notes',
+            'material_kind' => CourseMaterial::KIND_SUPPLEMENTARY,
             'file_path' => $rel,
             'file_type' => 'txt',
             'extracted_text_path' => null,

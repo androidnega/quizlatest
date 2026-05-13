@@ -1,10 +1,14 @@
 @props([
     'settingsHref' => null,
+    'iconOnly' => false,
 ])
 
 @php
     /** @var \App\Models\User $user */
     $user = auth()->user();
+    $displayHandle = filled($user->email ?? null)
+        ? \Illuminate\Support\Str::before((string) $user->email, '@')
+        : (string) ($user->index_number ?? $user->name ?? '');
     $parts = \Illuminate\Support\Str::of((string) ($user->name ?? ''))->trim()->explode(' ')->filter();
     $initials = $parts->take(2)->map(fn ($p) => \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr((string) $p, 0, 1)))->implode('');
     if ($initials === '') {
@@ -22,34 +26,37 @@
 >
     <button
         type="button"
-        class="inline-flex min-h-[44px] min-w-[44px] max-w-full items-center gap-2 rounded-xl border border-qs-soft bg-qs-bg px-2 py-1.5 text-left text-qs-text transition hover:bg-qs-card focus:outline-none focus:ring-2 focus:ring-qs-primary/25 md:min-h-0 md:min-w-0 md:px-2 md:py-1"
+        @class([
+            'inline-flex max-w-full items-center text-qs-text focus:outline-none focus:ring-2 focus:ring-qs-primary/25',
+            'min-h-[44px] min-w-[44px] justify-center rounded-full bg-transparent p-0 hover:bg-qs-soft/60 md:min-h-0 md:min-w-0' => $iconOnly,
+            'min-h-[44px] min-w-[44px] gap-2 rounded-lg bg-transparent px-1 py-1 text-left hover:bg-qs-soft/50 md:min-h-0 md:min-w-0 md:px-1 md:py-0.5' => ! $iconOnly,
+        ])
         @click="open = ! open"
         :aria-expanded="open ? 'true' : 'false'"
         aria-haspopup="menu"
         aria-controls="shell-profile-menu-panel"
+        @if ($iconOnly)
+            aria-label="{{ __('Account menu') }}"
+        @endif
     >
-        <span class="relative h-9 w-9 shrink-0 overflow-hidden rounded-full border border-qs-soft bg-qs-card md:h-10 md:w-10">
+        <span class="relative h-9 w-9 shrink-0 overflow-hidden rounded-full bg-qs-card md:h-10 md:w-10">
             @if ($avatarSrc)
                 <img src="{{ $avatarSrc }}" alt="" class="h-full w-full object-cover" width="40" height="40" loading="lazy" decoding="async" />
             @else
                 <span class="flex h-full w-full items-center justify-center text-[11px] font-semibold tracking-tight text-qs-muted md:text-xs">{{ $initials }}</span>
             @endif
         </span>
-        <span class="hidden min-w-0 max-w-[10rem] truncate text-sm font-medium text-qs-text lg:block">{{ $user->name }}</span>
-        <svg class="hidden h-4 w-4 shrink-0 text-qs-muted sm:block" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-        </svg>
+        @unless ($iconOnly)
+            <span class="hidden min-w-0 max-w-[12rem] truncate text-sm font-normal text-qs-text lg:block">{{ $displayHandle }}</span>
+            <svg class="hidden h-4 w-4 shrink-0 text-qs-muted sm:block" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+            </svg>
+        @endunless
     </button>
 
     <div
         x-show="open"
         x-cloak
-        x-transition:enter="transition ease-out duration-100"
-        x-transition:enter-start="opacity-0 scale-95"
-        x-transition:enter-end="opacity-100 scale-100"
-        x-transition:leave="transition ease-in duration-75"
-        x-transition:leave-start="opacity-100 scale-100"
-        x-transition:leave-end="opacity-0 scale-95"
         @click.outside="open = false"
         id="shell-profile-menu-panel"
         role="menu"

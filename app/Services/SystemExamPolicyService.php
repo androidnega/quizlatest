@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Quiz;
+
 /**
  * Institution-wide exam / OTP / proctoring policy from {@see SystemSettingsService}.
  * Admin settings are authoritative over per-exam quiz configuration.
@@ -73,6 +75,33 @@ final class SystemExamPolicyService
         }
 
         return true;
+    }
+
+    /**
+     * Coursework assignments skip live camera monitoring unless explicitly enabled on the quiz
+     * (reserved for a future admin-controlled exception).
+     */
+    public function isCameraMonitoringRequiredForQuiz(?Quiz $quiz): bool
+    {
+        if ($quiz !== null && $quiz->isAssignment()) {
+            $live = filter_var(
+                data_get($quiz->proctoring_settings, 'allow_live_proctoring_for_assignment', false),
+                FILTER_VALIDATE_BOOLEAN,
+            );
+
+            return $live && $this->isCameraMonitoringRequired();
+        }
+
+        return $this->isCameraMonitoringRequired();
+    }
+
+    public function isExamStartSnapshotRequiredForQuiz(?Quiz $quiz): bool
+    {
+        if ($quiz !== null && $quiz->isAssignment()) {
+            return false;
+        }
+
+        return $this->isExamStartSnapshotRequired();
     }
 
     public function isPhoneDetectionEnabled(): bool

@@ -10,16 +10,17 @@ use App\Models\User;
 class ResultFinalizationService
 {
     /**
-     * Persist {@see Result} after submission: score from summed answer points; status rules applied.
+     * Persist {@see Result} after submission: score from summed answer points only.
+     * Proctoring violations may auto-submit the attempt or hold results for review; they do not change this score.
      */
     public function syncAfterSubmission(
         ExamSession $examSession,
         int $timeTakenSeconds,
         string $reviewNote,
     ): void {
-        $examSession->load(['answers']);
+        $examSession->load(['answers', 'exam']);
 
-        $total = $this->sumPoints($examSession);
+        $total = $this->sumAnswerPoints($examSession);
         $status = $this->resolveStatus($examSession);
 
         $examSession->loadMissing('exam');
@@ -30,7 +31,7 @@ class ResultFinalizationService
                 'quiz_id' => $examSession->exam_id,
             ],
             [
-                'score' => round($total, 2),
+                'score' => $total,
                 'time_taken' => $timeTakenSeconds,
                 'status' => $status,
                 'exam_status' => $examSession->exam_status,
@@ -49,7 +50,7 @@ class ResultFinalizationService
     {
         $examSession->load(['answers', 'exam']);
 
-        $total = $this->sumPoints($examSession);
+        $total = $this->sumAnswerPoints($examSession);
         $status = $this->resolveStatus($examSession);
 
         $existing = Result::query()
@@ -58,7 +59,7 @@ class ResultFinalizationService
             ->first();
 
         $payload = [
-            'score' => round($total, 2),
+            'score' => $total,
             'status' => $status,
             'exam_status' => $examSession->exam_status,
             'academic_year_id' => $examSession->exam?->academic_year_id,
@@ -119,10 +120,12 @@ class ResultFinalizationService
         return 'graded';
     }
 
-    private function sumPoints(ExamSession $examSession): float
+    private function sumAnswerPoints(ExamSession $examSession): float
     {
-        return (float) ExamSessionAnswer::query()
+        $raw = (float) ExamSessionAnswer::query()
             ->where('exam_session_id', $examSession->id)
             ->sum('points_awarded');
+
+        return round(max(0.0, $raw), 2);
     }
 }

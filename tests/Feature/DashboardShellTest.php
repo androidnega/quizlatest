@@ -16,11 +16,21 @@ class DashboardShellTest extends TestCase
         $this->seed(InitialSetupSeeder::class);
         $admin = User::query()->where('email', 'admin')->firstOrFail();
 
-        $html = $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk()->getContent();
+        $html = $this->actingAs($admin)->get(route('dashboard'))->assertOk()->getContent();
         $this->assertStringContainsString('aria-haspopup="menu"', $html);
         $this->assertStringContainsString(route('profile.edit'), $html);
         $this->assertStringContainsString(route('admin.settings.index'), $html);
         $this->assertStringContainsString('method="POST" action="'.e(route('logout')).'"', $html);
+    }
+
+    public function test_admin_legacy_dashboard_admin_path_redirects_to_main_dashboard(): void
+    {
+        $this->seed(InitialSetupSeeder::class);
+        $admin = User::query()->where('email', 'admin')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->get('/dashboard/admin')
+            ->assertRedirect(route('dashboard'));
     }
 
     public function test_coordinator_dashboard_profile_menu_omits_admin_settings(): void

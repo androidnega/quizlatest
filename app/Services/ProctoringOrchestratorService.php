@@ -32,6 +32,22 @@ class ProctoringOrchestratorService
         'cooldown_seconds',
     ];
 
+    /**
+     * Keys we keep on the quiz row but do not feed into the orchestrator merge
+     * (grading / UX); listed here so they are not treated as unknown junk keys.
+     *
+     * @var list<string>
+     */
+    private const AUXILIARY_SETTING_KEYS = [
+        'violation_actions',
+        'violation_deduct_marks_per_flag',
+        'show_correct_answers_to_students',
+        'mobile_only',
+        'require_essay_marking_guide_on_publish',
+        'assignment_clipboard_block',
+        'allow_live_proctoring_for_assignment',
+    ];
+
     /** Baseline score bands (fixed; not part of DB free-form config). */
     private const INTERNAL_SCORE_BANDS = [
         'warning_score' => 30,
@@ -51,7 +67,8 @@ class ProctoringOrchestratorService
         $raw = is_array($raw) ? $raw : [];
 
         $allowed = array_flip(self::REQUIRED_SETTING_KEYS);
-        $unknownKeys = array_diff(array_keys($raw), array_keys($allowed));
+        $known = [...self::REQUIRED_SETTING_KEYS, ...self::AUXILIARY_SETTING_KEYS];
+        $unknownKeys = array_values(array_diff(array_keys($raw), $known));
 
         $filtered = array_intersect_key($raw, $allowed);
 
@@ -89,13 +106,61 @@ class ProctoringOrchestratorService
         if ($examId !== null && ($unknownKeys !== [] || $missing !== []) && empty(self::$configNormalizationLoggedForExam[$examId])) {
             Log::warning('quizsnap.proctoring_settings.configuration_normalized', [
                 'exam_id' => $examId,
-                'unknown_keys_removed' => array_values($unknownKeys),
+                'unknown_keys_removed' => $unknownKeys,
                 'missing_keys_filled_with_defaults' => $missing,
             ]);
             self::$configNormalizationLoggedForExam[$examId] = true;
         }
 
+        $normalized['violation_actions'] = self::normalizeViolationActions($raw['violation_actions'] ?? null);
+
+        if (array_key_exists('violation_deduct_marks_per_flag', $raw)) {
+            $normalized['violation_deduct_marks_per_flag'] = max(0.0, (float) $raw['violation_deduct_marks_per_flag']);
+        }
+
+        if (array_key_exists('show_correct_answers_to_students', $raw)) {
+            $normalized['show_correct_answers_to_students'] = filter_var(
+                $raw['show_correct_answers_to_students'],
+                FILTER_VALIDATE_BOOLEAN,
+            );
+        }
+
+        if (array_key_exists('mobile_only', $raw)) {
+            $normalized['mobile_only'] = filter_var($raw['mobile_only'], FILTER_VALIDATE_BOOLEAN);
+        }
+
+        if (array_key_exists('assignment_clipboard_block', $raw)) {
+            $normalized['assignment_clipboard_block'] = filter_var(
+                $raw['assignment_clipboard_block'],
+                FILTER_VALIDATE_BOOLEAN,
+            );
+        }
+
+        if (array_key_exists('allow_live_proctoring_for_assignment', $raw)) {
+            $normalized['allow_live_proctoring_for_assignment'] = filter_var(
+                $raw['allow_live_proctoring_for_assignment'],
+                FILTER_VALIDATE_BOOLEAN,
+            );
+        }
+
         return $normalized;
+    }
+
+    /**
+     * Policy flags stored on the quiz. Note: {@see ResultFinalizationService} does not apply
+     * automatic mark deductions from violations; examiners review (e.g. held results) instead.
+     *
+     * @return array{warn: bool, deduct: bool, autosubmit: bool}
+     */
+    private static function normalizeViolationActions(mixed $raw): array
+    {
+        $src = is_array($raw) ? $raw : [];
+
+        return [
+            'warn' => filter_var($src['warn'] ?? true, FILTER_VALIDATE_BOOLEAN),
+            'deduct' => filter_var($src['deduct'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'autosubmit' => filter_var($src['autosubmit'] ?? false, FILTER_VALIDATE_BOOLEAN),
+        ];
     }
 
     private static function coerceSettingValue(string $key, mixed $value, mixed $default): mixed

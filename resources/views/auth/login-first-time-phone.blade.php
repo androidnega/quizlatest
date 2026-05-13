@@ -1,5 +1,6 @@
 <x-guest-layout
     :page-title="__('Add your phone')"
+    :show-header="false"
     :eyebrow="__('Student access')"
     :heading="__('Mobile number for verification')"
     :description="__('Your coordinator did not add a phone yet. Enter your Ghana mobile number — we will send a one-time code by SMS only. Your number is saved only after you verify the code.')"

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ExamSession;
 use App\Services\ExamRuntimeInfraGate;
 use App\Services\SystemExamPolicyService;
+use App\Support\AssessmentProctoringDefaults;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -33,11 +34,20 @@ class StudentExamController extends Controller
         $gate = app(ExamRuntimeInfraGate::class);
         $examPolicy = app(SystemExamPolicyService::class);
 
+        $examSession->loadMissing('exam');
+        $exam = $examSession->exam;
+        $isAssignmentMode = $exam?->isAssignment() ?? false;
+        $requireCameraMonitoring = $examPolicy->isCameraMonitoringRequiredForQuiz($exam);
+        $assignmentClipboardBlock = $isAssignmentMode
+            && AssessmentProctoringDefaults::assignmentClipboardBlockEnabled($exam?->proctoring_settings);
+
         return view('student.exam.take', [
             'examSession' => $examSession,
             'enableLiveSockets' => $gate->enableLiveSockets(),
             'allowPollingFallback' => $gate->allowPollingFallback(),
-            'requireCameraMonitoring' => $examPolicy->isCameraMonitoringRequired(),
+            'requireCameraMonitoring' => $requireCameraMonitoring,
+            'isAssignmentMode' => $isAssignmentMode,
+            'assignmentClipboardBlock' => $assignmentClipboardBlock,
         ]);
     }
 }

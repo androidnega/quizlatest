@@ -39,12 +39,12 @@ class ProfileController extends Controller
         $user = $request->user();
 
         if ($user->role === 'student') {
-            $user->fill($request->only(['name', 'email', 'phone']));
+            $user->fill($request->only(['name', 'phone']));
         } else {
             $user->fill($request->validated());
         }
 
-        if ($user->isDirty('email')) {
+        if ($user->role !== 'student' && $user->isDirty('email')) {
             $user->email_verified_at = null;
         }
 
