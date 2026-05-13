@@ -25,6 +25,7 @@ use App\Http\Controllers\Examiner\ExamSessionReviewController as ExaminerExamSes
 use App\Http\Controllers\Examiner\ManualGradingController as ExaminerManualGradingController;
 use App\Http\Controllers\Examiner\PracticeOverviewController;
 use App\Http\Controllers\ExamSessionController;
+use App\Http\Controllers\Marketing\AboutController;
 use App\Http\Controllers\ProctoringUploadController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileFaceImageController;
@@ -45,6 +46,8 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('home');
 })->name('home');
+
+Route::get('/about', AboutController::class)->name('about');
 
 Route::get('/quiz-hero-demo', function () {
     return view('quiz-hero-demo');
