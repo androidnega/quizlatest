@@ -41,6 +41,10 @@ class AnswerEvaluationService
             }
 
             $question = $byId->get($answer->question_id);
+            if ($question?->isEssay() && $answer->evaluation_status === 'manual_graded') {
+                continue;
+            }
+
             if (! $question) {
                 $this->persistAnswer($answer, 0.0, 'error', ['message' => 'Question not found for exam.']);
                 $results[] = [
@@ -113,6 +117,9 @@ class AnswerEvaluationService
     private function scoreTrueFalse(Question $question, ExamSessionAnswer $answer, float $max): array
     {
         $expected = $question->correct_answer;
+        if (is_int($expected) && ($expected === 0 || $expected === 1)) {
+            $expected = (bool) $expected;
+        }
         if (! is_bool($expected)) {
             return [
                 'points_awarded' => 0.0,
@@ -196,7 +203,8 @@ class AnswerEvaluationService
     private function scoreFillBlank(Question $question, ExamSessionAnswer $answer, float $max): array
     {
         $expected = $question->correct_answer;
-        if (! is_array($expected) || $expected === []) {
+        $groups = $this->fillBlankExpectedGroups($expected);
+        if ($groups === null || $groups === []) {
             return [
                 'points_awarded' => 0.0,
                 'evaluation_status' => 'error',
@@ -215,13 +223,16 @@ class AnswerEvaluationService
 
         /** @var list<string> $given */
         $given = array_map(fn ($s) => (string) $s, array_values($payload['blanks']));
-        $n = count($expected);
+        $n = count($groups);
         $matched = 0;
 
         for ($i = 0; $i < $n; $i++) {
-            $exp = $this->normalizeBlank((string) ($expected[$i] ?? ''));
             $got = $this->normalizeBlank((string) ($given[$i] ?? ''));
-            if ($exp !== '' && $got !== '' && strcasecmp($exp, $got) === 0) {
+            if ($got === '') {
+                continue;
+            }
+            $alts = $groups[$i] ?? [];
+            if ($this->fillBlankGivenMatchesAlternatives($got, $alts)) {
                 $matched++;
             }
         }
@@ -234,6 +245,67 @@ class AnswerEvaluationService
             'evaluation_status' => 'auto_scored',
             'evaluation_detail' => ['blanks_matched' => $matched, 'blanks_total' => $n],
         ];
+    }
+
+    /**
+     * @param  mixed  $expected  Question.correct_answer JSON: list<string> and/or list<list<string>>.
+     * @return list<list<string>>|null
+     */
+    private function fillBlankExpectedGroups(mixed $expected): ?array
+    {
+        if (! is_array($expected) || $expected === []) {
+            return null;
+        }
+
+        $groups = [];
+        foreach ($expected as $cell) {
+            if (is_string($cell)) {
+                $n = $this->normalizeBlank($cell);
+                if ($n === '') {
+                    return null;
+                }
+                $groups[] = [$n];
+
+                continue;
+            }
+            if (is_array($cell)) {
+                $alts = [];
+                foreach ($cell as $alt) {
+                    if (! is_string($alt)) {
+                        return null;
+                    }
+                    $t = $this->normalizeBlank($alt);
+                    if ($t !== '') {
+                        $alts[] = $t;
+                    }
+                }
+                $alts = array_values(array_unique($alts));
+                if ($alts === []) {
+                    return null;
+                }
+                $groups[] = $alts;
+
+                continue;
+            }
+
+            return null;
+        }
+
+        return $groups;
+    }
+
+    /**
+     * @param  list<string>  $alternatives
+     */
+    private function fillBlankGivenMatchesAlternatives(string $normalizedGiven, array $alternatives): bool
+    {
+        foreach ($alternatives as $exp) {
+            if (strcasecmp($exp, $normalizedGiven) === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

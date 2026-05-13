@@ -13,7 +13,7 @@ namespace App\Services;
  *       "questions": [
  *         { "type": "mcq", "question_text": "...", "marks": 2, "options": ["a","b"], "correct_answer": "a" | 0 | [0,1] },
  *         { "type": "true_false", "question_text": "...", "marks": 1, "correct_answer": true },
- *         { "type": "fill_blank", "question_text": "...", "marks": 1, "correct_answer": ["x"] },
+ *         { "type": "fill_blank", "question_text": "...", "marks": 1, "correct_answer": ["x"] | [["x","y"]] },
  *         { "type": "essay", "question_text": "...", "marks": 5, "marking_guide": "...", "topic": "..." }
  *       ]
  *     }
@@ -453,15 +453,12 @@ final class ExamQuestionImportValidator
 
                 return null;
             }
-            $list = $this->normalizeStringList($correct);
-            if ($list === null || $list === []) {
-                $errors[] = "{$qp}.correct_answer: non-empty array of strings required.";
-
+            $groups = $this->normalizeFillBlankAcceptedList($correct, "{$qp}.correct_answer", $errors);
+            if ($groups === null) {
                 return null;
             }
-            $normalizedBlanks = array_map(fn (string $s) => $this->normalizeBlank($s), $list);
-            $row['correct_answer'] = $normalizedBlanks;
-            $row['answer_schema'] = ['blank_count' => count($normalizedBlanks)];
+            $row['correct_answer'] = $this->fillBlankCorrectAnswerForStorage($groups);
+            $row['answer_schema'] = ['blank_count' => count($groups)];
 
             return $row;
         }
@@ -645,6 +642,101 @@ final class ExamQuestionImportValidator
         }
 
         return null;
+    }
+
+    /**
+     * @return list<list<string>>|null
+     */
+    private function normalizeFillBlankAcceptedList(mixed $correct, string $path, array &$errors): ?array
+    {
+        if (is_string($correct)) {
+            $lines = preg_split('/\r\n|\r|\n/', $correct);
+            $trimmed = array_values(array_filter(array_map('trim', $lines ?: []), fn ($s) => $s !== ''));
+            if ($trimmed === []) {
+                $errors[] = "{$path}: non-empty string or array of blank answers required.";
+
+                return null;
+            }
+            $out = [];
+            foreach ($trimmed as $line) {
+                $out[] = [$this->normalizeBlank($line)];
+            }
+
+            return $out;
+        }
+        if (! is_array($correct)) {
+            $errors[] = "{$path}: must be a string, array of strings, or array of alternatives per blank.";
+
+            return null;
+        }
+        if ($correct === []) {
+            $errors[] = "{$path}: provide at least one blank answer.";
+
+            return null;
+        }
+
+        $out = [];
+        foreach ($correct as $i => $item) {
+            if (is_string($item)) {
+                $n = $this->normalizeBlank(trim($item));
+                if ($n === '') {
+                    $errors[] = "{$path}[{$i}]: blank answer cannot be empty.";
+
+                    return null;
+                }
+                $out[] = [$n];
+
+                continue;
+            }
+            if (is_array($item)) {
+                $alts = [];
+                foreach ($item as $j => $alt) {
+                    if (! is_string($alt)) {
+                        $errors[] = "{$path}[{$i}][{$j}]: must be a string.";
+
+                        return null;
+                    }
+                    $t = $this->normalizeBlank(trim($alt));
+                    if ($t !== '') {
+                        $alts[] = $t;
+                    }
+                }
+                $alts = array_values(array_unique($alts));
+                if ($alts === []) {
+                    $errors[] = "{$path}[{$i}]: provide at least one non-empty accepted answer.";
+
+                    return null;
+                }
+                $out[] = $alts;
+
+                continue;
+            }
+            $errors[] = "{$path}[{$i}]: must be a string or array of string alternatives.";
+
+            return null;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  list<list<string>>  $groups
+     * @return list<string>|list<list<string>>
+     */
+    private function fillBlankCorrectAnswerForStorage(array $groups): array
+    {
+        $multi = false;
+        foreach ($groups as $g) {
+            if (count($g) > 1) {
+                $multi = true;
+                break;
+            }
+        }
+        if ($multi) {
+            return $groups;
+        }
+
+        return array_map(fn (array $g) => $g[0], $groups);
     }
 
     /**

@@ -62,6 +62,28 @@ class ExamQuestionImportValidatorTest extends TestCase
         $this->assertNull($r['sections'][0]['questions'][3]['metadata'] ?? null);
     }
 
+    public function test_fill_blank_accepts_multiple_accepted_strings_per_blank(): void
+    {
+        $v = new ExamQuestionImportValidator;
+        $json = json_encode([
+            'sections' => [[
+                'title' => 'A',
+                'questions' => [[
+                    'type' => 'fill_blank',
+                    'question_text' => 'Capital',
+                    'marks' => 2,
+                    'correct_answer' => [['Accra', 'Greater Accra'], 'Kumasi'],
+                ]],
+            ]],
+        ], JSON_THROW_ON_ERROR);
+
+        $r = $v->validateJsonString($json);
+        $this->assertTrue($r['ok']);
+        $fb = $r['sections'][0]['questions'][0];
+        $this->assertSame([['Accra', 'Greater Accra'], ['Kumasi']], $fb['correct_answer']);
+        $this->assertSame(['blank_count' => 2], $fb['answer_schema']);
+    }
+
     public function test_rejects_mcq_without_enough_options(): void
     {
         $v = new ExamQuestionImportValidator;

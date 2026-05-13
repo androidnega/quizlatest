@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Examiner;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\ExaminerCourseAssignment;
 use App\Models\ExamSessionAnswer;
 use App\Services\ResultFinalizationService;
@@ -35,7 +36,10 @@ class ManualGradingController extends Controller
         $this->authorize('update', $answer->question->quiz);
 
         abort_unless($answer->question->isEssay(), 404);
-        abort_unless($answer->evaluation_status === 'pending_manual', 404);
+        abort_unless(
+            in_array($answer->evaluation_status, ['pending_manual', 'manual_graded'], true),
+            404,
+        );
 
         return view('examiner.grading.show', [
             'answer' => $answer,
@@ -48,20 +52,60 @@ class ManualGradingController extends Controller
         $this->authorize('update', $answer->question->quiz);
 
         abort_unless($answer->question->isEssay(), 404);
-        abort_unless($answer->evaluation_status === 'pending_manual', 422);
+
+        $isOverride = $answer->evaluation_status === 'manual_graded';
+        abort_unless(
+            in_array($answer->evaluation_status, ['pending_manual', 'manual_graded'], true),
+            422,
+        );
 
         $max = (float) $answer->question->marks;
 
-        $validated = $request->validate([
+        $rules = [
             'points_awarded' => ['required', 'numeric', 'min:0', 'max:'.$max],
             'grader_feedback' => ['nullable', 'string', 'max:5000'],
+        ];
+        if ($isOverride) {
+            $rules['override_reason'] = ['required', 'string', 'min:3', 'max:2000'];
+        }
+
+        $validated = $request->validate($rules);
+
+        $prev = is_array($answer->evaluation_detail) ? $answer->evaluation_detail : [];
+        $history = $prev['grading_history'] ?? [];
+        $history[] = [
+            'graded_at' => now()->toIso8601String(),
+            'grader_id' => $request->user()->id,
+            'points_awarded' => (float) $validated['points_awarded'],
+            'grader_feedback' => $validated['grader_feedback'] ?? null,
+            'override_reason' => $isOverride ? (string) $validated['override_reason'] : null,
+            'action' => $isOverride ? 'override' : 'initial',
+        ];
+
+        $detail = array_merge($prev, [
+            'graded' => true,
+            'grading_history' => $history,
+            'last_points_awarded' => (float) $validated['points_awarded'],
         ]);
 
         $answer->update([
             'points_awarded' => (float) $validated['points_awarded'],
             'evaluation_status' => 'manual_graded',
-            'evaluation_detail' => ['graded' => true],
+            'evaluation_detail' => $detail,
             'grader_feedback' => $validated['grader_feedback'] ?? null,
+        ]);
+
+        ActivityLog::query()->create([
+            'user_id' => $request->user()->id,
+            'quiz_id' => $answer->question->quiz_id,
+            'event_type' => $isOverride ? 'essay_manual_grade_override' : 'essay_manual_grade',
+            'event_data' => [
+                'exam_session_answer_id' => $answer->id,
+                'exam_session_id' => $answer->exam_session_id,
+                'points_awarded' => (float) $validated['points_awarded'],
+                'override_reason' => $isOverride ? (string) $validated['override_reason'] : null,
+            ],
+            'created_at' => now(),
         ]);
 
         $session = $answer->examSession;
