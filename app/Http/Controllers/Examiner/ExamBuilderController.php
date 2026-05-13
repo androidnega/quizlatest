@@ -23,6 +23,7 @@ use App\Services\OutlineTopicSuggester;
 use App\Services\ProctoringOrchestratorService;
 use App\Services\SystemExamPolicyService;
 use App\Services\SystemSettingsService;
+use App\Support\AssessmentQuestionTypes;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -158,6 +159,23 @@ class ExamBuilderController extends Controller
             'outlineSuggestTopicsUrl' => route('examiner.exams.create.outline-suggest-topics'),
             'aiTopicsInitial' => (string) $request->old('ai_topics', ''),
             'csrfToken' => csrf_token(),
+            'initialWizardStep' => (int) old('wizard_step', 1) === 2 ? 2 : 1,
+        ];
+
+        $examPolicy = app(SystemExamPolicyService::class);
+        $proctoringPolicy = [
+            'enabled' => $examPolicy->isProctoringEnabled(),
+            'allow_exam_start_snapshot' => $examPolicy->isExamStartSnapshotRequired(),
+            'allow_camera_monitoring' => $examPolicy->isCameraMonitoringRequired(),
+            'allow_phone' => $systemSettings->getBool('phone_detection_enabled', true),
+            'allow_fullscreen' => $systemSettings->getBool('fullscreen_required', true),
+            'allow_auto_submit' => $systemSettings->getBool('auto_submit_enabled', true),
+        ];
+        $normalizedDefaults = ProctoringOrchestratorService::normalizeProctoringSettings([], null);
+        $examProctoringControls = [
+            'phone_detection_enabled' => (bool) old('enable_phone', $normalizedDefaults['phone_detection_enabled'] ?? true),
+            'fullscreen_enforced' => (bool) old('enable_fullscreen', $normalizedDefaults['fullscreen_enforced'] ?? true),
+            'auto_submit_enabled' => (bool) old('enable_auto_submit', $normalizedDefaults['auto_submit_enabled'] ?? true),
         ];
 
         return view('examiner.exams.create', [
@@ -165,6 +183,8 @@ class ExamBuilderController extends Controller
             'classroomOptions' => $classroomOptions,
             'aiEnabled' => $aiEnabled,
             'examCreateAlpine' => $examCreateAlpine,
+            'proctoringPolicy' => $proctoringPolicy,
+            'examProctoringControls' => $examProctoringControls,
         ]);
     }
 
@@ -233,6 +253,7 @@ class ExamBuilderController extends Controller
         $this->authorize('create', Quiz::class);
 
         $validated = $request->validate([
+            'wizard_step' => ['nullable', 'integer', 'in:1,2'],
             'course_id' => ['required', 'integer'],
             'classroom_ids' => ['required', 'array', 'min:1'],
             'classroom_ids.*' => ['integer', 'distinct'],
@@ -240,6 +261,8 @@ class ExamBuilderController extends Controller
             'description' => ['nullable', 'string'],
             'duration_minutes' => ['required', 'integer', 'min:1', 'max:600'],
             'assessment_type' => ['required', 'string', 'in:quiz,mid,exam,assignment'],
+            'selected_question_types' => ['required', 'array', 'min:1'],
+            'selected_question_types.*' => ['string', 'in:mcq,true_false,fill_blank,essay'],
             'questions_per_student' => ['nullable', 'integer', 'min:1', 'max:500'],
             'randomize_questions' => ['sometimes', 'boolean'],
             'randomize_options' => ['sometimes', 'boolean'],
@@ -292,6 +315,8 @@ class ExamBuilderController extends Controller
         }
 
         $source = $validated['question_source'];
+        $selectedTypes = AssessmentQuestionTypes::normalizeFromRequest($request->input('selected_question_types'));
+
         if ($source === 'paste_json') {
             $request->validate([
                 'import_json' => ['required', 'string', 'min:3', 'max:500000'],
@@ -349,6 +374,42 @@ class ExamBuilderController extends Controller
         $start = isset($validated['start_time']) ? Carbon::parse($validated['start_time']) : null;
         $end = isset($validated['end_time']) ? Carbon::parse($validated['end_time']) : null;
 
+        $pendingImportSections = null;
+        if ($source === 'paste_json') {
+            $result = $importValidator->validateJsonString((string) $request->input('import_json', ''));
+            if (! $result['ok']) {
+                return back()
+                    ->withErrors(['import_json' => implode("\n", $result['errors'])])
+                    ->withInput();
+            }
+            $typeProbe = new Quiz(['selected_question_types' => $selectedTypes]);
+            AssessmentQuestionTypes::assertSectionsOnlyUseAllowedTypes($typeProbe, $result['sections']);
+            $pendingImportSections = $result['sections'];
+        } elseif ($source === 'ai_generate') {
+            $topic = (string) $combinedAiTopic;
+            $aiTypes = AssessmentQuestionTypes::intersectAiTypesWithAllowed(
+                $request->input('ai_question_types'),
+                $selectedTypes,
+                'ai_question_types'
+            );
+            $prompt = $promptBuilder->build([
+                'topic' => $topic,
+                'count' => (int) $request->input('ai_question_count'),
+                'types' => $aiTypes,
+                'difficulty' => $request->input('ai_difficulty') ?? 'mixed',
+                'marks_per_question' => (float) ($request->input('ai_marks') ?? 1),
+            ]);
+            $gen = $aiGenerator->generateFromPrompt($prompt);
+            if (! $gen['ok']) {
+                return back()
+                    ->withErrors(['ai_topics' => implode("\n", $gen['errors'])])
+                    ->withInput();
+            }
+            $typeProbe = new Quiz(['selected_question_types' => $selectedTypes]);
+            AssessmentQuestionTypes::assertSectionsOnlyUseAllowedTypes($typeProbe, $gen['sections'], 'ai_topics');
+            $pendingImportSections = $gen['sections'];
+        }
+
         $quiz = Quiz::create([
             'university_id' => $user->university_id,
             'academic_year_id' => $year->id,
@@ -358,6 +419,7 @@ class ExamBuilderController extends Controller
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'assessment_type' => $validated['assessment_type'],
+            'selected_question_types' => $selectedTypes,
             'status' => 'draft',
             'duration_minutes' => (int) $validated['duration_minutes'],
             'total_marks' => 0,
@@ -372,37 +434,8 @@ class ExamBuilderController extends Controller
         $quiz->targetClassrooms()->sync($classIds);
 
         $importErrors = null;
-        if ($source === 'paste_json') {
-            $result = $importValidator->validateJsonString((string) $request->input('import_json', ''));
-            if (! $result['ok']) {
-                $quiz->delete();
-
-                return back()
-                    ->withErrors(['import_json' => implode("\n", $result['errors'])])
-                    ->withInput();
-            }
-            $this->persistImportedSections($quiz, $result['sections']);
-            $this->approveAllPoolQuestions($quiz);
-            $importErrors = $this->validateQuestionsPerStudentAgainstPool($quiz, (int) $request->input('questions_per_student'));
-        } elseif ($source === 'ai_generate') {
-            $topic = (string) $combinedAiTopic;
-            $prompt = $promptBuilder->build([
-                'topic' => $topic,
-                'count' => (int) $request->input('ai_question_count'),
-                'types' => $request->input('ai_question_types', ['mcq']) ?? ['mcq'],
-                'difficulty' => $request->input('ai_difficulty') ?? 'mixed',
-                'marks_per_question' => (float) ($request->input('ai_marks') ?? 1),
-            ]);
-            $gen = $aiGenerator->generateFromPrompt($prompt);
-            if (! $gen['ok']) {
-                $quiz->delete();
-
-                return back()
-                    ->withErrors(['ai_topics' => implode("\n", $gen['errors'])])
-                    ->withInput();
-            }
-            $this->persistImportedSections($quiz, $gen['sections']);
-            $this->approveAllPoolQuestions($quiz);
+        if ($pendingImportSections !== null) {
+            $this->persistImportedSections($quiz, $pendingImportSections);
             $importErrors = $this->validateQuestionsPerStudentAgainstPool($quiz, (int) $request->input('questions_per_student'));
         }
 
@@ -468,29 +501,22 @@ class ExamBuilderController extends Controller
         return $out;
     }
 
-    private function approveAllPoolQuestions(Quiz $exam): void
-    {
-        Question::query()->where('quiz_id', $exam->id)->update(['pool_status' => 'approved']);
-        $total = (float) Question::query()->where('quiz_id', $exam->id)->sum('marks');
-        $exam->update(['total_marks' => $total]);
-    }
-
     /**
      * @return list<string>|null error messages or null if ok
      */
     private function validateQuestionsPerStudentAgainstPool(Quiz $exam, int $perStudent): ?array
     {
-        $approved = Question::query()
+        $poolCount = Question::query()
             ->where('quiz_id', $exam->id)
-            ->where('pool_status', 'approved')
+            ->where('pool_status', '!=', 'archived')
             ->count();
 
-        if ($approved < 1) {
+        if ($poolCount < 1) {
             return [__('Add at least one question before setting delivery.')];
         }
 
-        if ($perStudent > $approved) {
-            return [__('Questions per student cannot exceed the number of questions in the pool (:count).', ['count' => $approved])];
+        if ($perStudent > $poolCount) {
+            return [__('Questions per student cannot exceed the number of questions in the pool (:count).', ['count' => $poolCount])];
         }
 
         return null;
@@ -513,9 +539,13 @@ class ExamBuilderController extends Controller
 
         $sessionsCount = ExamSession::query()->where('exam_id', $exam->id)->count();
 
-        $shareUrl = route('student.exam.prepare', ['quiz' => $exam->id], absolute: true);
-        $tokenSeed = hash('sha256', (string) config('app.key').':'.$exam->id);
-        $displayToken = strtoupper(substr($tokenSeed, 0, 8)).'-'.strtoupper(substr($tokenSeed, 8, 8));
+        $shareUrl = route('student.exam.prepare', $exam, absolute: true);
+        if (filled($exam->share_token)) {
+            $displayToken = (string) $exam->share_token;
+        } else {
+            $tokenSeed = hash('sha256', (string) config('app.key').':'.$exam->id);
+            $displayToken = strtoupper(substr($tokenSeed, 0, 8)).'-'.strtoupper(substr($tokenSeed, 8, 8));
+        }
 
         $mobileOnly = (bool) data_get($exam->proctoring_settings, 'mobile_only', false);
 
@@ -533,12 +563,6 @@ class ExamBuilderController extends Controller
             $sessionsWorkspace = app(ExamSessionReviewController::class)->buildSessionsWorkspacePayload($request, $exam);
         }
 
-        $examPolicy = app(SystemExamPolicyService::class);
-        $examProctoringControls = ProctoringOrchestratorService::normalizeProctoringSettings(
-            is_array($exam->proctoring_settings) ? $exam->proctoring_settings : [],
-            $exam->id
-        );
-
         $allowedWorkspaceTabs = ['overview', 'sessions', 'scores', 'analytics'];
         $workspaceTab = (string) $request->query('tab', 'overview');
         if (! in_array($workspaceTab, $allowedWorkspaceTabs, true)) {
@@ -551,11 +575,11 @@ class ExamBuilderController extends Controller
         return view('examiner.exams.builder', [
             'exam' => $exam,
             'questionTypes' => ['mcq', 'true_false', 'fill_blank', 'essay'],
+            'allowedQuestionTypes' => AssessmentQuestionTypes::effective($exam->selected_question_types),
             'aiEnabled' => $systemSettings->getBool('enable_ai', true),
             'importPreview' => is_array($importPreview) ? $importPreview : null,
             'canEditContent' => $exam->status === 'draft',
             'canEditSchedule' => $exam->status === 'draft',
-            'canEditDelivery' => $exam->status === 'draft',
             'canEditPool' => $exam->status !== 'archived',
             'poolQuestionTotal' => $poolQuestionTotal,
             'poolApprovedCount' => $poolApprovedCount,
@@ -568,15 +592,6 @@ class ExamBuilderController extends Controller
             'questionAnalytics' => $questionAnalytics,
             'sessionsWorkspace' => $sessionsWorkspace,
             'workspaceTab' => $workspaceTab,
-            'proctoringPolicy' => [
-                'enabled' => $examPolicy->isProctoringEnabled(),
-                'allow_exam_start_snapshot' => $examPolicy->isExamStartSnapshotRequired(),
-                'allow_camera_monitoring' => $examPolicy->isCameraMonitoringRequired(),
-                'allow_phone' => $systemSettings->getBool('phone_detection_enabled', true),
-                'allow_fullscreen' => $systemSettings->getBool('fullscreen_required', true),
-                'allow_auto_submit' => $systemSettings->getBool('auto_submit_enabled', true),
-            ],
-            'examProctoringControls' => $examProctoringControls,
         ]);
     }
 
@@ -594,6 +609,23 @@ class ExamBuilderController extends Controller
                 $aiFlag = (bool) data_get($q->metadata, 'ai_generated')
                     || (bool) data_get($q->metadata, 'ai');
 
+                $mcqOptions = null;
+                $mcqCorrectIndices = [];
+                if ($q->isMCQ() && is_array($q->options)) {
+                    $mcqOptions = array_values($q->options);
+                    $ca = $q->correct_answer;
+                    if (is_array($ca)) {
+                        foreach ($ca as $v) {
+                            if (is_int($v) || (is_string($v) && ctype_digit($v))) {
+                                $mcqCorrectIndices[] = (int) $v;
+                            }
+                        }
+                    } elseif (is_int($ca) || (is_string($ca) && ctype_digit($ca))) {
+                        $mcqCorrectIndices[] = (int) $ca;
+                    }
+                    $mcqCorrectIndices = array_values(array_unique($mcqCorrectIndices));
+                }
+
                 $rows[] = [
                     'id' => $q->id,
                     'n' => $n,
@@ -605,6 +637,8 @@ class ExamBuilderController extends Controller
                     'ai' => $aiFlag,
                     'answer' => $this->questionAnswerPreviewLine($q),
                     'section' => $section->title,
+                    'options' => $mcqOptions,
+                    'correct_indices' => $mcqOptions !== null ? $mcqCorrectIndices : [],
                 ];
             }
         }
@@ -734,6 +768,10 @@ class ExamBuilderController extends Controller
             'pool_status' => ['required', 'string', 'in:draft,approved,archived'],
         ]);
 
+        if ($validated['pool_status'] === 'approved') {
+            AssessmentQuestionTypes::assertQuestionTypeAllowedForQuiz($exam, (string) $question->type, 'pool_status');
+        }
+
         $question->update(['pool_status' => $validated['pool_status']]);
 
         $this->bumpExamConfigCache($exam->fresh());
@@ -767,6 +805,16 @@ class ExamBuilderController extends Controller
             $query->whereIn('id', $ids);
         }
 
+        if ($validated['pool_status'] === 'approved') {
+            $allowed = AssessmentQuestionTypes::effective($exam->selected_question_types);
+            $bad = (clone $query)->whereNotIn('type', $allowed)->exists();
+            if ($bad) {
+                throw ValidationException::withMessages([
+                    'pool_status' => [__('One or more selected questions use a type that is not enabled for this assessment. Change allowed types or leave those questions as draft.')],
+                ]);
+            }
+        }
+
         $updated = $query->update(['pool_status' => $validated['pool_status']]);
 
         $this->bumpExamConfigCache($exam->fresh());
@@ -780,13 +828,50 @@ class ExamBuilderController extends Controller
             ->with('builder_stage', $nextStage);
     }
 
+    public function updateSelectedQuestionTypes(Request $request, Quiz $exam): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+        $this->assertExamDraftForContentMutations($exam);
+
+        $validated = $request->validate([
+            'selected_question_types' => ['required', 'array', 'min:1'],
+            'selected_question_types.*' => ['string', 'in:mcq,true_false,fill_blank,essay'],
+        ]);
+
+        $next = AssessmentQuestionTypes::normalizeFromRequest($validated['selected_question_types']);
+
+        $used = Question::query()
+            ->where('quiz_id', $exam->id)
+            ->where('pool_status', '!=', 'archived')
+            ->distinct()
+            ->pluck('type')
+            ->map(fn ($t) => strtolower((string) $t))
+            ->filter()
+            ->values()
+            ->all();
+
+        foreach ($used as $ut) {
+            if (! in_array($ut, $next, true)) {
+                throw ValidationException::withMessages([
+                    'selected_question_types' => [__('Cannot remove question type :type while the pool still contains active (non-archived) questions of that type. Archive those questions first.', ['type' => $ut])],
+                ]);
+            }
+        }
+
+        $exam->update(['selected_question_types' => $next]);
+
+        $this->bumpExamConfigCache($exam->fresh());
+
+        return back()->with('status', __('Allowed question types updated.'));
+    }
+
     public function publish(Request $request, Quiz $exam, ExamLifecycleService $lifecycle): RedirectResponse
     {
         $this->authorize('update', $exam);
 
         $lifecycle->publish($exam->fresh());
 
-        return back()->with('status', 'Exam published.');
+        return back()->with('status', __('Quiz published. Eligible students can now see and start it on their dashboard within your availability window.'));
     }
 
     public function unpublish(Request $request, Quiz $exam, ExamLifecycleService $lifecycle): RedirectResponse
@@ -884,6 +969,8 @@ class ExamBuilderController extends Controller
         ]);
 
         $type = $validated['type'];
+        AssessmentQuestionTypes::assertQuestionTypeAllowedForQuiz($exam, $type);
+
         $options = null;
         $correct = null;
 
@@ -953,6 +1040,8 @@ class ExamBuilderController extends Controller
                 ->withInput();
         }
 
+        AssessmentQuestionTypes::assertSectionsOnlyUseAllowedTypes($exam, $result['sections']);
+
         session()->put('exam_question_import_'.$exam->id, [
             'sections' => $result['sections'],
             'source' => 'paste',
@@ -982,6 +1071,8 @@ class ExamBuilderController extends Controller
             return back()->withErrors(['import_json' => 'No import preview found. Paste JSON and preview again.']);
         }
 
+        AssessmentQuestionTypes::assertSectionsOnlyUseAllowedTypes($exam, $bundle['sections']);
+
         $this->persistImportedSections($exam, $bundle['sections']);
         session()->forget('exam_question_import_'.$exam->id);
 
@@ -1005,10 +1096,17 @@ class ExamBuilderController extends Controller
             'ai_marks' => ['nullable', 'numeric', 'min:0', 'max:1000'],
         ]);
 
+        $allowed = AssessmentQuestionTypes::effective($exam->selected_question_types);
+        $types = AssessmentQuestionTypes::intersectAiTypesWithAllowed(
+            $validated['ai_question_types'] ?? null,
+            $allowed,
+            'ai_question_types'
+        );
+
         $prompt = $promptBuilder->build([
             'topic' => $this->normalizeAiTopicWireForPrompt((string) $validated['ai_topic']),
             'count' => (int) $validated['ai_count'],
-            'types' => $validated['ai_question_types'] ?? ['mcq'],
+            'types' => $types,
             'difficulty' => $validated['ai_difficulty'] ?? 'mixed',
             'marks_per_question' => (float) ($validated['ai_marks'] ?? 1),
         ]);
@@ -1044,10 +1142,16 @@ class ExamBuilderController extends Controller
         if ($custom !== '') {
             $prompt = $custom;
         } else {
+            $allowed = AssessmentQuestionTypes::effective($exam->selected_question_types);
+            $types = AssessmentQuestionTypes::intersectAiTypesWithAllowed(
+                $validated['ai_question_types'] ?? null,
+                $allowed,
+                'ai_question_types'
+            );
             $prompt = app(ExamAiPromptBuilder::class)->build([
                 'topic' => $this->normalizeAiTopicWireForPrompt((string) ($validated['ai_topic'] ?? '')),
                 'count' => (int) ($validated['ai_count'] ?? 5),
-                'types' => $validated['ai_question_types'] ?? ['mcq'],
+                'types' => $types,
                 'difficulty' => $validated['ai_difficulty'] ?? 'mixed',
                 'marks_per_question' => (float) ($validated['ai_marks'] ?? 1),
             ]);
@@ -1057,6 +1161,8 @@ class ExamBuilderController extends Controller
         if (! $result['ok']) {
             return back()->withErrors(['ai' => implode("\n", $result['errors'])])->withInput();
         }
+
+        AssessmentQuestionTypes::assertSectionsOnlyUseAllowedTypes($exam, $result['sections'], 'ai');
 
         session()->put('exam_question_import_'.$exam->id, [
             'sections' => $result['sections'],
@@ -1071,6 +1177,8 @@ class ExamBuilderController extends Controller
      */
     private function persistImportedSections(Quiz $exam, array $sections): void
     {
+        AssessmentQuestionTypes::assertSectionsOnlyUseAllowedTypes($exam, $sections);
+
         DB::transaction(function () use ($exam, $sections): void {
             $baseOrder = (int) ExamSection::query()->where('exam_id', $exam->id)->max('section_order');
 

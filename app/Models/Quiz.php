@@ -4,8 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 class Quiz extends Model
 {
@@ -18,6 +20,7 @@ class Quiz extends Model
         'title',
         'description',
         'assessment_type',
+        'selected_question_types',
         'status',
         'published_at',
         'duration_minutes',
@@ -32,12 +35,53 @@ class Quiz extends Model
 
     protected $casts = [
         'proctoring_settings' => 'array',
+        'selected_question_types' => 'array',
         'published_at' => 'datetime',
         'start_time' => 'datetime',
         'end_time' => 'datetime',
         'randomize_questions' => 'boolean',
         'randomize_options' => 'boolean',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Quiz $quiz): void {
+            if (! filled($quiz->share_token)) {
+                $quiz->share_token = (string) Str::uuid();
+            }
+        });
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'share_token';
+    }
+
+    public function getRouteKey(): string
+    {
+        if (filled($this->share_token)) {
+            return (string) $this->share_token;
+        }
+
+        return (string) $this->getAttribute($this->getKeyName());
+    }
+
+    /**
+     * @param  mixed  $value
+     */
+    public function resolveRouteBinding($value, $field = null)
+    {
+        if ($field !== null) {
+            return parent::resolveRouteBinding($value, $field);
+        }
+
+        $value = (string) $value;
+        if (preg_match('/^[0-9]+$/', $value)) {
+            return static::query()->whereKey((int) $value)->firstOrFail();
+        }
+
+        return static::query()->where('share_token', $value)->firstOrFail();
+    }
 
     public function university(): BelongsTo
     {
@@ -57,6 +101,15 @@ class Quiz extends Model
     public function course(): BelongsTo
     {
         return $this->belongsTo(Course::class);
+    }
+
+    /**
+     * When non-empty, only students in these class groups (who are also enrolled in the quiz course) may see and start this quiz.
+     * When empty, any student in a class group linked to the quiz course may access it (legacy behaviour).
+     */
+    public function targetClassrooms(): BelongsToMany
+    {
+        return $this->belongsToMany(Classroom::class, 'quiz_class', 'quiz_id', 'class_id');
     }
 
     public function creator(): BelongsTo

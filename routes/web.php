@@ -29,6 +29,7 @@ use App\Http\Controllers\ProctoringUploadController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileFaceImageController;
 use App\Http\Controllers\SecureExamEvidenceController;
+use App\Http\Controllers\Student\StudentAssignmentsController;
 use App\Http\Controllers\Student\StudentCourseMaterialController;
 use App\Http\Controllers\Student\StudentExamController;
 use App\Http\Controllers\Student\StudentExamEntryController;
@@ -112,6 +113,7 @@ Route::middleware('auth')->group(function () {
                 ->name('start');
             Route::post('/proctoring-capability', [ExamSessionController::class, 'proctoringCapability'])->name('proctoring-capability');
             Route::get('/{examSession}/state', [ExamSessionController::class, 'state'])->name('state');
+            Route::post('/{examSession}/resume', [ExamSessionController::class, 'resume'])->name('resume');
             Route::post('/{examSession}/answers', [ExamSessionController::class, 'saveAnswer'])->name('answers.save');
             Route::post('/{examSession}/heartbeat', [ExamSessionController::class, 'heartbeat'])->name('heartbeat');
             Route::post('/{examSession}/verification-image', [ExamSessionController::class, 'storeVerificationImage'])
@@ -171,6 +173,8 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
     Route::middleware('student')->group(function () {
         Route::post('/policy-notice/dismiss', [DashboardController::class, 'dismissStudentPolicyNotice'])
             ->name('student.dashboard.policy-notice.dismiss');
+
+        Route::get('/assignments', [StudentAssignmentsController::class, 'index'])->name('student.assignments.index');
 
         Route::prefix('results')
             ->name('student.results.')
@@ -339,6 +343,7 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
                 Route::patch('/{exam}/schedule', [ExamBuilderController::class, 'updateSchedule'])->name('exams.schedule.update');
                 Route::patch('/{exam}/delivery', [ExamBuilderController::class, 'updateDeliverySettings'])->name('exams.delivery.update');
                 Route::patch('/{exam}/proctoring-options', [ExamBuilderController::class, 'updateProctoringExaminerChoices'])->name('exams.proctoring-options.update');
+                Route::patch('/{exam}/question-types', [ExamBuilderController::class, 'updateSelectedQuestionTypes'])->name('exams.question-types.update');
                 Route::patch('/{exam}/questions/{question}/pool-status', [ExamBuilderController::class, 'updateQuestionPoolStatus'])->name('exams.questions.pool-status');
                 Route::patch('/{exam}/questions/pool-status/bulk', [ExamBuilderController::class, 'bulkUpdateQuestionPoolStatus'])->name('exams.questions.pool-status.bulk');
                 Route::post('/{exam}/sections', [ExamBuilderController::class, 'storeSection'])->name('exams.sections.store');

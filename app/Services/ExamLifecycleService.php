@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ExamSection;
 use App\Models\Question;
 use App\Models\Quiz;
+use App\Support\AssessmentQuestionTypes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -28,6 +29,11 @@ final class ExamLifecycleService
 
         if ($exam->sections_count < 1) {
             $errors[] = 'Add at least one section before publishing.';
+        }
+
+        $allowedTypes = AssessmentQuestionTypes::effective($exam->selected_question_types);
+        if ($allowedTypes === []) {
+            $errors[] = 'Select at least one question type for this assessment before publishing.';
         }
 
         $approvedCount = Question::query()
@@ -65,6 +71,18 @@ final class ExamLifecycleService
 
         if ($approvedMarksSum <= 0) {
             $errors[] = 'Approved questions must have a positive total mark value.';
+        }
+
+        if ($allowedTypes !== [] && $approvedCount > 0) {
+            $badApprovedType = Question::query()
+                ->where('quiz_id', $exam->id)
+                ->where('pool_status', 'approved')
+                ->whereNotIn('type', $allowedTypes)
+                ->exists();
+
+            if ($badApprovedType) {
+                $errors[] = 'The approved pool contains a question type that is not enabled for this assessment. Archive those questions or widen the allowed question types.';
+            }
         }
 
         return $errors;
@@ -146,6 +164,7 @@ final class ExamLifecycleService
                 'title' => $this->uniqueCloneTitle($source),
                 'description' => $source->description,
                 'assessment_type' => $source->assessment_type,
+                'selected_question_types' => $source->selected_question_types,
                 'status' => 'draft',
                 'published_at' => null,
                 'duration_minutes' => $source->duration_minutes,
@@ -185,6 +204,11 @@ final class ExamLifecycleService
             }
 
             $copy->update(['total_marks' => $totalMarks]);
+
+            $classIds = $source->targetClassrooms()->pluck('id')->all();
+            if ($classIds !== []) {
+                $copy->targetClassrooms()->sync($classIds);
+            }
 
             return $copy->fresh();
         });

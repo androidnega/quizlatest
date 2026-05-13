@@ -388,12 +388,14 @@ final class ExamRedisService
     {
         return [
             'id' => (int) $quiz->id,
+            'share_token' => filled($quiz->share_token) ? (string) $quiz->share_token : null,
             'university_id' => $quiz->university_id !== null ? (int) $quiz->university_id : null,
             'course_id' => $quiz->course_id !== null ? (int) $quiz->course_id : null,
             'created_by' => $quiz->created_by !== null ? (int) $quiz->created_by : null,
             'title' => (string) $quiz->title,
             'description' => $quiz->description,
             'assessment_type' => $quiz->assessment_type,
+            'selected_question_types' => is_array($quiz->selected_question_types) ? $quiz->selected_question_types : null,
             'status' => $quiz->status,
             'published_at' => $quiz->published_at?->toAtomString(),
             'duration_minutes' => (int) ($quiz->duration_minutes ?? 0),
@@ -415,12 +417,14 @@ final class ExamRedisService
         $quiz = new Quiz;
         $quiz->forceFill([
             'id' => (int) $row['id'],
+            'share_token' => $row['share_token'] ?? null,
             'university_id' => $row['university_id'] ?? null,
             'course_id' => $row['course_id'] ?? null,
             'created_by' => $row['created_by'] ?? null,
             'title' => (string) ($row['title'] ?? ''),
             'description' => $row['description'] ?? null,
             'assessment_type' => $row['assessment_type'] ?? 'quiz',
+            'selected_question_types' => $row['selected_question_types'] ?? null,
             'status' => $row['status'] ?? 'draft',
             'published_at' => $row['published_at'] ?? null,
             'duration_minutes' => (int) ($row['duration_minutes'] ?? 0),

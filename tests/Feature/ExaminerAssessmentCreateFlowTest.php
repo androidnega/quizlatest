@@ -97,8 +97,12 @@ class ExaminerAssessmentCreateFlowTest extends TestCase
             ->get(route('examiner.exams.create'))
             ->assertOk()
             ->assertSee('Create assessment', false)
+            ->assertSee('Question types in pool', false)
             ->assertSee('Class groups', false)
-            ->assertSee('Import JSON', false);
+            ->assertSee('Import JSON', false)
+            ->assertSee('Next', false)
+            ->assertSee('Proctoring options', false)
+            ->assertSee('Save and continue', false);
     }
 
     public function test_examiner_can_create_draft_assessment_and_redirect_to_workspace(): void
@@ -107,6 +111,7 @@ class ExaminerAssessmentCreateFlowTest extends TestCase
 
         $response = $this->actingAs($ctx['examiner'])
             ->post(route('examiner.exams.store'), [
+                'wizard_step' => 2,
                 'course_id' => $ctx['course_id'],
                 'classroom_ids' => [$ctx['classroom_id']],
                 'assessment_type' => 'mid',
@@ -116,6 +121,7 @@ class ExaminerAssessmentCreateFlowTest extends TestCase
                 'question_source' => 'later',
                 'randomize_questions' => '1',
                 'randomize_options' => '1',
+                'selected_question_types' => ['mcq', 'true_false', 'fill_blank', 'essay'],
             ]);
 
         $quiz = Quiz::query()->where('title', 'Mid Semester Assessment')->firstOrFail();
@@ -146,6 +152,7 @@ class ExaminerAssessmentCreateFlowTest extends TestCase
 
         $this->actingAs($ctx['examiner'])
             ->post(route('examiner.exams.store'), [
+                'wizard_step' => 2,
                 'course_id' => $ctx['course_id'],
                 'classroom_ids' => [$ctx['classroom_id']],
                 'assessment_type' => 'quiz',
@@ -154,6 +161,7 @@ class ExaminerAssessmentCreateFlowTest extends TestCase
                 'question_source' => 'later',
                 'randomize_questions' => '1',
                 'randomize_options' => '1',
+                'selected_question_types' => ['mcq', 'true_false', 'fill_blank', 'essay'],
             ])
             ->assertRedirect();
 

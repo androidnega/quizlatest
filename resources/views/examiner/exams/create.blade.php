@@ -1,4 +1,3 @@
-@php($staffAcademicPeriodBadge = null)
 <x-layouts.examiner>
     <x-slot name="title">{{ __('Create assessment') }}</x-slot>
     <x-slot name="subtitle">{{ __('Choose class groups, optional JSON import with a prompt helper, in-app AI generation, then scheduling.') }}</x-slot>
@@ -23,9 +22,11 @@
             </div>
         @endif
 
-        <form method="post" action="{{ route('examiner.exams.store') }}" enctype="multipart/form-data" class="space-y-8" @submit="syncClassroomInputs()">
+        <form id="exam-create-form" method="post" action="{{ route('examiner.exams.store') }}" enctype="multipart/form-data" class="space-y-8" @submit="syncClassroomInputs()">
             @csrf
+            <input type="hidden" name="wizard_step" :value="wizardStep" />
 
+            <div x-show="wizardStep === 1" class="space-y-8">
             <section class="space-y-4" aria-labelledby="ec-general">
                 <h2 id="ec-general" class="text-sm font-semibold text-qs-text">{{ __('General') }}</h2>
                 <div>
@@ -41,6 +42,23 @@
                     </select>
                     <p class="mt-1 text-xs text-qs-muted">{{ __('Shown on reports and student-facing labels.') }}</p>
                 </div>
+                <fieldset class="space-y-2" aria-labelledby="ec-qtypes">
+                    <legend id="ec-qtypes" class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Question types in pool') }} <span class="text-qs-danger">*</span></legend>
+                    <p class="text-xs text-qs-muted">{{ __('Only these types can be added, imported, or AI-generated for this assessment.') }}</p>
+                    @php
+                        $qtDefaults = ['mcq', 'true_false', 'fill_blank', 'essay'];
+                        $qtOld = old('selected_question_types', $qtDefaults);
+                        $qtLabels = ['mcq' => __('Multiple choice'), 'true_false' => __('True/False'), 'fill_blank' => __('Fill-in-the-blank'), 'essay' => __('Essay')];
+                    @endphp
+                    <div class="flex flex-wrap gap-3">
+                        @foreach ($qtLabels as $value => $label)
+                            <label class="inline-flex items-center gap-2 rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm text-qs-text">
+                                <input type="checkbox" name="selected_question_types[]" value="{{ $value }}" class="qs-qtype-cb size-4 rounded border-qs-soft text-qs-accent" @checked(in_array($value, is_array($qtOld) ? $qtOld : $qtDefaults, true)) />
+                                <span>{{ $label }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                </fieldset>
                 <div>
                     <label class="mb-1 block text-sm font-medium text-qs-muted">{{ __('Course') }} <span class="text-qs-danger">*</span></label>
                     <select name="course_id" x-model="courseId" required class="qs-input mt-1 w-full py-2.5">
@@ -265,7 +283,22 @@
                             />
                         </div>
                     </div>
-                    <input type="hidden" name="ai_question_types[]" value="mcq" />
+                    <div class="sm:col-span-2 space-y-2">
+                        <span class="block text-xs font-medium text-qs-muted">{{ __('AI question types') }}</span>
+                        <div class="flex flex-wrap gap-3">
+                            @php
+                                $aiQtLabels = ['mcq' => __('Multiple choice'), 'true_false' => __('True/False'), 'fill_blank' => __('Fill-in-the-blank'), 'essay' => __('Essay')];
+                                $__aiCreateDefault = ['mcq'];
+                            @endphp
+                            @foreach ($aiQtLabels as $value => $label)
+                                <label class="inline-flex items-center gap-2 text-sm text-qs-text">
+                                    <input type="checkbox" name="ai_question_types[]" value="{{ $value }}" class="size-4 rounded border-qs-soft text-qs-accent" @checked(in_array($value, old('ai_question_types', $__aiCreateDefault), true)) />
+                                    <span>{{ $label }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                        <p class="text-xs text-qs-muted">{{ __('Only types enabled above will be generated; unchecked defaults to MCQ when MCQ is allowed.') }}</p>
+                    </div>
                     <input type="hidden" name="ai_difficulty" value="moderate" />
                     <input type="hidden" name="ai_marks" value="1" />
                 </div>
@@ -295,12 +328,37 @@
             </section>
 
             <div class="flex flex-wrap gap-3 border-t border-qs-soft pt-4">
-                <button type="submit" class="qs-btn-primary min-h-[44px] px-5 text-sm font-semibold" @if (count($classroomOptions) === 0) disabled @endif>
-                    {{ __('Create assessment') }}
+                <button
+                    type="button"
+                    class="qs-btn-primary min-h-[44px] px-5 text-sm font-semibold"
+                    @if (count($classroomOptions) === 0) disabled @endif
+                    @click="wizardNext()"
+                >
+                    {{ __('Next') }}
                 </button>
                 <a href="{{ route('examiner.exams.index') }}" class="inline-flex min-h-[44px] items-center rounded-lg border border-qs-soft px-4 text-sm font-semibold text-qs-muted hover:bg-qs-card">
                     {{ __('Cancel') }}
                 </a>
+            </div>
+            </div>
+
+            <div x-show="wizardStep === 2" x-cloak class="space-y-6">
+                <p class="text-sm leading-relaxed text-qs-muted">
+                    {{ __('Choose proctoring options for this assessment, then continue to the builder to add or review questions.') }}
+                </p>
+                @include('examiner.exams.partials.proctoring-examiner-panel', [
+                    'proctoringPolicy' => $proctoringPolicy,
+                    'examProctoringControls' => $examProctoringControls,
+                    'variant' => 'embedded',
+                ])
+                <div class="flex flex-wrap gap-3 border-t border-qs-soft pt-4">
+                    <button type="button" class="qs-btn-secondary min-h-[44px] px-5 text-sm font-semibold" @click="wizardBack()">
+                        {{ __('Back') }}
+                    </button>
+                    <button type="submit" class="qs-btn-primary min-h-[44px] px-5 text-sm font-semibold" @if (count($classroomOptions) === 0) disabled @endif>
+                        {{ __('Save and continue') }}
+                    </button>
+                </div>
             </div>
         </form>
     </div>
@@ -471,6 +529,30 @@
                     importValidateOk: false,
                     importValidateMessage: '',
                     copyPromptHint: '',
+                    wizardStep: cfg.initialWizardStep === 2 ? 2 : 1,
+                    wizardNext() {
+                        this.syncClassroomInputs();
+                        if (!this.selectedClassIds || this.selectedClassIds.length === 0) {
+                            window.alert(@json(__('Select at least one class group.')));
+                            return;
+                        }
+                        const form = document.getElementById('exam-create-form');
+                        if (form && !form.checkValidity()) {
+                            form.reportValidity();
+                            return;
+                        }
+                        const typeCbs = form.querySelectorAll('input.qs-qtype-cb:checked');
+                        if (!typeCbs.length) {
+                            window.alert(@json(__('Select at least one question type for the pool.')));
+                            return;
+                        }
+                        this.wizardStep = 2;
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    },
+                    wizardBack() {
+                        this.wizardStep = 1;
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    },
                     get pastePromptTopicsSerialized() {
                         return JSON.stringify(this.pasteTopicTags);
                     },

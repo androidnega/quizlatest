@@ -1,8 +1,33 @@
 <x-layouts.examiner>
-    @php($staffAcademicPeriodBadge = null)
-    @php($poolComplete = $poolQuestionTotal > 0 && $poolApprovedCount === $poolQuestionTotal)
-    @php($slugTitle = \Illuminate\Support\Str::slug($exam->title))
-    @php($courseTitleUpper = $exam->course ? mb_strtoupper($exam->course->title) : null)
+    @php
+        $poolQuestionTotal = (int) ($poolQuestionTotal ?? 0);
+        $poolApprovedCount = (int) ($poolApprovedCount ?? 0);
+        $poolComplete = $poolQuestionTotal > 0 && $poolApprovedCount === $poolQuestionTotal;
+        $slugTitle = \Illuminate\Support\Str::slug($exam->title);
+        $courseTitleUpper = $exam->course ? mb_strtoupper($exam->course->title) : null;
+        $questionTypeLabels = [
+            'mcq' => __('MCQ'),
+            'true_false' => __('True/False'),
+            'fill_blank' => __('Fill-in-the-blank'),
+            'essay' => __('Essay'),
+        ];
+        $allowedQuestionTypes = $allowedQuestionTypes ?? \App\Support\AssessmentQuestionTypes::ALL;
+        $__aiTypeDefault = array_values(array_intersect(['mcq'], $allowedQuestionTypes));
+        if ($__aiTypeDefault === []) {
+            $__aiTypeDefault = array_slice($allowedQuestionTypes, 0, 1) ?: ['mcq'];
+        }
+    @endphp
+    @php
+        $__poolUrlTpl = '';
+        $__qAny = $exam->sections->flatMap(fn ($sec) => $sec->questions)->first();
+        if ($__qAny !== null) {
+            $__poolUrlTpl = str_replace(
+                '/questions/'.$__qAny->id.'/',
+                '/questions/__QID__/',
+                route('examiner.exams.questions.pool-status', [$exam, $__qAny])
+            );
+        }
+    @endphp
 
     <x-slot name="title">{{ $exam->title }}</x-slot>
     <x-slot name="subtitle"></x-slot>
@@ -12,8 +37,11 @@
             tab: @js($workspaceTab),
             generationLocked: @js($generationLocked),
             poolComplete: @js($poolComplete),
+            canEditPool: @js($canEditPool),
             overviewQuestions: @js($overviewQuestions),
             qFilter: '',
+            poolQFilter: '',
+            poolUrlTemplate: @js($__poolUrlTpl),
             shareUrl: @js($shareUrl),
             displayToken: @js($displayToken),
             copyToast: false,
@@ -29,6 +57,28 @@
                     || (q.typeLabel || '').toLowerCase().includes(f)
                     || (q.section || '').toLowerCase().includes(f)
                 );
+            },
+            draftPoolCount() {
+                return this.overviewQuestions.filter((q) => q.pool_status === 'draft').length;
+            },
+            poolDraftQuestions() {
+                const f = (this.poolQFilter || '').toLowerCase().trim();
+                let qs = this.overviewQuestions.filter((q) => q.pool_status === 'draft');
+                if (!f) return qs;
+                return qs.filter((q) =>
+                    (q.text || '').toLowerCase().includes(f)
+                    || (q.topic || '').toLowerCase().includes(f)
+                    || (q.type || '').toLowerCase().includes(f)
+                    || (q.typeLabel || '').toLowerCase().includes(f)
+                    || (q.section || '').toLowerCase().includes(f)
+                );
+            },
+            poolStatusUrl(qid) {
+                const t = this.poolUrlTemplate || '';
+                if (!t || !t.includes('__QID__')) {
+                    return '#';
+                }
+                return t.replace('__QID__', String(qid));
             },
             async copyText(val) {
                 try {
@@ -80,6 +130,12 @@
                     @endif
                     <span class="text-slate-400"> · </span><span>{{ $exam->duration_minutes }} {{ __('min') }}</span>
                 </p>
+                <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
+                    <span class="font-semibold text-slate-700">{{ __('Pool question types:') }}</span>
+                    @foreach ($allowedQuestionTypes as $t)
+                        <span class="rounded-md bg-slate-100 px-2 py-0.5 font-medium text-slate-800">{{ $questionTypeLabels[$t] ?? $t }}</span>
+                    @endforeach
+                </div>
                 <div class="mt-3 flex flex-wrap gap-2">
                     @if ($exam->status === 'published')
                         <span class="inline-flex items-center rounded-md bg-sky-600 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-white">{{ __('Active') }}</span>
@@ -149,7 +205,7 @@
     @endif
     @if ($poolComplete)
         <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900">
-            All questions are approved. Moved to Delivery &amp; Publish. Question pool is now inactive.
+            All questions are approved. You can still review the overview above; new generation stays locked for this assessment.
         </div>
     @endif
 
@@ -167,61 +223,30 @@
                     <button type="submit" class="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-700">{{ __('End availability') }}</button>
                 </form>
             @elseif ($canEditSchedule)
-                <a href="#builder-delivery" class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-100">{{ __('Schedule window') }}</a>
+                <a
+                    href="#question-pool-section"
+                    x-show="!poolComplete"
+                    x-cloak
+                    class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-100"
+                >{{ __('Question pool') }}</a>
+                <form
+                    x-show="poolComplete"
+                    x-cloak
+                    method="post"
+                    action="{{ route('examiner.exams.publish', $exam) }}"
+                    class="inline"
+                    onsubmit="return confirm(@js(__('Publish this quiz for students? It becomes visible to eligible students on their dashboard and they can start it within the availability window you set.')));"
+                >
+                    @csrf
+                    <button
+                        type="submit"
+                        class="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"
+                        title="{{ __('Publishes the quiz so eligible students can see and start it (within your schedule).') }}"
+                    >{{ __('Publish for students') }}</button>
+                </form>
             @endif
         </div>
         <p x-show="copyToast" x-cloak class="mt-2 w-full text-xs font-medium text-emerald-700 sm:mt-0">{{ __('Copied to clipboard') }}</p>
-    </section>
-
-    {{-- Proctoring — configure on the workspace after the assessment exists --}}
-    <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6" aria-labelledby="builder-proctoring-heading">
-        <h2 id="builder-proctoring-heading" class="text-sm font-semibold text-slate-900">{{ __('Proctoring options') }}</h2>
-        <p class="mt-1 text-xs text-slate-600">{{ __('Capped by your institution’s policy.') }}</p>
-
-        <div class="mt-4 space-y-2">
-            <label class="flex min-h-[44px] cursor-default items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-800">
-                <input type="checkbox" class="size-4 rounded border-slate-300 text-sky-600" @checked($proctoringPolicy['allow_exam_start_snapshot']) disabled />
-                <span class="min-w-0 flex-1">{{ __('Exam start verification photo') }}</span>
-                <span class="shrink-0 text-[11px] font-medium text-slate-500">{{ $proctoringPolicy['allow_exam_start_snapshot'] ? __('Required by admin') : __('Disabled by admin') }}</span>
-            </label>
-            <label class="flex min-h-[44px] cursor-default items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-800">
-                <input type="checkbox" class="size-4 rounded border-slate-300 text-sky-600" @checked($proctoringPolicy['allow_camera_monitoring']) disabled />
-                <span class="min-w-0 flex-1">{{ __('Proctoring camera during exam') }}</span>
-                <span class="shrink-0 text-[11px] font-medium text-slate-500">{{ $proctoringPolicy['allow_camera_monitoring'] ? __('Required by admin') : __('Disabled by admin') }}</span>
-            </label>
-        </div>
-
-        @if ($canEditSchedule)
-            <form method="post" action="{{ route('examiner.exams.proctoring-options.update', $exam) }}" class="mt-5 space-y-2 border-t border-slate-100 pt-5">
-                @csrf
-                @method('patch')
-                <p class="mb-2 text-xs text-slate-600">{{ __('These apply when students take the exam.') }}</p>
-                <input type="hidden" name="enable_phone" value="0" />
-                <label class="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50">
-                    <input type="checkbox" name="enable_phone" value="1" class="size-4 rounded border-slate-300 text-sky-600" @checked(old('enable_phone', $examProctoringControls['phone_detection_enabled'])) @disabled(! $proctoringPolicy['allow_phone']) />
-                    <span>{{ __('Phone detection') }}</span>
-                </label>
-                <input type="hidden" name="enable_fullscreen" value="0" />
-                <label class="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50">
-                    <input type="checkbox" name="enable_fullscreen" value="1" class="size-4 rounded border-slate-300 text-sky-600" @checked(old('enable_fullscreen', $examProctoringControls['fullscreen_enforced'])) @disabled(! $proctoringPolicy['allow_fullscreen']) />
-                    <span>{{ __('Fullscreen enforcement') }}</span>
-                </label>
-                <input type="hidden" name="enable_auto_submit" value="0" />
-                <label class="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50">
-                    <input type="checkbox" name="enable_auto_submit" value="1" class="size-4 rounded border-slate-300 text-sky-600" @checked(old('enable_auto_submit', $examProctoringControls['auto_submit_enabled'])) @disabled(! $proctoringPolicy['allow_auto_submit']) />
-                    <span>{{ __('Auto submit on severe violations') }}</span>
-                </label>
-                <div class="pt-2">
-                    <button type="submit" class="rounded-lg bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-700">{{ __('Save proctoring options') }}</button>
-                </div>
-            </form>
-        @else
-            <div class="mt-5 space-y-2 border-t border-slate-100 pt-5 text-sm text-slate-600">
-                <p><span class="font-medium text-slate-800">{{ __('Phone detection') }}:</span> {{ $examProctoringControls['phone_detection_enabled'] ? __('On') : __('Off') }}</p>
-                <p><span class="font-medium text-slate-800">{{ __('Fullscreen enforcement') }}:</span> {{ $examProctoringControls['fullscreen_enforced'] ? __('On') : __('Off') }}</p>
-                <p><span class="font-medium text-slate-800">{{ __('Auto submit on severe violations') }}:</span> {{ $examProctoringControls['auto_submit_enabled'] ? __('On') : __('Off') }}</p>
-            </div>
-        @endif
     </section>
 
     {{-- Question overview --}}
@@ -295,8 +320,26 @@
         </div>
     @enderror
 
-    <div x-show="!generationLocked" x-cloak id="builder-import-ai" class="scroll-mt-28 space-y-6" x-data="{ sourceMode: '{{ old('ai_custom_prompt') || old('ai_topic') || old('ai_count') ? 'ai' : 'json' }}' }">
+    <div x-show="!generationLocked" x-cloak id="question-pool-authoring" class="scroll-mt-28 space-y-6" x-data="{ sourceMode: '{{ old('ai_custom_prompt') || old('ai_topic') || old('ai_count') ? 'ai' : 'json' }}' }">
         @if ($canEditContent)
+        <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-labelledby="allowed-qtypes-heading">
+            <h3 id="allowed-qtypes-heading" class="text-sm font-semibold text-slate-900">{{ __('Allowed question types') }}</h3>
+            <p class="mt-1 text-xs text-slate-600">{{ __('The pool only accepts questions of these types. You cannot remove a type while non-archived questions still use it.') }}</p>
+            @error('selected_question_types')
+                <p class="mt-2 text-xs text-rose-700">{{ $message }}</p>
+            @enderror
+            <form method="post" action="{{ route('examiner.exams.question-types.update', $exam) }}" class="mt-3 flex flex-wrap items-center gap-3">
+                @csrf
+                @method('PATCH')
+                @foreach (\App\Support\AssessmentQuestionTypes::ALL as $tq)
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-800">
+                        <input type="checkbox" name="selected_question_types[]" value="{{ $tq }}" class="size-4 rounded border-slate-300 text-sky-600" @checked(in_array($tq, $allowedQuestionTypes, true)) />
+                        <span>{{ $questionTypeLabels[$tq] ?? $tq }}</span>
+                    </label>
+                @endforeach
+                <button type="submit" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800">{{ __('Save types') }}</button>
+            </form>
+        </section>
         <div class="rounded-xl border border-qs-soft bg-white p-4 shadow-sm">
             <h3 class="text-sm font-semibold text-qs-text mb-2">Question source</h3>
             <div class="flex flex-wrap gap-3 text-sm text-qs-text">
@@ -336,7 +379,17 @@
                 </div>
                 <input type="hidden" name="ai_marks" value="1" />
                 <input type="hidden" name="ai_difficulty" value="undergraduate" />
-                <input type="hidden" name="ai_question_types[]" value="mcq" />
+                <div class="sm:col-span-2 space-y-1">
+                    <span class="block text-xs text-qs-muted">{{ __('Question types to include in the prompt') }}</span>
+                    <div class="flex flex-wrap gap-3">
+                        @foreach ($allowedQuestionTypes as $tq)
+                            <label class="inline-flex items-center gap-2 text-sm text-qs-text">
+                                <input type="checkbox" name="ai_question_types[]" value="{{ $tq }}" class="size-4 rounded border-qs-soft text-qs-accent" @checked(in_array($tq, old('ai_question_types', $__aiTypeDefault), true)) />
+                                <span>{{ $questionTypeLabels[$tq] ?? $tq }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                </div>
                 <div class="sm:col-span-2">
                     <button type="submit" class="qs-btn-secondary min-h-[44px] text-sm">Generate prompt template</button>
                 </div>
@@ -390,7 +443,17 @@
                         <input type="hidden" name="ai_custom_prompt" value="" />
                         <input type="hidden" name="ai_marks" value="1" />
                         <input type="hidden" name="ai_difficulty" value="undergraduate" />
-                        <input type="hidden" name="ai_question_types[]" value="mcq" />
+                        <div class="sm:col-span-2 space-y-1">
+                            <span class="block text-xs text-qs-muted">{{ __('Question types to generate') }}</span>
+                            <div class="flex flex-wrap gap-3">
+                                @foreach ($allowedQuestionTypes as $tq)
+                                    <label class="inline-flex items-center gap-2 text-sm text-qs-text">
+                                        <input type="checkbox" name="ai_question_types[]" value="{{ $tq }}" class="size-4 rounded border-qs-soft text-qs-accent" @checked(in_array($tq, old('ai_question_types', $__aiTypeDefault), true)) />
+                                        <span>{{ $questionTypeLabels[$tq] ?? $tq }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
                     </div>
                     <button type="submit" class="qs-btn-primary min-h-[44px] text-sm">Generate &amp; preview</button>
                 </form>
@@ -433,119 +496,153 @@
         @endif
     </div>
 
-    <div x-show="!poolComplete" x-cloak id="builder-sections" class="scroll-mt-28 space-y-8">
-    <div class="rounded-xl border border-qs-soft bg-white p-5 shadow-sm">
-        <h3 class="text-sm font-semibold text-qs-text mb-2">Question pool preview</h3>
-        <p class="text-xs text-qs-muted">Sections and questions are created from imported/generate JSON. Approve ready questions so they can be used in randomized delivery.</p>
-        @if ($exam->sections->isNotEmpty())
-            <form method="post" action="{{ route('examiner.exams.questions.pool-status.bulk', $exam) }}" class="mt-4 space-y-3">
-                @csrf
-                @method('PATCH')
-                <div class="flex flex-wrap items-center gap-2">
-                    <input type="hidden" name="pool_status" value="approved" />
-                    <input type="hidden" name="mode" value="all" />
-                    <button type="submit" class="qs-btn-secondary min-h-[44px] text-sm">Approve all questions</button>
-                </div>
-            </form>
-            <p class="mt-2 text-xs text-qs-muted">Use checkboxes below to batch approve selected questions.</p>
+    <div x-show="!poolComplete" x-cloak id="question-pool-section" class="scroll-mt-28 space-y-6">
+        <div
+            x-show="draftPoolCount() > 0"
+            x-cloak
+            class="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950 shadow-sm"
+        >
+            <p class="font-semibold text-sky-900">{{ __('Action required') }}</p>
+            <p class="mt-1 text-sky-900/90">{{ __('Approve generated questions below so they can be delivered to students.') }}</p>
+        </div>
+        @if ($exam->status !== 'published')
+            <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
+                <p class="font-semibold text-amber-900">{{ __('Not published') }}</p>
+                <p class="mt-1 text-amber-900/90">{{ __('Students cannot start this assessment until you publish it. Delivery counts and randomization were set when you created the assessment.') }}</p>
+            </div>
         @endif
-    </div>
-    @if ($exam->sections->isNotEmpty())
-        <form id="pool-batch-approve-selected" method="post" action="{{ route('examiner.exams.questions.pool-status.bulk', $exam) }}" class="rounded-xl border border-qs-soft bg-white p-4 shadow-sm">
-            @csrf
-            @method('PATCH')
-            <input type="hidden" name="pool_status" value="approved" />
-            <input type="hidden" name="mode" value="selected" />
-            <div class="flex flex-wrap items-center gap-2">
-                <button type="submit" class="qs-btn-secondary min-h-[44px] text-sm">Approve selected</button>
-                @error('pool_status')
-                    <span class="text-xs text-qs-danger">{{ $message }}</span>
-                @enderror
-            </div>
-        </form>
-    @endif
-    @forelse ($exam->sections as $section)
-        <div class="mb-10 rounded-xl border border-qs-soft bg-white p-5 shadow-sm">
-            <div class="flex items-center justify-between mb-4 border-b border-qs-soft pb-3">
-                <h3 class="text-lg font-semibold text-qs-text">{{ $section->title }}</h3>
-                <span class="text-xs text-qs-muted">Order {{ $section->section_order }}</span>
-            </div>
-
-            @foreach ($section->questions as $q)
-                <div class="mb-4 rounded-lg bg-white p-4 text-sm border border-qs-soft">
-                    <div class="flex flex-wrap justify-between gap-2 items-start">
-                        <div class="flex items-center gap-2">
-                            <input type="checkbox" name="question_ids[]" value="{{ $q->id }}" form="pool-batch-approve-selected" class="size-4 rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40" />
-                            <span class="font-medium text-qs-text">{{ $loop->iteration }}. {{ $q->type }}</span>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <span class="text-xs uppercase tracking-wide text-qs-muted">{{ $q->pool_status }}</span>
-                            <span class="text-qs-muted">{{ $q->marks }} pts</span>
-                        </div>
-                    </div>
-                    @if ($canEditPool)
-                        <form method="post" action="{{ route('examiner.exams.questions.pool-status', [$exam, $q]) }}" class="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                            @csrf
-                            @method('PATCH')
-                            <label class="text-qs-muted">Pool status</label>
-                            <select name="pool_status" class="min-h-[44px] rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm text-qs-text" onchange="this.form.submit()">
-                                @foreach (['draft', 'approved', 'archived'] as $ps)
-                                    <option value="{{ $ps }}" @selected($q->pool_status === $ps)>{{ $ps }}</option>
-                                @endforeach
-                            </select>
-                        </form>
-                    @endif
-                    <p class="mt-2 text-qs-text whitespace-pre-wrap">{{ $q->question_text }}</p>
-                    @if ($q->isMCQ() && is_array($q->options))
-                        <ul class="mt-2 list-disc list-inside text-qs-muted">
-                            @foreach ($q->options as $idx => $opt)
-                                <li>{{ $idx }}: {{ $opt }}</li>
-                            @endforeach
-                        </ul>
-                    @endif
-                </div>
-            @endforeach
-
+        <div
+            x-show="generationLocked && draftPoolCount() > 0"
+            x-cloak
+            class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 shadow-sm"
+        >
+            <p class="font-semibold text-slate-900">{{ __('Pool locked for regeneration') }}</p>
+            <p class="mt-1 text-slate-700">{{ __('You can still approve or reject questions already in the pool.') }}</p>
         </div>
-    @empty
-        <p class="rounded-xl border border-dashed border-qs-soft bg-qs-card px-4 py-8 text-center text-sm text-qs-muted">No questions yet. Use JSON or internal AI above to generate and preview questions first.</p>
-    @endforelse
-    </div>
 
-    @if ($canEditDelivery)
-        <div id="builder-delivery" class="scroll-mt-28 rounded-xl border border-qs-soft bg-white p-5 shadow-sm">
-            <h3 class="text-sm font-semibold text-qs-text mb-2">Randomized delivery</h3>
-            <p class="text-xs text-qs-muted mb-3">Students only receive a subset of <strong class="text-qs-text">approved</strong> questions. Approve questions in the pool above, then set how many each student sees.</p>
-            <p class="mb-2 text-xs text-qs-muted">{{ __('Approved in pool') }}: <strong class="text-qs-text">{{ $poolApprovedCount }}</strong></p>
-            @error('questions_per_student')
-                <div class="mb-2 text-xs text-qs-danger">{{ $message }}</div>
-            @enderror
-            @if ($poolApprovedCount < 1)
-                <div class="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                    {{ __('Approve at least one question first. Delivery settings become available immediately after approval.') }}
-                </div>
-            @endif
-            <form method="post" action="{{ route('examiner.exams.delivery.update', $exam) }}" class="space-y-3 max-w-xl">
-                @csrf
-                @method('PATCH')
+        <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6" aria-labelledby="question-pool-heading">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                    <label class="block text-xs text-qs-muted mb-1">Questions each student answers</label>
-                    <input type="number" name="questions_per_student" value="{{ old('questions_per_student', $exam->questions_per_student ?? 1) }}" min="1" max="500" required class="w-full max-w-xs rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm min-h-[44px]" @disabled($poolApprovedCount < 1) />
+                    <h2 id="question-pool-heading" class="text-base font-semibold text-slate-900">{{ __('Question pool (unapproved)') }}</h2>
+                    <p class="mt-1 text-xs text-slate-600">{{ __('Draft questions must be approved before delivery. Use the search below to filter this list.') }}</p>
                 </div>
-                <div class="flex flex-wrap gap-4 text-sm text-qs-text">
-                    <label class="inline-flex min-h-[44px] cursor-pointer items-center gap-2 py-1">
-                        <input type="checkbox" name="randomize_questions" value="1" class="size-4 shrink-0 rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40" @checked(old('randomize_questions', $exam->randomize_questions)) @disabled($poolApprovedCount < 1) />
-                        Randomize which questions (and order)
-                    </label>
-                    <label class="inline-flex min-h-[44px] cursor-pointer items-center gap-2 py-1">
-                        <input type="checkbox" name="randomize_options" value="1" class="size-4 shrink-0 rounded border-qs-soft text-qs-accent focus:ring-qs-accent/40" @checked(old('randomize_options', $exam->randomize_options)) @disabled($poolApprovedCount < 1) />
-                        Randomize MCQ option order
-                    </label>
-                </div>
-                <button type="submit" class="qs-btn-secondary min-h-[44px] text-sm" @disabled($poolApprovedCount < 1)>Apply delivery options</button>
-            </form>
-        </div>
-    @endif
+                <template x-if="canEditPool && draftPoolCount() > 0">
+                    <form method="post" action="{{ route('examiner.exams.questions.pool-status.bulk', $exam) }}" class="shrink-0">
+                        @csrf
+                        @method('PATCH')
+                        <input type="hidden" name="pool_status" value="approved" />
+                        <input type="hidden" name="mode" value="all" />
+                        <button type="submit" class="inline-flex min-h-[44px] items-center justify-center rounded-lg bg-sky-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-sky-700">
+                            {{ __('Approve all') }} (<span x-text="draftPoolCount()"></span>)
+                        </button>
+                    </form>
+                </template>
+            </div>
+
+            <label class="mt-4 block">
+                <span class="sr-only">{{ __('Filter pool') }}</span>
+                <input
+                    type="search"
+                    x-model="poolQFilter"
+                    class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                    placeholder="{{ __('Type to filter questions…') }}"
+                />
+            </label>
+
+            <div class="mt-6 space-y-4">
+                <template x-for="q in poolDraftQuestions()" :key="'pool-draft-' + q.id">
+                    <article class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-sm font-semibold leading-relaxed text-slate-900 whitespace-pre-wrap" x-text="q.text"></p>
+                                <p class="mt-1 text-xs text-slate-500">
+                                    <span x-text="q.typeLabel"></span>
+                                    <span class="text-slate-400"> · </span>
+                                    <span x-text="q.section"></span>
+                                </p>
+                            </div>
+                            <div x-show="canEditPool" class="flex shrink-0 flex-wrap justify-end gap-2">
+                                <button
+                                    type="button"
+                                    disabled
+                                    class="cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-400"
+                                    title="{{ __('Inline edit is not available yet') }}"
+                                >
+                                    {{ __('Edit') }}
+                                </button>
+                                <form method="post" class="inline" :action="poolStatusUrl(q.id)">
+                                    @csrf
+                                    @method('PATCH')
+                                    <input type="hidden" name="pool_status" value="approved" />
+                                    <button type="submit" class="rounded-lg bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-700">{{ __('Approve') }}</button>
+                                </form>
+                                <form
+                                    method="post"
+                                    class="inline"
+                                    :action="poolStatusUrl(q.id)"
+                                    onsubmit="return confirm(@js(__('Reject this question? It will be moved out of the active pool (archived).')));"
+                                >
+                                    @csrf
+                                    @method('PATCH')
+                                    <input type="hidden" name="pool_status" value="archived" />
+                                    <button type="submit" class="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-700">{{ __('Reject') }}</button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <template x-if="q.options && q.options.length">
+                            <ul class="mt-4 space-y-2 border-t border-slate-100 pt-4">
+                                <template x-for="(opt, idx) in q.options" :key="'opt-' + q.id + '-' + idx">
+                                    <li class="flex flex-wrap items-baseline gap-2 text-sm text-slate-800">
+                                        <span class="w-6 shrink-0 font-semibold text-slate-500" x-text="String.fromCharCode(65 + idx) + '.'"></span>
+                                        <span class="min-w-0 flex-1" x-text="opt"></span>
+                                        <template x-if="q.correct_indices && q.correct_indices.includes(idx)">
+                                            <span class="shrink-0 text-xs font-semibold text-sky-700">({{ __('correct') }})</span>
+                                        </template>
+                                    </li>
+                                </template>
+                            </ul>
+                        </template>
+                        <template x-if="!q.options || !q.options.length">
+                            <p class="mt-4 border-t border-slate-100 pt-4 text-sm text-slate-700">
+                                <span class="font-medium text-slate-500">{{ __('Answer') }}:</span>
+                                <span x-text="q.answer"></span>
+                            </p>
+                        </template>
+
+                        <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                            <div class="flex flex-wrap gap-1.5">
+                                <template x-if="q.topic">
+                                    <span
+                                        class="inline-flex max-w-full items-center rounded-md bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-900"
+                                        x-text="q.topic"
+                                    ></span>
+                                </template>
+                                <template x-if="q.ai">
+                                    <span class="inline-flex rounded-md bg-violet-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-violet-800">{{ __('AI') }}</span>
+                                </template>
+                            </div>
+                        </div>
+                    </article>
+                </template>
+            </div>
+
+            <template x-if="overviewQuestions.length && poolDraftQuestions().length === 0">
+                <p class="mt-6 text-center text-sm text-slate-500">{{ __('No draft questions match this filter, or all are already approved.') }}</p>
+            </template>
+            <template x-if="!overviewQuestions.length">
+                <p class="mt-6 rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-8 text-center text-sm text-slate-500">
+                    {{ __('No questions yet. Use JSON or internal AI above to generate and preview questions first.') }}
+                </p>
+            </template>
+            <p class="mt-6 text-center text-xs text-slate-500" x-show="draftPoolCount() > 0">
+                {{ __('You have draft question(s) in the pool below. Use Approve all or approve individually.') }}
+            </p>
+            @error('pool_status')
+                <p class="mt-3 text-center text-xs text-rose-600">{{ $message }}</p>
+            @enderror
+        </section>
+    </div>
 
     </div>
     </template>
