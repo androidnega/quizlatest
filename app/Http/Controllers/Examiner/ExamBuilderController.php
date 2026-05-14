@@ -29,6 +29,7 @@ use App\Support\AssessmentProctoringDefaults;
 use App\Support\AssessmentQuestionTypes;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -97,6 +98,19 @@ class ExamBuilderController extends Controller
             $courseIdFilter = 0;
         }
 
+        $proctoringFocusRaw = $request->query('proctoring_focus');
+        $allowedProctoringFocus = [
+            'flagged',
+            'auto_submitted',
+            'phone_detected',
+            'tab_switch_limit',
+            'held_results',
+            'assignments_grading',
+        ];
+        $proctoringFocus = is_string($proctoringFocusRaw) && in_array($proctoringFocusRaw, $allowedProctoringFocus, true)
+            ? $proctoringFocusRaw
+            : null;
+
         $examQuery = Quiz::query()
             ->when($user->role === 'examiner', fn ($q) => $q->where('created_by', $user->id))
             ->when($user->role !== 'examiner', fn ($q) => $q->whereIn('course_id', $manageableCourseIds))
@@ -113,6 +127,62 @@ class ExamBuilderController extends Controller
             ->when($tab === 'ended', fn ($q) => $q->where('status', 'archived'))
             ->orderByDesc('updated_at');
 
+        $examQuery
+            ->when($proctoringFocus === 'flagged', function ($q): void {
+                $q->whereExists(function (Builder $sub): void {
+                    $sub->from('exam_sessions')
+                        ->whereColumn('exam_sessions.exam_id', 'quizzes.id')
+                        ->where(function ($s): void {
+                            $s->whereIn('exam_sessions.risk_state', ['suspicious', 'critical', 'locked'])
+                                ->orWhereExists(function (Builder $sub2): void {
+                                    $sub2->from('results')
+                                        ->whereColumn('results.user_id', 'exam_sessions.student_id')
+                                        ->whereColumn('results.quiz_id', 'exam_sessions.exam_id')
+                                        ->where('results.status', 'held')
+                                        ->selectRaw('1');
+                                });
+                        });
+                });
+            })
+            ->when($proctoringFocus === 'auto_submitted', function ($q): void {
+                $q->whereExists(function (Builder $sub): void {
+                    $sub->from('exam_sessions')
+                        ->whereColumn('exam_sessions.exam_id', 'quizzes.id')
+                        ->whereNotNull('exam_sessions.auto_submit_reason_code');
+                });
+            })
+            ->when($proctoringFocus === 'phone_detected', function ($q): void {
+                $q->whereExists(function (Builder $sub): void {
+                    $sub->from('exam_sessions')
+                        ->whereColumn('exam_sessions.exam_id', 'quizzes.id')
+                        ->where(function ($s): void {
+                            $s->where('exam_sessions.auto_submit_reason_code', 'phone_detected')
+                                ->orWhereExists(function (Builder $sub2): void {
+                                    $sub2->from('proctoring_events')
+                                        ->whereColumn('proctoring_events.user_id', 'exam_sessions.student_id')
+                                        ->whereColumn('proctoring_events.quiz_id', 'exam_sessions.exam_id')
+                                        ->where('proctoring_events.event_type', 'phone_detected')
+                                        ->whereColumn('proctoring_events.metadata->session_id', 'exam_sessions.session_id')
+                                        ->selectRaw('1');
+                                });
+                        });
+                });
+            })
+            ->when($proctoringFocus === 'tab_switch_limit', function ($q): void {
+                $q->whereExists(function (Builder $sub): void {
+                    $sub->from('exam_sessions')
+                        ->whereColumn('exam_sessions.exam_id', 'quizzes.id')
+                        ->where('exam_sessions.auto_submit_reason_code', 'tab_switch_limit');
+                });
+            })
+            ->when($proctoringFocus === 'held_results', function ($q): void {
+                $q->whereHas('results', fn ($r) => $r->where('status', 'held'));
+            })
+            ->when($proctoringFocus === 'assignments_grading', function ($q): void {
+                $q->where('assessment_type', 'assignment')
+                    ->whereHas('results', fn ($r) => $r->whereIn('status', ['held', 'pending_manual']));
+            });
+
         $exams = $examQuery->paginate(15)->withQueryString();
 
         return view('examiner.exams.index', [
@@ -125,6 +195,7 @@ class ExamBuilderController extends Controller
                 ->orderByDesc('start_date')
                 ->get(['id', 'name', 'is_active']),
             'selectedAcademicYearId' => $yearFilter > 0 ? $yearFilter : null,
+            'proctoringFocus' => $proctoringFocus,
         ]);
     }
 
@@ -454,7 +525,7 @@ class ExamBuilderController extends Controller
             $pendingImportSections = $gen['sections'];
         }
 
-        $quiz = Quiz::create([
+        $quiz = Quiz::create(array_merge([
             'university_id' => $user->university_id,
             'academic_year_id' => $year->id,
             'term_id' => $activeTerm?->id,
@@ -474,7 +545,12 @@ class ExamBuilderController extends Controller
             'start_time' => $start,
             'end_time' => $end,
             'due_at' => $dueAt,
-        ]);
+        ], $creatingAssignment ? [
+            'assignment_allows_text' => true,
+            'assignment_allows_files' => false,
+            'assignment_allowed_extensions' => ['pdf', 'docx', 'txt'],
+            'assignment_max_file_kb' => 5120,
+        ] : []));
 
         $quiz->targetClassrooms()->sync($classIds);
 
@@ -584,7 +660,7 @@ class ExamBuilderController extends Controller
 
         $sessionsCount = ExamSession::query()->where('exam_id', $exam->id)->count();
 
-        $shareUrl = route('student.exam.instructions', $exam, absolute: true);
+        $shareUrl = route('student.exam.prepare', $exam, absolute: true);
         if (filled($exam->share_token)) {
             $displayToken = (string) $exam->share_token;
         } else {
@@ -1009,6 +1085,42 @@ class ExamBuilderController extends Controller
         $this->bumpExamConfigCache($exam->fresh());
 
         return back()->with('status', 'Exam window updated.');
+    }
+
+    public function updateAssignmentSubmissionSettings(Request $request, Quiz $exam): RedirectResponse
+    {
+        $this->authorize('update', $exam);
+        abort_unless($exam->isAssignment(), 404);
+
+        $validated = $request->validate([
+            'assignment_allowed_extensions' => ['nullable', 'string', 'max:500'],
+            'assignment_max_file_kb' => ['nullable', 'integer', 'min:256', 'max:51200'],
+        ]);
+
+        if (! $request->boolean('assignment_allows_text') && ! $request->boolean('assignment_allows_files')) {
+            throw ValidationException::withMessages([
+                'assignment_allows_text' => [__('Choose at least one of typed text or file upload.')],
+            ]);
+        }
+
+        $rawExt = trim((string) ($validated['assignment_allowed_extensions'] ?? ''));
+        $extArr = $rawExt === ''
+            ? (array) ($exam->assignment_allowed_extensions ?? ['pdf', 'docx', 'txt'])
+            : array_values(array_unique(array_filter(array_map(
+                static fn (string $s): string => strtolower(ltrim(trim($s), '.')),
+                preg_split('/[\s,]+/', $rawExt) ?: [],
+            ))));
+
+        $exam->update([
+            'assignment_allows_text' => $request->boolean('assignment_allows_text'),
+            'assignment_allows_files' => $request->boolean('assignment_allows_files'),
+            'assignment_allowed_extensions' => $extArr,
+            'assignment_max_file_kb' => (int) ($validated['assignment_max_file_kb'] ?? ($exam->assignment_max_file_kb ?? 5120)),
+        ]);
+
+        $this->bumpExamConfigCache($exam->fresh());
+
+        return back()->with('status', __('Assignment submission options updated.'));
     }
 
     public function releaseAssignmentGrades(Request $request, Quiz $exam): RedirectResponse

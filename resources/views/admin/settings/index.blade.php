@@ -129,6 +129,26 @@
                     @checked(old('auto_submit_enabled', $auto_submit_enabled)) @disabled($lock_auto_submit_enabled) />
                 Auto-submit enabled
             </label>
+            @if (auth()->user()?->isSuperAdmin())
+                <div class="rounded-lg border border-amber-100 bg-amber-50/90 px-3 py-2 text-xs leading-relaxed text-amber-950">
+                    {{ __('Exam surface integrity (invigilated exams only). OS-level screenshots and screen recording cannot be fully blocked in a browser; these options deter common shortcuts and log signals for review.') }}
+                </div>
+                <label class="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
+                    <input type="checkbox" name="exam_clipboard_lock" value="1" class="{{ $setCheck }}"
+                        @checked(old('exam_clipboard_lock', $exam_clipboard_lock)) @disabled($lock_exam_clipboard_lock) />
+                    {{ __('Block copy, cut, and paste in the exam answer area') }}
+                </label>
+                <label class="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
+                    <input type="checkbox" name="exam_screenshot_mitigation" value="1" class="{{ $setCheck }}"
+                        @checked(old('exam_screenshot_mitigation', $exam_screenshot_mitigation)) @disabled($lock_exam_screenshot_mitigation) />
+                    {{ __('Mitigate common screenshot shortcuts and right-click (when in fullscreen)') }}
+                </label>
+                <label class="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
+                    <input type="checkbox" name="exam_screen_record_mitigation" value="1" class="{{ $setCheck }}"
+                        @checked(old('exam_screen_record_mitigation', $exam_screen_record_mitigation)) @disabled($lock_exam_screen_record_mitigation) />
+                    {{ __('Try to capture the PrintScreen key via Keyboard Lock when the browser supports it (fullscreen)') }}
+                </label>
+            @endif
             <div>
                 <label class="mb-1 block text-sm text-slate-600">Default exam proctoring (JSON, optional)</label>
                 <textarea name="default_proctoring_settings" rows="8" class="{{ $setInput }} font-mono text-xs"

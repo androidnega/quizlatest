@@ -116,4 +116,15 @@ class StudentDashboardDigestTest extends TestCase
             ->assertOk()
             ->assertDontSee('Fullscreen policy updated', false);
     }
+
+    public function test_student_dashboard_tip_includes_dismiss_control(): void
+    {
+        $this->seed(InitialSetupSeeder::class);
+        $student = User::query()->where('role', 'student')->firstOrFail();
+
+        $this->actingAs($student)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee(__('Dismiss tip'), false);
+    }
 }

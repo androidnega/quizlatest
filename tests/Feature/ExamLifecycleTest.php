@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\ExamSection;
+use App\Models\ExamSession;
 use App\Models\Question;
 use App\Models\Quiz;
 use App\Models\User;
 use App\Services\SystemSettingsService;
 use Database\Seeders\InitialSetupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -187,6 +189,7 @@ class ExamLifecycleTest extends TestCase
         $this->addSectionAndMcq($exam);
 
         $this->actingAs($ctx['student']);
+        $this->get(route('student.exam.instructions', $exam))->assertForbidden();
         $this->get(route('student.exam.prepare', $exam))->assertForbidden();
 
         $this->setDeliveryForExaminer($ctx['examiner'], $exam->fresh());
@@ -196,6 +199,7 @@ class ExamLifecycleTest extends TestCase
 
         $exam->refresh();
         $this->actingAs($ctx['student']);
+        $this->get(route('student.exam.instructions', $exam))->assertOk();
         $this->get(route('student.exam.prepare', $exam))->assertOk();
 
         $this->actingAs($ctx['examiner']);
@@ -205,6 +209,7 @@ class ExamLifecycleTest extends TestCase
         ]);
 
         $this->actingAs($ctx['student']);
+        $this->get(route('student.exam.instructions', $exam->fresh()))->assertForbidden();
         $this->get(route('student.exam.prepare', $exam->fresh()))->assertForbidden();
 
         $this->actingAs($ctx['examiner']);
@@ -222,6 +227,7 @@ class ExamLifecycleTest extends TestCase
         $this->assertSame('archived', $exam->status);
 
         $this->actingAs($ctx['student']);
+        $this->get(route('student.exam.instructions', $exam))->assertForbidden();
         $this->get(route('student.exam.prepare', $exam))->assertForbidden();
     }
 
@@ -292,10 +298,16 @@ class ExamLifecycleTest extends TestCase
         DB::table('users')->where('id', $ctx['student']->id)->update(['student_onboarded_at' => null]);
 
         $response = $this->actingAs(User::query()->findOrFail($ctx['student']->id))
-            ->get(route('student.exam.prepare', $exam));
+            ->get(route('student.exam.instructions', $exam));
 
         $response->assertRedirect(route('login', absolute: false));
         $response->assertSessionHasErrors('index_number');
+
+        $responsePrepare = $this->actingAs(User::query()->findOrFail($ctx['student']->id))
+            ->get(route('student.exam.prepare', $exam));
+
+        $responsePrepare->assertRedirect(route('login', absolute: false));
+        $responsePrepare->assertSessionHasErrors('index_number');
     }
 
     public function test_inactive_student_is_redirected_from_exam_prepare(): void
@@ -311,10 +323,16 @@ class ExamLifecycleTest extends TestCase
         DB::table('users')->where('id', $ctx['student']->id)->update(['is_active' => false]);
 
         $response = $this->actingAs(User::query()->findOrFail($ctx['student']->id))
-            ->get(route('student.exam.prepare', $exam));
+            ->get(route('student.exam.instructions', $exam));
 
         $response->assertRedirect(route('login', absolute: false));
         $response->assertSessionHasErrors('index_number');
+
+        $responsePrepare = $this->actingAs(User::query()->findOrFail($ctx['student']->id))
+            ->get(route('student.exam.prepare', $exam));
+
+        $responsePrepare->assertRedirect(route('login', absolute: false));
+        $responsePrepare->assertSessionHasErrors('index_number');
     }
 
     public function test_onboarded_active_student_can_prepare_published_exam(): void
@@ -328,6 +346,7 @@ class ExamLifecycleTest extends TestCase
 
         $exam->refresh();
         $this->actingAs($ctx['student']);
+        $this->get(route('student.exam.instructions', $exam))->assertOk();
         $this->get(route('student.exam.prepare', $exam))->assertOk();
     }
 
@@ -437,7 +456,7 @@ class ExamLifecycleTest extends TestCase
         );
         $tmp = tempnam(sys_get_temp_dir(), 'qsnap_');
         file_put_contents($tmp, $png ?: '');
-        $upload = new \Illuminate\Http\UploadedFile($tmp, 'verification.png', 'image/png', null, true);
+        $upload = new UploadedFile($tmp, 'verification.png', 'image/png', null, true);
 
         $response = $this->actingAs(User::query()->findOrFail($ctx['student']->id))
             ->post(route('exam-sessions.start'), [
@@ -447,7 +466,7 @@ class ExamLifecycleTest extends TestCase
 
         $response->assertOk()->assertJsonStructure(['session_id']);
 
-        $session = \App\Models\ExamSession::query()->where('session_id', $response->json('session_id'))->firstOrFail();
+        $session = ExamSession::query()->where('session_id', $response->json('session_id'))->firstOrFail();
         $this->assertNotNull($session->verification_image_path);
     }
 }

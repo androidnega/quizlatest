@@ -92,21 +92,36 @@
 
         <div class="qs-card rounded-xl p-5 shadow-sm">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-muted">{{ __('Risk & violations') }}</h3>
+            <p class="mt-2 text-xs leading-relaxed text-qs-muted">
+                {{ __('Proctoring signals do not automatically deduct marks. They support warnings, flags, auto-submit where enabled, and examiner review.') }}
+            </p>
             @if ($isAssignmentSession ?? false)
                 <p class="mt-2 text-xs text-qs-muted">{{ __('Coursework typically has little or no live proctoring; counts below are mostly informational.') }}</p>
             @endif
-            <dl class="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+            <dl class="mt-3 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
                 <div>
-                    <dt class="text-qs-muted">Risk state</dt>
+                    <dt class="text-qs-muted">{{ __('Risk state') }}</dt>
                     <dd class="font-medium text-qs-text">{{ $session->risk_state }}</dd>
                 </div>
                 <div>
-                    <dt class="text-qs-muted">Violation score</dt>
+                    <dt class="text-qs-muted">{{ __('Violation score') }}</dt>
                     <dd class="font-medium text-qs-text">{{ $session->violation_score }}</dd>
                 </div>
                 <div>
-                    <dt class="text-qs-muted">Violation count</dt>
+                    <dt class="text-qs-muted">{{ __('Violation count') }}</dt>
                     <dd class="font-medium text-qs-text">{{ $session->violation_count }}</dd>
+                </div>
+                <div>
+                    <dt class="text-qs-muted">{{ __('Tab switches (server)') }}</dt>
+                    <dd class="font-medium text-qs-text">{{ (int) ($session->tab_switch_count ?? 0) }}</dd>
+                </div>
+                <div>
+                    <dt class="text-qs-muted">{{ __('Auto-submit reason') }}</dt>
+                    <dd class="font-medium text-qs-text">{{ $session->auto_submit_reason_code ?? '—' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-qs-muted">{{ __('Face obstruction strikes') }}</dt>
+                    <dd class="font-medium text-qs-text">{{ (int) ($session->face_covered_strike_count ?? 0) }}</dd>
                 </div>
             </dl>
         </div>
@@ -143,6 +158,20 @@
             </div>
         @endif
 
+        @if (! empty($assignmentSubmissionFiles) && count($assignmentSubmissionFiles))
+            <div class="qs-card rounded-xl p-5 shadow-sm">
+                <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-muted">{{ __('Assignment submission files') }}</h3>
+                <ul class="mt-3 divide-y divide-qs-soft text-sm">
+                    @foreach ($assignmentSubmissionFiles as $f)
+                        <li class="flex flex-wrap items-center justify-between gap-2 py-2">
+                            <span class="min-w-0 truncate font-medium text-qs-text">{{ $f->original_filename }}</span>
+                            <a href="{{ route('examiner.exam-sessions.assignment-files.download', ['examSession' => $session, 'assignmentFile' => $f]) }}" class="shrink-0 text-xs font-semibold text-sky-700 underline-offset-2 hover:underline">{{ __('Download') }}</a>
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         <div class="qs-card rounded-xl p-5 shadow-sm">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-muted">Proctoring timeline</h3>
             <p class="mt-1 text-xs text-qs-muted">Latest 200 events, oldest first.</p>
@@ -153,6 +182,7 @@
                             <th class="text-left">Time</th>
                             <th class="text-left">Event</th>
                             <th class="text-left">Action</th>
+                            <th class="text-left">Details</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -164,10 +194,11 @@
                                 <td class="whitespace-nowrap text-sm text-qs-text">{{ $ev['at']?->timezone(config('app.timezone'))->format('Y-m-d H:i:s') }}</td>
                                 <td class="text-sm text-qs-text">{{ $ev['event_type'] }}</td>
                                 <td class="text-sm font-medium text-qs-text">{{ $ev['action'] }}</td>
+                                <td class="text-xs text-qs-muted">{{ $ev['metadata_summary'] }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="3" class="px-4 py-6 text-center text-sm text-qs-muted">No proctoring events recorded.</td>
+                                <td colspan="4" class="px-4 py-6 text-center text-sm text-qs-muted">No proctoring events recorded.</td>
                             </tr>
                         @endforelse
                     </tbody>

@@ -120,6 +120,30 @@ final class SystemExamPolicyService
     }
 
     /**
+     * Block copy/cut/paste inside the invigilated exam UI (best-effort; not assignment mode).
+     */
+    public function isExamClipboardLockEnabled(): bool
+    {
+        return $this->settings->getBool('exam_clipboard_lock', true);
+    }
+
+    /**
+     * Mitigate common browser screenshot shortcuts and context menu (fullscreen + policy).
+     */
+    public function isExamScreenshotMitigationEnabled(): bool
+    {
+        return $this->settings->getBool('exam_screenshot_mitigation', true);
+    }
+
+    /**
+     * Best-effort: try Keyboard Lock for PrintScreen when supported (cannot stop OS recorders).
+     */
+    public function isExamScreenRecordMitigationEnabled(): bool
+    {
+        return $this->settings->getBool('exam_screen_record_mitigation', true);
+    }
+
+    /**
      * Apply admin caps to normalized proctoring settings (exam + defaults already merged).
      *
      * @param  array<string, mixed>  $normalized

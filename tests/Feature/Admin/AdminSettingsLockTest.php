@@ -3,7 +3,9 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\User;
+use Database\Seeders\InitialSetupSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AdminSettingsLockTest extends TestCase
@@ -51,5 +53,22 @@ class AdminSettingsLockTest extends TestCase
         $this->actingAs($admin)
             ->post(route('admin.settings.lock', absolute: false), ['key' => 'not_a_real_setting_key'])
             ->assertSessionHasErrors('key');
+    }
+
+    public function test_non_super_admin_cannot_lock_exam_integrity_only_keys(): void
+    {
+        $this->seed(InitialSetupSeeder::class);
+
+        $uni = (int) DB::table('universities')->value('id');
+        $limited = User::factory()->create([
+            'role' => 'admin',
+            'is_super_admin' => false,
+            'university_id' => $uni,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($limited)
+            ->post(route('admin.settings.lock', absolute: false), ['key' => 'exam_clipboard_lock'])
+            ->assertForbidden();
     }
 }

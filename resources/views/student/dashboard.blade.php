@@ -125,11 +125,33 @@
         @endif
 
         @if ($dashboardTip !== '')
-            <div class="flex gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm">
+            @php
+                $dashboardTipDismissKey = 'qs_student_dash_tip_v1_' . hash('sha256', $dashboardTip . '|' . app()->getLocale());
+            @endphp
+            <div
+                x-data="{
+                    key: @js($dashboardTipDismissKey),
+                    dismissed: false,
+                }"
+                x-init="dismissed = (() => { try { return localStorage.getItem(key) === '1'; } catch (e) { return false; } })()"
+                x-show="!dismissed"
+                x-transition.opacity.duration.150ms
+                class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm"
+                role="region"
+                aria-label="{{ __('Tip') }}"
+            >
                 <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700" aria-hidden="true">
                     <i class="fa-solid fa-lightbulb text-sm"></i>
                 </span>
-                <p class="min-w-0 leading-relaxed">{{ $dashboardTip }}</p>
+                <p class="min-w-0 flex-1 leading-relaxed">{{ $dashboardTip }}</p>
+                <button
+                    type="button"
+                    class="-m-1 inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400/40"
+                    @click="dismissed = true; try { localStorage.setItem(key, '1'); } catch (e) {}"
+                    aria-label="{{ __('Dismiss tip') }}"
+                >
+                    <i class="fa-solid fa-xmark text-base" aria-hidden="true"></i>
+                </button>
             </div>
         @endif
 
@@ -325,10 +347,10 @@
 
                     @if ($prepareExam && ($examInProgressHere || $highlightExam))
                         <a
-                            href="{{ route('student.exam.prepare', $prepareExam) }}"
+                            href="{{ route('student.exam.instructions', $prepareExam) }}"
                             class="inline-flex items-center justify-center rounded-2xl bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white/25 focus:ring-offset-2 focus:ring-offset-slate-950"
                         >
-                            {{ __('View instructions') }}
+                            {{ __('Dos and don’ts') }}
                         </a>
                     @endif
                 </div>

@@ -70,6 +70,57 @@
             </div>
         </section>
 
+        <section aria-labelledby="examiner-proctoring-shortcuts">
+            <h2 id="examiner-proctoring-shortcuts" class="sr-only">{{ __('Proctoring and integrity shortcuts') }}</h2>
+            <p class="mb-3 text-xs leading-relaxed text-slate-600">
+                {{ __('Proctoring violations do not automatically deduct marks. They are used for warnings, flags, auto-submit, and examiner review.') }}
+            </p>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <article class="{{ $cardBase }} {{ $cardPlain }}">
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Flagged sessions') }}</p>
+                    <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $proctoringFlaggedSessionsCount }}</p>
+                    <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['proctoring_focus' => 'flagged'])) }}" class="mt-2 inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:underline">
+                        {{ __('Open matching assessments') }}
+                    </a>
+                </article>
+                <article class="{{ $cardBase }} {{ $cardPlain }}">
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Auto-submitted sessions') }}</p>
+                    <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $autoSubmittedSessionsCount }}</p>
+                    <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['proctoring_focus' => 'auto_submitted'])) }}" class="mt-2 inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:underline">
+                        {{ __('Open matching assessments') }}
+                    </a>
+                </article>
+                <article class="{{ $cardBase }} {{ $cardPlain }}">
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Phone detected events') }}</p>
+                    <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $phoneDetectedEventsCount }}</p>
+                    <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['proctoring_focus' => 'phone_detected'])) }}" class="mt-2 inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:underline">
+                        {{ __('Open matching assessments') }}
+                    </a>
+                </article>
+                <article class="{{ $cardBase }} {{ $cardPlain }}">
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Tab switch limit reached') }}</p>
+                    <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $tabSwitchLimitSessionsCount }}</p>
+                    <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['proctoring_focus' => 'tab_switch_limit'])) }}" class="mt-2 inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:underline">
+                        {{ __('Open matching assessments') }}
+                    </a>
+                </article>
+                <article class="{{ $cardBase }} {{ $cardPlain }}">
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Sessions held for review') }}</p>
+                    <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $heldResultsCount }}</p>
+                    <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['proctoring_focus' => 'held_results'])) }}" class="mt-2 inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:underline">
+                        {{ __('Open matching assessments') }}
+                    </a>
+                </article>
+                <article class="{{ $cardBase }} {{ $cardPlain }}">
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Assignments awaiting grading') }}</p>
+                    <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $assignmentsAwaitingGradingCount }}</p>
+                    <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['proctoring_focus' => 'assignments_grading'])) }}" class="mt-2 inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:underline">
+                        {{ __('Open matching assessments') }}
+                    </a>
+                </article>
+            </div>
+        </section>
+
         <section class="min-w-0 rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm sm:p-4" aria-labelledby="examiner-quick-actions-heading">
             <h2 id="examiner-quick-actions-heading" class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Quick actions') }}</h2>
             <div class="mt-3 flex min-w-0 flex-wrap gap-2">

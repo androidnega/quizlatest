@@ -111,6 +111,33 @@
             </form>
         @endif
 
+        @if ($canEditSchedule)
+            <form method="post" action="{{ route('examiner.exams.assignment-submission.update', $exam) }}" class="mt-4 space-y-3 rounded-lg border border-slate-200 bg-white p-3">
+                @csrf
+                @method('PATCH')
+                <p class="text-xs font-semibold text-slate-800">{{ __('Submission format') }}</p>
+                <input type="hidden" name="assignment_allows_text" value="0" />
+                <label class="flex items-center gap-2 text-sm text-slate-800">
+                    <input type="checkbox" name="assignment_allows_text" value="1" class="size-4 rounded border-slate-300 text-sky-600" @checked(old('assignment_allows_text', $exam->assignment_allows_text)) />
+                    <span>{{ __('Allow typed responses in-app') }}</span>
+                </label>
+                <input type="hidden" name="assignment_allows_files" value="0" />
+                <label class="flex items-center gap-2 text-sm text-slate-800">
+                    <input type="checkbox" name="assignment_allows_files" value="1" class="size-4 rounded border-slate-300 text-sky-600" @checked(old('assignment_allows_files', $exam->assignment_allows_files)) />
+                    <span>{{ __('Allow file uploads') }}</span>
+                </label>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600" for="assignment-ext">{{ __('Allowed extensions (comma-separated, e.g. pdf, docx)') }}</label>
+                    <input id="assignment-ext" type="text" name="assignment_allowed_extensions" value="{{ old('assignment_allowed_extensions', is_array($exam->assignment_allowed_extensions) ? implode(', ', $exam->assignment_allowed_extensions) : '') }}" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600" for="assignment-max-kb">{{ __('Max file size (KB)') }}</label>
+                    <input id="assignment-max-kb" type="number" name="assignment_max_file_kb" min="256" max="51200" value="{{ old('assignment_max_file_kb', $exam->assignment_max_file_kb ?? 5120) }}" class="mt-1 w-full max-w-xs rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                </div>
+                <button type="submit" class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800">{{ __('Save submission options') }}</button>
+            </form>
+        @endif
+
         <p class="mt-3 text-[11px] leading-relaxed text-slate-600">
             {{ __('Typed responses: copy and paste stays blocked by default for integrity. Use the grading queue to enter marks and feedback, then release grades when you are ready.') }}
         </p>

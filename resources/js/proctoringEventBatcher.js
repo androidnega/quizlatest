@@ -29,6 +29,7 @@ export class ProctoringEventBatcher {
         this.flushIntervalMs = options.flushIntervalMs ?? 4500;
         this.maxBatch = options.maxBatch ?? 14;
         this.preferGzip = options.preferGzip !== false;
+        this.onFlushResult = typeof options.onFlushResult === 'function' ? options.onFlushResult : null;
 
         this.queue = [];
         this.timer = null;
@@ -98,6 +99,14 @@ export class ProctoringEventBatcher {
 
             if (!response.ok) {
                 throw new Error(data.message || `Batch rejected (${response.status})`);
+            }
+
+            if (this.onFlushResult) {
+                try {
+                    this.onFlushResult(data);
+                } catch {
+                    //
+                }
             }
 
             resolvers.forEach(({ resolve }) => resolve(data));

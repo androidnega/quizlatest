@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
+use App\Models\AssignmentSubmissionFile;
 use App\Models\ExamSession;
 use App\Models\ExamSessionAnswer;
 use App\Models\ExamSessionQuestion;
@@ -30,6 +31,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -312,11 +314,17 @@ class ExamSessionController extends Controller
         abort_unless((int) $metadata['student_id'] === (int) $examSession->student_id, 422, 'student_id mismatch.');
         abort_unless((int) $metadata['exam_id'] === (int) $examSession->exam_id, 422, 'exam_id mismatch.');
 
+        $examSession->loadMissing('exam');
+        $quiz = $examSession->exam;
+
         if (($validated['event_type'] ?? '') === 'essay_clipboard_attempt') {
             $this->validateEssayClipboardAttemptMetadata($metadata);
         }
+        if (($validated['event_type'] ?? '') === 'exam_integrity_signal') {
+            $this->validateExamIntegritySignalMetadata($metadata);
+        }
 
-        if (! $this->allowsProctoringEventIngest((string) $validated['event_type'])) {
+        if (! $this->allowsProctoringEventIngest((string) $validated['event_type'], $quiz)) {
             return response()->json([
                 'status' => 'ignored',
                 'reason' => 'proctoring_disabled',
@@ -334,12 +342,19 @@ class ExamSessionController extends Controller
         );
 
         if ($decision['auto_submit'] === true) {
-            $this->submitSession($examSession->fresh(), 'submitted_held', 'violation_threshold');
+            $code = $this->autoSubmitReasonCodeFromEventType((string) $validated['event_type']);
+            $this->submitSession($examSession->fresh(), 'submitted_held', 'violation_threshold', $code);
+
+            $msg = is_string($decision['client_message'] ?? null) && $decision['client_message'] !== ''
+                ? (string) $decision['client_message']
+                : 'Your assessment was submitted because you left the exam screen multiple times.';
 
             return response()->json([
                 'status' => 'submitted_held',
-                'reason' => 'violation_threshold',
-                'message' => 'Your exam has been submitted due to violation detection. Your result is under review. Please contact your lecturer.',
+                'reason' => $code,
+                'message' => $msg,
+                'tab_switch_count' => (int) ($decision['tab_switch_count'] ?? 0),
+                'proctoring_overlay' => $decision['proctoring_overlay'] ?? ['active' => false, 'reason' => null, 'message' => null],
             ]);
         }
 
@@ -348,6 +363,9 @@ class ExamSessionController extends Controller
             'violation_score' => $decision['score'],
             'risk_state' => $decision['risk_state'],
             'action' => $decision['action'],
+            'client_message' => $decision['client_message'] ?? null,
+            'tab_switch_count' => (int) ($decision['tab_switch_count'] ?? 0),
+            'proctoring_overlay' => $decision['proctoring_overlay'] ?? ['active' => false, 'reason' => null, 'message' => null],
         ]);
     }
 
@@ -374,9 +392,12 @@ class ExamSessionController extends Controller
         /** @var list<array<string, mixed>> $events */
         $events = $payload['events'];
 
+        $examSession->loadMissing('exam');
+        $quiz = $examSession->exam;
+
         $eventsToProcess = array_values(array_filter(
             $events,
-            fn (array $e): bool => $this->allowsProctoringEventIngest((string) ($e['event_type'] ?? '')),
+            fn (array $e): bool => $this->allowsProctoringEventIngest((string) ($e['event_type'] ?? ''), $quiz),
         ));
 
         if ($eventsToProcess === []) {
@@ -397,6 +418,9 @@ class ExamSessionController extends Controller
             if (($eventPayload['event_type'] ?? '') === 'essay_clipboard_attempt') {
                 $this->validateEssayClipboardAttemptMetadata($eventPayload['metadata']);
             }
+            if (($eventPayload['event_type'] ?? '') === 'exam_integrity_signal') {
+                $this->validateExamIntegritySignalMetadata($eventPayload['metadata']);
+            }
 
             $decision = $this->orchestrator->ingestEvent(
                 examSession: $examSession->fresh(),
@@ -407,13 +431,20 @@ class ExamSessionController extends Controller
             );
 
             if ($decision['auto_submit'] === true) {
-                $this->submitSession($examSession->fresh(), 'submitted_held', 'violation_threshold');
+                $code = $this->autoSubmitReasonCodeFromEventType((string) ($eventPayload['event_type'] ?? ''));
+                $this->submitSession($examSession->fresh(), 'submitted_held', 'violation_threshold', $code);
+
+                $msg = is_string($decision['client_message'] ?? null) && $decision['client_message'] !== ''
+                    ? (string) $decision['client_message']
+                    : 'Your exam has been submitted due to violation detection. Your result is under review. Please contact your lecturer.';
 
                 return response()->json([
                     'status' => 'submitted_held',
-                    'reason' => 'violation_threshold',
-                    'message' => 'Your exam has been submitted due to violation detection. Your result is under review. Please contact your lecturer.',
+                    'reason' => $code,
+                    'message' => $msg,
                     'last_decision' => $decision,
+                    'tab_switch_count' => (int) ($decision['tab_switch_count'] ?? 0),
+                    'proctoring_overlay' => $decision['proctoring_overlay'] ?? ['active' => false, 'reason' => null, 'message' => null],
                 ]);
             }
 
@@ -425,16 +456,175 @@ class ExamSessionController extends Controller
             'processed' => count($eventsToProcess),
             'violation_score' => $examSession->violation_score,
             'risk_state' => $examSession->risk_state,
+            'tab_switch_count' => (int) ($examSession->tab_switch_count ?? 0),
+            'proctoring_overlay' => [
+                'active' => (bool) ($examSession->proctoring_blur_active ?? false),
+                'reason' => $examSession->proctoring_blur_reason,
+                'message' => null,
+            ],
         ]);
     }
 
     /**
      * Essay clipboard audits are accepted even when institution proctoring is off (log-only scoring via violation_weights).
      */
-    private function allowsProctoringEventIngest(string $eventType): bool
+    private function allowsProctoringEventIngest(string $eventType, ?Quiz $quiz): bool
     {
-        return $this->examPolicy->isProctoringEnabled()
-            || $eventType === 'essay_clipboard_attempt';
+        if ($eventType === 'essay_clipboard_attempt' || $eventType === 'exam_integrity_signal') {
+            return true;
+        }
+
+        if ($eventType === 'proctoring_overlay_resolved') {
+            return true;
+        }
+
+        if ($quiz !== null && $quiz->isAssignment()) {
+            $live = filter_var(data_get($quiz->proctoring_settings, 'allow_live_proctoring_for_assignment', false), FILTER_VALIDATE_BOOLEAN);
+            if (! $live) {
+                return false;
+            }
+        }
+
+        return $this->examPolicy->isProctoringEnabled();
+    }
+
+    private function autoSubmitReasonCodeFromEventType(string $eventType): string
+    {
+        return match ($eventType) {
+            'tab_switch' => 'tab_switch_limit',
+            'phone_detected' => 'phone_detected',
+            'possible_screenshot_attempt' => 'screenshot_attempt',
+            default => 'violation',
+        };
+    }
+
+    public function clearProctoringOverlay(Request $request, ExamSession $examSession): JsonResponse
+    {
+        $this->authorizeStudentProctoringSession($request, $examSession);
+        if ($this->autoExpireIfTimedOut($examSession)) {
+            return response()->json(['status' => 'submitted', 'reason' => 'timeout']);
+        }
+
+        $validated = $request->validate([
+            'resolved_reason' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $examSession->loadMissing('exam');
+
+        if (! $this->allowsProctoringEventIngest('proctoring_overlay_resolved', $examSession->exam)) {
+            return response()->json(['status' => 'ignored', 'reason' => 'proctoring_disabled']);
+        }
+
+        $meta = ['resolved_reason' => $validated['resolved_reason'] ?? 'student_cleared'];
+        $decision = $this->orchestrator->ingestEvent(
+            examSession: $examSession->fresh(),
+            eventType: 'proctoring_overlay_resolved',
+            metadata: array_merge($meta, [
+                'session_id' => $examSession->session_id,
+                'student_id' => (int) $examSession->student_id,
+                'exam_id' => (int) $examSession->exam_id,
+            ]),
+        );
+
+        return response()->json(array_merge(
+            ['status' => 'ok'],
+            $this->mergeStudentExamStatePayload($examSession->fresh()),
+            ['proctoring_overlay' => $decision['proctoring_overlay'] ?? []],
+        ));
+    }
+
+    public function storeAssignmentSubmissionFile(Request $request, ExamSession $examSession): JsonResponse
+    {
+        $this->authorizeStudentProctoringSession($request, $examSession);
+        if ($this->autoExpireIfTimedOut($examSession)) {
+            return response()->json(['status' => 'submitted', 'reason' => 'timeout']);
+        }
+
+        $examSession->loadMissing('exam');
+        $exam = $examSession->exam;
+        abort_unless($exam?->isAssignment(), 422, 'Not an assignment session.');
+        abort_unless($examSession->status === 'active', 422, 'Session is not active.');
+        abort_unless((bool) $exam->assignment_allows_files, 422, 'File uploads are not enabled for this assignment.');
+
+        $validated = $request->validate([
+            'file' => ['required', 'file'],
+        ]);
+
+        $uploaded = $validated['file'];
+        $maxKb = (int) ($exam->assignment_max_file_kb ?? 10240);
+        if ($uploaded->getSize() > $maxKb * 1024) {
+            throw ValidationException::withMessages([
+                'file' => [__('The file may not be greater than :kb KB.', ['kb' => $maxKb])],
+            ]);
+        }
+
+        $ext = strtolower((string) ($uploaded->getClientOriginalExtension() ?: $uploaded->guessExtension() ?: ''));
+        $allowed = $exam->assignment_allowed_extensions;
+        if (! is_array($allowed) || $allowed === []) {
+            $allowed = ['pdf', 'doc', 'docx', 'txt', 'png', 'jpg', 'jpeg'];
+        }
+        $allowed = array_values(array_unique(array_map(
+            fn ($e) => strtolower(ltrim((string) $e, '.')),
+            $allowed,
+        )));
+        if (! in_array($ext, $allowed, true)) {
+            throw ValidationException::withMessages([
+                'file' => [__('This file type is not allowed for this assignment.')],
+            ]);
+        }
+
+        $relativeDir = 'assignment_submissions/'.$examSession->session_id;
+        $storedName = Str::uuid()->toString().'.'.$ext;
+        Storage::disk('local')->putFileAs($relativeDir, $uploaded, $storedName);
+        $relativePath = $relativeDir.'/'.$storedName;
+
+        $row = AssignmentSubmissionFile::query()->create([
+            'exam_session_id' => $examSession->id,
+            'student_id' => $examSession->student_id,
+            'quiz_id' => $examSession->exam_id,
+            'original_filename' => $uploaded->getClientOriginalName(),
+            'stored_path' => $relativePath,
+            'mime_type' => $uploaded->getClientMimeType(),
+            'file_size' => (int) $uploaded->getSize(),
+            'uploaded_at' => now(),
+        ]);
+
+        return response()->json([
+            'status' => 'ok',
+            'file' => [
+                'id' => $row->id,
+                'original_filename' => $row->original_filename,
+                'mime_type' => $row->mime_type,
+                'file_size' => $row->file_size,
+                'uploaded_at' => $row->uploaded_at?->toAtomString(),
+            ],
+        ]);
+    }
+
+    public function downloadOwnAssignmentSubmissionFile(
+        Request $request,
+        ExamSession $examSession,
+        AssignmentSubmissionFile $assignmentFile,
+        SensitiveStorageService $sensitiveStorage,
+    ) {
+        $this->authorizeStudentOwnsSession($request, $examSession);
+        abort_unless((int) $assignmentFile->exam_session_id === (int) $examSession->id, 404);
+        abort_unless((int) $assignmentFile->student_id === (int) $examSession->student_id, 403);
+
+        return $sensitiveStorage->downloadResponse($assignmentFile->stored_path, $assignmentFile->original_filename);
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
+    private function validateExamIntegritySignalMetadata(array $metadata): void
+    {
+        validator($metadata, [
+            'signal' => ['required', 'string', Rule::in([
+                'copy', 'cut', 'paste', 'drop', 'contextmenu', 'printscreen_key', 'capture_shortcut',
+            ])],
+            'question_id' => ['nullable', 'integer', 'min:1'],
+        ])->validate();
     }
 
     /**
@@ -830,7 +1020,7 @@ class ExamSessionController extends Controller
         return false;
     }
 
-    private function submitSession(ExamSession $examSession, string $examStatus, string $reason): void
+    private function submitSession(ExamSession $examSession, string $examStatus, string $reason, ?string $autoSubmitReasonCode = null): void
     {
         if ($examSession->status === 'submitted') {
             return;
@@ -851,7 +1041,7 @@ class ExamSessionController extends Controller
             $accum += max(0, $examSession->pause_segment_started_at->diffInSeconds(now()));
         }
 
-        $examSession->update([
+        $update = [
             'status' => 'submitted',
             'end_time' => now(),
             'exam_status' => $examStatus,
@@ -859,7 +1049,13 @@ class ExamSessionController extends Controller
             'accumulated_pause_seconds' => $accum,
             'pause_segment_started_at' => null,
             'submitted_late' => $submittedLate,
-        ]);
+        ];
+
+        if ($autoSubmitReasonCode !== null && $autoSubmitReasonCode !== '') {
+            $update['auto_submit_reason_code'] = $autoSubmitReasonCode;
+        }
+
+        $examSession->update($update);
 
         $this->examRedis->decrementActiveSessions($examId);
 

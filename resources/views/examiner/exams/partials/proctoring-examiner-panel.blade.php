@@ -25,6 +25,9 @@
 >
     <h2 id="proctoring-examiner-panel-heading" class="text-sm font-semibold text-slate-900">{{ __('Proctoring options') }}</h2>
     <p class="mt-1 text-xs text-slate-600">{{ __('Capped by your institution’s policy.') }}</p>
+    <p class="mt-2 text-xs leading-relaxed text-slate-500">
+        {{ __('Multi-monitor / HDMI checks use browser APIs where available; when unsupported, students are not blocked by that check. Screenshot logging is best-effort only.') }}
+    </p>
 
     <div class="mt-4 space-y-2">
         <label class="flex min-h-[44px] cursor-default items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-800">

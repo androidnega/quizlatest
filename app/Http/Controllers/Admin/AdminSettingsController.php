@@ -23,13 +23,18 @@ class AdminSettingsController extends Controller
         $this->authorize('manageSystemSettings');
 
         $enableSms = $this->systemSettings->getBool('enable_sms', true);
-        $lockable = self::lockableDefinitions();
+        $examPolicy = app(SystemExamPolicyService::class);
+        $user = request()->user();
+
+        $allLockable = self::lockableDefinitions();
+        $superOnlyLockKeys = ['exam_clipboard_lock', 'exam_screenshot_mitigation', 'exam_screen_record_mitigation'];
         $lockStatesByKey = [];
-        foreach (array_keys($lockable) as $key) {
+        foreach (array_keys($allLockable) as $key) {
             $lockStatesByKey[$key] = $this->systemSettings->isLocked($key);
         }
-
-        $examPolicy = app(SystemExamPolicyService::class);
+        $lockable = $user?->isSuperAdmin()
+            ? $allLockable
+            : array_diff_key($allLockable, array_flip($superOnlyLockKeys));
 
         return view('admin.settings.index', [
             'lockable' => $lockable,
@@ -102,6 +107,13 @@ class AdminSettingsController extends Controller
             'lock_allow_redis_fallback' => $this->systemSettings->isLocked('allow_redis_fallback'),
             'lock_enable_live_sockets' => $this->systemSettings->isLocked('enable_live_sockets'),
             'lock_allow_polling_fallback' => $this->systemSettings->isLocked('allow_polling_fallback'),
+
+            'exam_clipboard_lock' => $examPolicy->isExamClipboardLockEnabled(),
+            'exam_screenshot_mitigation' => $examPolicy->isExamScreenshotMitigationEnabled(),
+            'exam_screen_record_mitigation' => $examPolicy->isExamScreenRecordMitigationEnabled(),
+            'lock_exam_clipboard_lock' => $this->systemSettings->isLocked('exam_clipboard_lock'),
+            'lock_exam_screenshot_mitigation' => $this->systemSettings->isLocked('exam_screenshot_mitigation'),
+            'lock_exam_screen_record_mitigation' => $this->systemSettings->isLocked('exam_screen_record_mitigation'),
         ]);
     }
 
@@ -202,6 +214,12 @@ class AdminSettingsController extends Controller
         $this->setBoolIfUnlocked('enable_live_sockets', $request->boolean('enable_live_sockets'), $user);
         $this->setBoolIfUnlocked('allow_polling_fallback', $request->boolean('allow_polling_fallback'), $user);
 
+        if ($user?->isSuperAdmin()) {
+            $this->setBoolIfUnlocked('exam_clipboard_lock', $request->boolean('exam_clipboard_lock'), $user);
+            $this->setBoolIfUnlocked('exam_screenshot_mitigation', $request->boolean('exam_screenshot_mitigation'), $user);
+            $this->setBoolIfUnlocked('exam_screen_record_mitigation', $request->boolean('exam_screen_record_mitigation'), $user);
+        }
+
         if (array_key_exists('practice_quiz_daily_limit', $validated) && $validated['practice_quiz_daily_limit'] !== null && ! $this->systemSettings->isLocked('practice_quiz_daily_limit')) {
             $this->systemSettings->set('practice_quiz_daily_limit', (string) (int) $validated['practice_quiz_daily_limit'], $user);
         }
@@ -231,6 +249,7 @@ class AdminSettingsController extends Controller
         $validated = $request->validate([
             'key' => ['required', 'string', Rule::in(array_keys(self::lockableDefinitions()))],
         ]);
+        $this->abortUnlessSuperAdminForIntegrityLockKey($request, $validated['key']);
         $this->systemSettings->lockSetting($validated['key'], $request->user());
 
         return redirect()
@@ -248,6 +267,7 @@ class AdminSettingsController extends Controller
         $validated = $request->validate([
             'key' => ['required', 'string', Rule::in(array_keys(self::lockableDefinitions()))],
         ]);
+        $this->abortUnlessSuperAdminForIntegrityLockKey($request, $validated['key']);
         $this->systemSettings->unlockSetting($validated['key'], $request->user());
 
         return redirect()
@@ -295,7 +315,18 @@ class AdminSettingsController extends Controller
             'allow_redis_fallback' => __('Allow Redis fallbacks (cache / DB)'),
             'enable_live_sockets' => __('Enable live WebSockets (Reverb)'),
             'allow_polling_fallback' => __('Allow polling fallback for exam UI'),
+            'exam_clipboard_lock' => __('Exam: block copy / paste / cut in the exam UI'),
+            'exam_screenshot_mitigation' => __('Exam: screenshot shortcut & context-menu mitigation'),
+            'exam_screen_record_mitigation' => __('Exam: PrintScreen keyboard lock when supported'),
         ];
+    }
+
+    private function abortUnlessSuperAdminForIntegrityLockKey(Request $request, string $key): void
+    {
+        $superOnly = ['exam_clipboard_lock', 'exam_screenshot_mitigation', 'exam_screen_record_mitigation'];
+        if (in_array($key, $superOnly, true) && ! $request->user()?->isSuperAdmin()) {
+            abort(403);
+        }
     }
 
     private function setBoolIfUnlocked(string $key, bool $value, User $user): void

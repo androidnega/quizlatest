@@ -33,9 +33,6 @@ class ProctoringOrchestratorService
     ];
 
     /**
-     * Keys we keep on the quiz row but do not feed into the orchestrator merge
-     * (grading / UX); listed here so they are not treated as unknown junk keys.
-     *
      * @var list<string>
      */
     private const AUXILIARY_SETTING_KEYS = [
@@ -46,6 +43,11 @@ class ProctoringOrchestratorService
         'require_essay_marking_guide_on_publish',
         'assignment_clipboard_block',
         'allow_live_proctoring_for_assignment',
+        'phone_detection_confidence_threshold',
+        'screenshot_autosubmit_enabled',
+        'external_display_detection_enabled',
+        'face_covered_flag_after_strikes',
+        'tab_switch_debounce_seconds',
     ];
 
     /** Baseline score bands (fixed; not part of DB free-form config). */
@@ -83,8 +85,8 @@ class ProctoringOrchestratorService
                 'multiple_faces' => 25,
                 'phone_detected' => 20,
                 'fullscreen_exit' => 10,
-                /** Log-only default; set a positive weight in quiz proctoring JSON for a small violation score per cooled-down event. */
                 'essay_clipboard_attempt' => 0,
+                'exam_integrity_signal' => 0,
             ],
             'cooldown_seconds' => 45,
         ];
@@ -142,6 +144,28 @@ class ProctoringOrchestratorService
                 FILTER_VALIDATE_BOOLEAN,
             );
         }
+
+        $normalized['phone_detection_confidence_threshold'] = isset($raw['phone_detection_confidence_threshold'])
+            ? max(0.35, min(0.99, (float) $raw['phone_detection_confidence_threshold']))
+            : 0.55;
+
+        $normalized['screenshot_autosubmit_enabled'] = filter_var(
+            $raw['screenshot_autosubmit_enabled'] ?? false,
+            FILTER_VALIDATE_BOOLEAN,
+        );
+
+        $normalized['external_display_detection_enabled'] = filter_var(
+            $raw['external_display_detection_enabled'] ?? true,
+            FILTER_VALIDATE_BOOLEAN,
+        );
+
+        $normalized['face_covered_flag_after_strikes'] = isset($raw['face_covered_flag_after_strikes'])
+            ? max(3, min(30, (int) $raw['face_covered_flag_after_strikes']))
+            : 6;
+
+        $normalized['tab_switch_debounce_seconds'] = isset($raw['tab_switch_debounce_seconds'])
+            ? max(2, min(15, (int) $raw['tab_switch_debounce_seconds']))
+            : 3;
 
         return $normalized;
     }
@@ -201,6 +225,7 @@ class ProctoringOrchestratorService
             'phone_detected' => 20,
             'fullscreen_exit' => 10,
             'essay_clipboard_attempt' => 0,
+            'exam_integrity_signal' => 0,
         ];
 
         $weights = array_intersect_key($weights, $defaults);
@@ -223,8 +248,6 @@ class ProctoringOrchestratorService
     }
 
     /**
-     * Full settings used inside ingest (canonical quiz fields + fixed bands).
-     *
      * @return array<string, mixed>
      */
     private function effectiveSettings(ExamSession $examSession): array
@@ -238,26 +261,580 @@ class ProctoringOrchestratorService
         return $this->globalControl->mergeExamSettingsForOrchestrator($merged);
     }
 
+    /**
+     * @return array{
+     *   score: int,
+     *   risk_state: string,
+     *   action: string,
+     *   auto_submit: bool,
+     *   client_message: ?string,
+     *   tab_switch_count: int,
+     *   proctoring_overlay: array{active: bool, reason: ?string, message: ?string}
+     * }
+     */
     public function ingestEvent(ExamSession $examSession, string $eventType, array $metadata = [], ?int $severity = null, bool $flagged = false): array
     {
         $examSession->loadMissing('exam');
 
         if ($this->globalControl->shouldBypassProctoringIngest()) {
-            return [
-                'score' => (int) $examSession->violation_score,
-                'risk_state' => (string) $examSession->risk_state,
-                'action' => 'log',
-                'auto_submit' => false,
-            ];
+            return $this->emptyDecision($examSession);
         }
 
         $settings = $this->effectiveSettings($examSession);
-        $events = is_array($examSession->violation_events) ? $examSession->violation_events : [];
         $now = now();
 
+        return match ($eventType) {
+            'tab_switch' => $this->ingestTabSwitch($examSession, $settings, $metadata, $severity, $flagged, $now),
+            'phone_detected' => $this->ingestPhoneDetected($examSession, $settings, $metadata, $severity, $flagged, $now),
+            'face_covered', 'face_obstructed', 'face_not_clear' => $this->ingestFaceObstruction(
+                $examSession,
+                $settings,
+                $metadata,
+                $severity,
+                $flagged,
+                $now,
+                $eventType,
+            ),
+            'possible_screenshot_attempt' => $this->ingestScreenshotAttempt($examSession, $settings, $metadata, $severity, $flagged, $now),
+            'external_display_risk' => $this->ingestExternalDisplayRisk($examSession, $settings, $metadata, $severity, $flagged, $now),
+            'proctoring_overlay_resolved' => $this->ingestOverlayResolved($examSession, $metadata, $now),
+            default => $this->ingestLegacyWeightedEvent($examSession, $eventType, $settings, $metadata, $severity, $flagged, $now),
+        };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptyDecision(ExamSession $examSession): array
+    {
+        return [
+            'score' => (int) $examSession->violation_score,
+            'risk_state' => (string) $examSession->risk_state,
+            'action' => 'log',
+            'auto_submit' => false,
+            'client_message' => null,
+            'tab_switch_count' => (int) ($examSession->tab_switch_count ?? 0),
+            'proctoring_overlay' => [
+                'active' => (bool) ($examSession->proctoring_blur_active ?? false),
+                'reason' => $examSession->proctoring_blur_reason,
+                'message' => null,
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function ingestTabSwitch(
+        ExamSession $examSession,
+        array $settings,
+        array $metadata,
+        ?int $severity,
+        bool $flagged,
+        Carbon $now,
+    ): array {
+        $session = $examSession->fresh() ?? $examSession;
+        $events = is_array($session->violation_events) ? $session->violation_events : [];
+        $debounceSec = (int) data_get($settings, 'tab_switch_debounce_seconds', 3);
+        $debounceSec = max(2, min(15, $debounceSec));
+        if ($this->isInCooldown($events, 'tab_switch', $now, $debounceSec)) {
+            return array_merge($this->emptyDecision($session), [
+                'action' => 'debounced',
+                'client_message' => null,
+            ]);
+        }
+
+        $previousRiskState = (string) $session->risk_state;
+        $session->increment('tab_switch_count');
+        $session = $session->fresh() ?? $session;
+        $strike = (int) ($session->tab_switch_count ?? 0);
+
+        $action = $strike >= 3 ? 'autosubmit' : 'warn';
+        $clientMessage = match (true) {
+            $strike === 1 => 'Please stay on the assessment page. Leaving the page may submit your work.',
+            $strike === 2 => 'Warning: You have left the assessment screen again. A third time will submit your work.',
+            default => 'Your assessment has been submitted because you left the screen three times.',
+        };
+
+        $riskState = match (true) {
+            $strike >= 3 => 'locked',
+            $strike === 2 => 'suspicious',
+            default => 'warning',
+        };
+
+        $examStatus = (string) ($session->exam_status ?? 'active');
+        if ($strike === 2 && $session->status !== 'submitted') {
+            $examStatus = 'flagged_for_review';
+        }
+
+        $events[] = [
+            'event_type' => 'tab_switch',
+            'score' => 0,
+            'timestamp' => $now->toISOString(),
+            'cooldown_applied' => false,
+            'action' => $action,
+            'tab_switch_strike' => $strike,
+        ];
+
+        $this->persistProctoringEvent(
+            $session,
+            'tab_switch',
+            $metadata,
+            $severity ?? 1,
+            $strike >= 2,
+            $action,
+            $riskState,
+            $now,
+        );
+
+        $session->update([
+            'violation_events' => $events,
+            'last_event_time' => $now,
+            'risk_state' => $riskState,
+            'exam_status' => $examStatus,
+            'violation_count' => (int) $session->violation_count + ($strike === 2 ? 1 : 0),
+        ]);
+
+        $outSession = $session->fresh() ?? $session;
+        $warnMessage = $strike < 3 ? $clientMessage : null;
+        $this->dispatchRealtimeNotifications(
+            $outSession,
+            'tab_switch',
+            $previousRiskState,
+            $riskState,
+            (int) ($outSession->violation_score ?? 0),
+            $action,
+            $warnMessage,
+            $strike >= 3 ? $clientMessage : null,
+        );
+
+        return [
+            'score' => (int) ($outSession->violation_score ?? 0),
+            'risk_state' => $riskState,
+            'action' => $action,
+            'auto_submit' => $action === 'autosubmit',
+            'client_message' => $clientMessage,
+            'tab_switch_count' => $strike,
+            'proctoring_overlay' => [
+                'active' => (bool) ($outSession->proctoring_blur_active ?? false),
+                'reason' => $outSession->proctoring_blur_reason ?? null,
+                'message' => null,
+            ],
+        ];
+    }
+
+    /**
+     * Camera-based phone detection: auto-submit when confidence meets threshold (no mark deduction).
+     *
+     * @param  array<string, mixed>  $settings
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function ingestPhoneDetected(
+        ExamSession $examSession,
+        array $settings,
+        array $metadata,
+        ?int $severity,
+        bool $flagged,
+        Carbon $now,
+    ): array {
+        if (empty($settings['phone_detection_enabled'])) {
+            return $this->emptyDecision($examSession);
+        }
+
+        $threshold = (float) data_get($settings, 'phone_detection_confidence_threshold', 0.55);
+        $confidence = isset($metadata['confidence']) ? (float) $metadata['confidence'] : 0.0;
+        if ($confidence < $threshold) {
+            return $this->emptyDecision($examSession);
+        }
+
+        $session = $examSession->fresh() ?? $examSession;
+        $events = is_array($session->violation_events) ? $session->violation_events : [];
+        $cooldownSeconds = max(20, (int) ($settings['cooldown_seconds'] ?? 45));
+        if ($this->isInCooldown($events, 'phone_detected', $now, $cooldownSeconds)) {
+            return array_merge($this->emptyDecision($session), ['action' => 'debounced']);
+        }
+
+        $metadata['detection_method'] = 'camera_based_object_detection';
+        $metadata['confidence_threshold'] = $threshold;
+        $metadata['label'] = 'Camera-based phone detection is probabilistic and not guaranteed.';
+
+        $action = 'autosubmit';
+        $riskState = 'locked';
+        $prevRisk = (string) $session->risk_state;
+
+        $events[] = [
+            'event_type' => 'phone_detected',
+            'score' => 0,
+            'timestamp' => $now->toISOString(),
+            'cooldown_applied' => false,
+            'action' => $action,
+        ];
+
+        $this->persistProctoringEvent(
+            $session,
+            'phone_detected',
+            $metadata,
+            $severity ?? 3,
+            true,
+            $action,
+            $riskState,
+            $now,
+        );
+
+        $session->update([
+            'violation_events' => $events,
+            'last_event_time' => $now,
+            'risk_state' => $riskState,
+            'exam_status' => 'flagged_for_review',
+            'violation_count' => (int) $session->violation_count + 1,
+        ]);
+
+        $out = $session->fresh() ?? $session;
+        $msg = 'A mobile device was detected. Your assessment has been submitted for review.';
+        $this->dispatchRealtimeNotifications(
+            $out,
+            'phone_detected',
+            $prevRisk,
+            $riskState,
+            (int) ($out->violation_score ?? 0),
+            $action,
+            null,
+            $msg,
+        );
+
+        return [
+            'score' => (int) ($out->violation_score ?? 0),
+            'risk_state' => $riskState,
+            'action' => $action,
+            'auto_submit' => true,
+            'client_message' => $msg,
+            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'proctoring_overlay' => ['active' => false, 'reason' => null, 'message' => null],
+        ];
+    }
+
+    /**
+     * Face obstruction / unclear face (distinct from face_missing when no face is seen).
+     *
+     * @param  array<string, mixed>  $settings
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function ingestFaceObstruction(
+        ExamSession $examSession,
+        array $settings,
+        array $metadata,
+        ?int $severity,
+        bool $flagged,
+        Carbon $now,
+        string $logEventType,
+    ): array {
+        $session = $examSession->fresh() ?? $examSession;
+        $events = is_array($session->violation_events) ? $session->violation_events : [];
+        $cooldownSeconds = max(10, min(120, (int) ($settings['cooldown_seconds'] ?? 45)));
+        $faceFamily = ['face_covered', 'face_obstructed', 'face_not_clear'];
+        if ($this->isInCooldownAny($events, $faceFamily, $now, min(20, $cooldownSeconds))) {
+            return array_merge($this->emptyDecision($session), ['action' => 'debounced']);
+        }
+
+        $prevRisk = (string) $session->risk_state;
+        $session->increment('face_covered_strike_count');
+        $session = $session->fresh() ?? $session;
+        $strikes = (int) ($session->face_covered_strike_count ?? 0);
+        $flagAfter = (int) data_get($settings, 'face_covered_flag_after_strikes', 6);
+
+        $action = 'warn';
+        $clientMessage = 'Please remove your hand or anything covering your face.';
+        $riskState = 'warning';
+        $examStatus = (string) ($session->exam_status ?? 'active');
+        $blurActive = false;
+
+        if ($strikes >= $flagAfter) {
+            $riskState = 'suspicious';
+            $examStatus = 'flagged_for_review';
+            $blurActive = true;
+            $action = 'blur';
+            $clientMessage = 'Your face must stay clearly visible. The screen is locked until you fix your camera setup; press continue when ready.';
+        }
+
+        $metadata['obstruction_signal'] = $logEventType;
+
+        $events[] = [
+            'event_type' => $logEventType,
+            'score' => 0,
+            'timestamp' => $now->toISOString(),
+            'cooldown_applied' => false,
+            'action' => $action,
+            'strike' => $strikes,
+        ];
+
+        $this->persistProctoringEvent(
+            $session,
+            $logEventType,
+            $metadata,
+            $severity ?? 1,
+            $strikes >= $flagAfter,
+            $action,
+            $riskState,
+            $now,
+        );
+
+        $session->update([
+            'violation_events' => $events,
+            'last_event_time' => $now,
+            'risk_state' => $riskState,
+            'exam_status' => $examStatus,
+            'proctoring_blur_active' => $blurActive ? true : (bool) ($session->proctoring_blur_active ?? false),
+            'proctoring_blur_reason' => $blurActive ? 'face_obstruction' : $session->proctoring_blur_reason,
+        ]);
+
+        $out = $session->fresh() ?? $session;
+        $this->dispatchRealtimeNotifications($out, $logEventType, $prevRisk, $riskState, (int) ($out->violation_score ?? 0), $action, $clientMessage, null);
+
+        $overlayMessage = null;
+        if (! empty($out->proctoring_blur_active)) {
+            $overlayMessage = match ((string) ($out->proctoring_blur_reason ?? '')) {
+                'face_obstruction' => 'Your face must stay clearly visible. Adjust your position, then tap continue when your face is clearly on camera.',
+                'external_display' => 'External display risk detected. Disconnect it to continue.',
+                default => 'Please resolve the issue to continue.',
+            };
+        }
+
+        return [
+            'score' => (int) ($out->violation_score ?? 0),
+            'risk_state' => $riskState,
+            'action' => $action,
+            'auto_submit' => false,
+            'client_message' => $clientMessage,
+            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'proctoring_overlay' => [
+                'active' => (bool) ($out->proctoring_blur_active ?? false),
+                'reason' => $out->proctoring_blur_reason,
+                'message' => $overlayMessage,
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function ingestScreenshotAttempt(
+        ExamSession $examSession,
+        array $settings,
+        array $metadata,
+        ?int $severity,
+        bool $flagged,
+        Carbon $now,
+    ): array {
+        $metadata['detection_note'] = 'Browser-based logging only; screenshots cannot be fully detected or prevented.';
+
+        $session = $examSession->fresh() ?? $examSession;
+        $events = is_array($session->violation_events) ? $session->violation_events : [];
+        $auto = filter_var($settings['screenshot_autosubmit_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $action = $auto ? 'autosubmit' : 'warn';
+        $riskState = $auto ? 'locked' : 'warning';
+        $prevRisk = (string) $session->risk_state;
+
+        $events[] = [
+            'event_type' => 'possible_screenshot_attempt',
+            'score' => 0,
+            'timestamp' => $now->toISOString(),
+            'cooldown_applied' => false,
+            'action' => $action,
+        ];
+
+        $this->persistProctoringEvent(
+            $session,
+            'possible_screenshot_attempt',
+            $metadata,
+            $severity ?? 1,
+            false,
+            $action,
+            $riskState,
+            $now,
+        );
+
+        $session->update([
+            'violation_events' => $events,
+            'last_event_time' => $now,
+            'risk_state' => $riskState,
+            'exam_status' => $auto ? 'flagged_for_review' : ($session->exam_status ?? 'active'),
+        ]);
+
+        $out = $session->fresh() ?? $session;
+        $msg = 'Screenshot attempts are not allowed during this assessment.';
+        $this->dispatchRealtimeNotifications(
+            $out,
+            'possible_screenshot_attempt',
+            $prevRisk,
+            $riskState,
+            (int) ($out->violation_score ?? 0),
+            $action,
+            $auto ? null : $msg,
+            $auto ? $msg : null,
+        );
+
+        return [
+            'score' => (int) ($out->violation_score ?? 0),
+            'risk_state' => $riskState,
+            'action' => $action,
+            'auto_submit' => $auto,
+            'client_message' => $msg,
+            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'proctoring_overlay' => ['active' => false, 'reason' => null, 'message' => null],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function ingestExternalDisplayRisk(
+        ExamSession $examSession,
+        array $settings,
+        array $metadata,
+        ?int $severity,
+        bool $flagged,
+        Carbon $now,
+    ): array {
+        if (! filter_var($settings['external_display_detection_enabled'] ?? true, FILTER_VALIDATE_BOOLEAN)) {
+            return $this->emptyDecision($examSession);
+        }
+
+        $session = $examSession->fresh() ?? $examSession;
+        $events = is_array($session->violation_events) ? $session->violation_events : [];
+        $prevRisk = (string) $session->risk_state;
+
+        $events[] = [
+            'event_type' => 'external_display_risk',
+            'score' => 0,
+            'timestamp' => $now->toISOString(),
+            'cooldown_applied' => false,
+            'action' => 'blur',
+        ];
+
+        $this->persistProctoringEvent(
+            $session,
+            'external_display_risk',
+            $metadata,
+            $severity ?? 2,
+            true,
+            'blur',
+            'suspicious',
+            $now,
+        );
+
+        $msg = 'External display risk detected. Disconnect it to continue.';
+        $session->update([
+            'violation_events' => $events,
+            'last_event_time' => $now,
+            'risk_state' => 'suspicious',
+            'exam_status' => 'flagged_for_review',
+            'proctoring_blur_active' => true,
+            'proctoring_blur_reason' => 'external_display',
+        ]);
+
+        $out = $session->fresh() ?? $session;
+        $this->dispatchRealtimeNotifications(
+            $out,
+            'external_display_risk',
+            $prevRisk,
+            'suspicious',
+            (int) ($out->violation_score ?? 0),
+            'blur',
+            $msg,
+            null,
+        );
+
+        return [
+            'score' => (int) ($out->violation_score ?? 0),
+            'risk_state' => 'suspicious',
+            'action' => 'blur',
+            'auto_submit' => false,
+            'client_message' => $msg,
+            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'proctoring_overlay' => [
+                'active' => true,
+                'reason' => 'external_display',
+                'message' => $msg,
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function ingestOverlayResolved(ExamSession $examSession, array $metadata, Carbon $now): array
+    {
+        $session = $examSession->fresh() ?? $examSession;
+        $events = is_array($session->violation_events) ? $session->violation_events : [];
+        $reason = isset($metadata['resolved_reason']) ? (string) $metadata['resolved_reason'] : 'student_cleared';
+
+        $events[] = [
+            'event_type' => 'proctoring_overlay_resolved',
+            'score' => 0,
+            'timestamp' => $now->toISOString(),
+            'cooldown_applied' => false,
+            'action' => 'log',
+            'payload' => ['resolved_reason' => $reason],
+        ];
+
+        $this->persistProctoringEvent(
+            $session,
+            'proctoring_overlay_resolved',
+            $metadata,
+            1,
+            false,
+            'log',
+            (string) ($session->risk_state ?? 'normal'),
+            $now,
+        );
+
+        $session->update([
+            'proctoring_blur_active' => false,
+            'proctoring_blur_reason' => null,
+            'violation_events' => $events,
+            'last_event_time' => $now,
+        ]);
+
+        $out = $session->fresh() ?? $session;
+
+        return [
+            'score' => (int) ($out->violation_score ?? 0),
+            'risk_state' => (string) ($out->risk_state ?? 'normal'),
+            'action' => 'log',
+            'auto_submit' => false,
+            'client_message' => null,
+            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'proctoring_overlay' => ['active' => false, 'reason' => null, 'message' => null],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function ingestLegacyWeightedEvent(
+        ExamSession $examSession,
+        string $eventType,
+        array $settings,
+        array $metadata,
+        ?int $severity,
+        bool $flagged,
+        Carbon $now,
+    ): array {
+        $events = is_array($examSession->violation_events) ? $examSession->violation_events : [];
         $previousRiskState = (string) $examSession->risk_state;
 
-        $cooldownSeconds = (int) $settings['cooldown_seconds'];
+        $cooldownSeconds = (int) ($settings['cooldown_seconds'] ?? 45);
         $inCooldown = $this->isInCooldown($events, $eventType, $now, $cooldownSeconds);
 
         $scoreDelta = $this->resolveScoreDelta($settings, $events, $eventType, $inCooldown);
@@ -273,22 +850,16 @@ class ProctoringOrchestratorService
             'action' => $action,
         ];
 
-        ProctoringEvent::create([
-            'user_id' => $examSession->student_id,
-            'quiz_id' => $examSession->exam_id,
-            'event_type' => $eventType,
-            'severity' => $severity ?? 1,
-            'flagged' => $flagged,
-            'action_taken' => $action,
-            'metadata' => [
-                'session_id' => $examSession->session_id,
-                'student_id' => $examSession->student_id,
-                'exam_id' => $examSession->exam_id,
-                'risk_state' => $riskState,
-                'payload' => $metadata,
-            ],
-            'created_at' => $now,
-        ]);
+        $this->persistProctoringEvent(
+            $examSession,
+            $eventType,
+            $metadata,
+            $severity ?? 1,
+            $flagged,
+            $action,
+            $riskState,
+            $now,
+        );
 
         $examSession->update([
             'violation_count' => (int) $examSession->violation_count + ($flagged ? 1 : 0),
@@ -301,25 +872,67 @@ class ProctoringOrchestratorService
                 : $examSession->exam_status,
         ]);
 
-        $decision = [
+        $out = $examSession->fresh();
+        $this->dispatchRealtimeNotifications(
+            $out,
+            $eventType,
+            $previousRiskState,
+            $riskState,
+            $newScore,
+            $action,
+            null,
+            null,
+        );
+
+        return [
             'score' => $newScore,
             'risk_state' => $riskState,
             'action' => $action,
             'auto_submit' => $action === 'autosubmit',
+            'client_message' => null,
+            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'proctoring_overlay' => [
+                'active' => (bool) ($out->proctoring_blur_active ?? false),
+                'reason' => $out->proctoring_blur_reason,
+                'message' => null,
+            ],
         ];
-
-        $this->dispatchRealtimeNotifications(
-            examSession: $examSession,
-            eventType: $eventType,
-            previousRiskState: $previousRiskState,
-            riskState: $riskState,
-            violationScore: $newScore,
-            action: $action,
-        );
-
-        return $decision;
     }
 
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
+    private function persistProctoringEvent(
+        ExamSession $examSession,
+        string $eventType,
+        array $metadata,
+        int $severity,
+        bool $flagged,
+        string $actionTaken,
+        string $riskState,
+        Carbon $now,
+    ): void {
+        ProctoringEvent::create([
+            'user_id' => $examSession->student_id,
+            'quiz_id' => $examSession->exam_id,
+            'event_type' => $eventType,
+            'severity' => $severity,
+            'flagged' => $flagged,
+            'action_taken' => $actionTaken,
+            'metadata' => [
+                'session_id' => $examSession->session_id,
+                'student_id' => $examSession->student_id,
+                'exam_id' => $examSession->exam_id,
+                'risk_state' => $riskState,
+                'payload' => $metadata,
+            ],
+            'created_at' => $now,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
     private function dispatchRealtimeNotifications(
         ExamSession $examSession,
         string $eventType,
@@ -327,6 +940,8 @@ class ProctoringOrchestratorService
         string $riskState,
         int $violationScore,
         string $action,
+        ?string $overrideWarningMessage,
+        ?string $autoSubmitStudentMessage = null,
     ): void {
         if ($riskState !== $previousRiskState) {
             broadcast(new ProctoringRiskUpdateEvent(
@@ -339,12 +954,13 @@ class ProctoringOrchestratorService
             ));
         }
 
-        if ($action === 'warn') {
+        if ($action === 'warn' || $action === 'blur') {
+            $message = $overrideWarningMessage ?? $this->warningMessage($eventType);
             broadcast(new ProctoringWarningEvent(
                 sessionId: $examSession->session_id,
                 examId: (int) $examSession->exam_id,
                 studentId: (int) $examSession->student_id,
-                message: $this->warningMessage($eventType),
+                message: $message,
                 riskState: $riskState,
                 violationScore: $violationScore,
                 eventType: $eventType,
@@ -352,20 +968,30 @@ class ProctoringOrchestratorService
         }
 
         if ($action === 'autosubmit') {
+            $reason = match ($eventType) {
+                'tab_switch' => 'tab_switch_limit',
+                'phone_detected' => 'phone_detected',
+                'possible_screenshot_attempt' => 'screenshot_attempt',
+                default => 'violation_threshold',
+            };
             broadcast(new ExamAutoSubmitEvent(
                 sessionId: $examSession->session_id,
                 examId: (int) $examSession->exam_id,
                 studentId: (int) $examSession->student_id,
-                reason: $eventType === 'tab_switch' ? 'tab_switch_escalation' : 'violation_threshold',
+                reason: $reason,
                 violationScore: $violationScore,
                 riskState: $riskState,
             ));
+
+            $heldMsg = $autoSubmitStudentMessage
+                ?? $overrideWarningMessage
+                ?? 'Your exam has been submitted due to violation detection. Your result is under review. Please contact your lecturer.';
 
             broadcast(new ExamHeldResultEvent(
                 sessionId: $examSession->session_id,
                 examId: (int) $examSession->exam_id,
                 studentId: (int) $examSession->student_id,
-                message: 'Your exam has been submitted due to violation detection. Your result is under review. Please contact your lecturer.',
+                message: $heldMsg,
                 reason: 'submitted_held',
             ));
         }
@@ -374,12 +1000,16 @@ class ProctoringOrchestratorService
     private function warningMessage(string $eventType): string
     {
         return match ($eventType) {
-            'tab_switch' => 'You moved away from the exam tab or window. Please return and stay focused.',
+            'tab_switch' => 'Please stay on the assessment page. Leaving the page may submit your work.',
             'fullscreen_exit' => 'Fullscreen mode ended. Please restore fullscreen if required by your institution.',
             'face_missing' => 'Your face was not visible to the camera.',
             'multiple_faces' => 'Multiple faces were detected near your workstation.',
-            'phone_detected' => 'A phone-like object was detected in frame.',
+            'phone_detected' => 'A mobile device was detected. Your assessment has been submitted for review.',
+            'face_covered', 'face_obstructed', 'face_not_clear' => 'Please remove your hand or anything covering your face.',
+            'possible_screenshot_attempt' => 'Screenshot attempts are not allowed during this assessment.',
+            'external_display_risk' => 'External display risk detected. Disconnect it to continue.',
             'essay_clipboard_attempt' => 'Clipboard use is restricted during essay answers.',
+            'exam_integrity_signal' => 'An exam integrity safeguard was triggered. Please stay within the exam window.',
             default => 'A proctoring concern was detected. Please adjust your setup.',
         };
     }
@@ -394,21 +1024,16 @@ class ProctoringOrchestratorService
             return 0;
         }
 
+        if ($eventType === 'exam_integrity_signal' && ! $this->examPolicy->isProctoringEnabled()) {
+            return 0;
+        }
+
         if ($eventType === 'fullscreen_exit' && empty($settings['fullscreen_enforced'])) {
             return 0;
         }
 
         if ($eventType === 'phone_detected' && empty($settings['phone_detection_enabled'])) {
             return 0;
-        }
-
-        if ($eventType === 'tab_switch') {
-            $occurrence = collect($events)->where('event_type', 'tab_switch')->count() + 1;
-            $tabRule = is_array($settings['tab_switch_rules'] ?? null)
-                ? $settings['tab_switch_rules']
-                : [1 => 10, 2 => 40, 3 => 60];
-
-            return (int) ($tabRule[$occurrence] ?? 0);
         }
 
         /** @var array<string, int> $weights */
@@ -419,21 +1044,11 @@ class ProctoringOrchestratorService
         return (int) ($weights[$eventType] ?? 0);
     }
 
+    /**
+     * @param  list<array<string, mixed>>  $events
+     */
     private function resolveAction(array $settings, string $eventType, array $events, int $newScore, bool $inCooldown): string
     {
-        if ($eventType === 'tab_switch' && ! $inCooldown) {
-            $occurrence = collect($events)->where('event_type', 'tab_switch')->count() + 1;
-            if ($occurrence === 1) {
-                return 'log';
-            }
-            if ($occurrence === 2) {
-                return 'warn';
-            }
-            if ($occurrence >= 3) {
-                return 'autosubmit';
-            }
-        }
-
         $criticalScore = (int) data_get($settings, 'auto_submit_score', 90);
         $autoSubmitEnabled = filter_var($settings['auto_submit_enabled'] ?? true, FILTER_VALIDATE_BOOLEAN);
 
@@ -471,6 +1086,27 @@ class ProctoringOrchestratorService
             return false;
         }
 
-        return $now->diffInSeconds($lastSame['timestamp']) < $cooldownSeconds;
+        $ts = $lastSame['timestamp'];
+        $lastAt = $ts instanceof Carbon ? $ts : Carbon::parse((string) $ts);
+
+        return $now->diffInSeconds($lastAt) < $cooldownSeconds;
+    }
+
+    /**
+     * @param  list<string>  $eventTypes
+     */
+    private function isInCooldownAny(array $events, array $eventTypes, Carbon $now, int $cooldownSeconds): bool
+    {
+        $last = collect($events)
+            ->reverse()
+            ->first(fn ($event) => in_array((string) ($event['event_type'] ?? ''), $eventTypes, true));
+        if (! is_array($last) || empty($last['timestamp'])) {
+            return false;
+        }
+
+        $ts = $last['timestamp'];
+        $lastAt = $ts instanceof Carbon ? $ts : Carbon::parse((string) $ts);
+
+        return $now->diffInSeconds($lastAt) < $cooldownSeconds;
     }
 }

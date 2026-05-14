@@ -5,7 +5,7 @@
         : null;
     $lowPct = $scoreLow !== null ? round(((float) $scoreLow / $tm) * 100, 2) : null;
     $highPct = $scoreHigh !== null ? round(((float) $scoreHigh / $tm) * 100, 2) : null;
-    $exportQuery = array_filter(request()->only(['status', 'risk_state', 'q']));
+    $exportQuery = array_filter(request()->only(['status', 'risk_state', 'integrity', 'q']));
     $exportHref = route('examiner.exams.sessions.export-csv', $exam);
     if ($exportQuery !== []) {
         $exportHref .= '?'.http_build_query($exportQuery);
@@ -142,9 +142,19 @@
                         @endforeach
                     </select>
                 </div>
+                <div class="w-full min-w-[10rem] sm:w-auto">
+                    <label class="mb-1 block text-[11px] font-medium text-qs-muted" for="sessions-integrity-ws">{{ __('Integrity') }}</label>
+                    <select id="sessions-integrity-ws" name="integrity" class="w-full rounded-xl border border-qs-soft bg-qs-card px-3 py-2 text-sm text-qs-text focus:border-qs-primary focus:outline-none focus:ring-2 focus:ring-qs-primary/25">
+                        <option value="">{{ __('All') }}</option>
+                        <option value="flagged" @selected(($integrityFilter ?? null) === 'flagged')>{{ __('Flagged (risk or held)') }}</option>
+                        <option value="auto_submitted" @selected(($integrityFilter ?? null) === 'auto_submitted')>{{ __('Auto-submitted') }}</option>
+                        <option value="phone_detected" @selected(($integrityFilter ?? null) === 'phone_detected')>{{ __('Phone detected') }}</option>
+                        <option value="tab_switch_limit" @selected(($integrityFilter ?? null) === 'tab_switch_limit')>{{ __('Tab switch limit') }}</option>
+                    </select>
+                </div>
                 <div class="flex gap-2">
                     <button type="submit" class="qs-btn-primary">{{ __('Apply') }}</button>
-                    @if (request()->hasAny(['status', 'risk_state', 'q']))
+                    @if (request()->hasAny(['status', 'risk_state', 'integrity', 'q']))
                         <a href="{{ $workspaceUrl.'?tab=sessions' }}" class="qs-btn-secondary">{{ __('Reset') }}</a>
                     @endif
                 </div>

@@ -71,7 +71,7 @@ class ExamEntryPipelineService
                 abort_unless($inTargetClass, 422, 'Exam is not assigned to your class group.');
             }
 
-            // 3. Session rules (before OTP / SMS cost)
+            // 3. Session rules (single-student constraints)
             $existingSubmitted = ExamSession::query()
                 ->where('student_id', $student->id)
                 ->where('exam_id', $exam->id)
@@ -165,26 +165,9 @@ class ExamEntryPipelineService
                 ];
             }
 
-            // 4. OTP gate (SMS / phone verification)
-            if ($this->examPolicy->isOtpEnabled()) {
-                $gate = $this->examOtp->evaluateStartGate($student, $examId);
-                if ($gate === 'otp_required') {
-                    return [
-                        'status' => 'otp_required',
-                        'message' => __('Enter the code sent to your phone.'),
-                        'exam_id' => $examId,
-                    ];
-                }
-                if ($gate === 'otp_pending') {
-                    return [
-                        'status' => 'otp_pending',
-                        'message' => __('A code is already on its way. Enter it below.'),
-                        'exam_id' => $examId,
-                    ];
-                }
-            }
+            // Exam starts do not use phone OTP (institution "exam start OTP" settings are ignored here).
 
-            $snapshotRequired = $this->examPolicy->isExamStartSnapshotRequired();
+            $snapshotRequired = $this->examPolicy->isExamStartSnapshotRequiredForQuiz($exam);
             $snapshotFile = $request->hasFile('verification_snapshot') ? $request->file('verification_snapshot') : null;
             if ($snapshotRequired) {
                 abort_unless(

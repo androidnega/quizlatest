@@ -46,6 +46,10 @@ final class ExamSessionStateResolver
             return $examSession->exam_status === 'submitted_held' ? 'held' : 'submitted';
         }
 
+        if (! empty($examSession->proctoring_blur_active)) {
+            return 'proctoring_blocked';
+        }
+
         $risk = (string) $examSession->risk_state;
 
         return match ($risk) {

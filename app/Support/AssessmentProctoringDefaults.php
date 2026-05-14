@@ -84,6 +84,7 @@ final class AssessmentProctoringDefaults
             'phone_detected' => 0,
             'fullscreen_exit' => 0,
             'essay_clipboard_attempt' => 0,
+            'exam_integrity_signal' => 0,
         ]);
         $base['assignment_clipboard_block'] = true;
         $base['allow_live_proctoring_for_assignment'] = false;

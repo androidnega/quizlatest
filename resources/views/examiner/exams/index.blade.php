@@ -10,15 +10,35 @@
         $listBaseQuery = array_filter([
             'academic_year_id' => $selectedAcademicYearId,
             'course_id' => $filterCourseId,
+            'proctoring_focus' => $proctoringFocus ?? null,
         ]);
         $activeTabUrl = route('examiner.exams.index', array_merge($listBaseQuery, ['tab' => 'active']));
         $endedTabUrl = route('examiner.exams.index', array_merge($listBaseQuery, ['tab' => 'ended']));
-        $clearParams = array_filter(['academic_year_id' => $selectedAcademicYearId]);
+        $clearParams = array_filter([
+            'academic_year_id' => $selectedAcademicYearId,
+            'proctoring_focus' => $proctoringFocus ?? null,
+        ]);
         if (($examsTab ?? 'active') === 'ended') {
             $clearParams['tab'] = 'ended';
         }
         $clearCourseFilterUrl = route('examiner.exams.index', $clearParams);
+        $clearProctoringFilterUrl = route('examiner.exams.index', array_filter([
+            'academic_year_id' => $selectedAcademicYearId,
+            'course_id' => $filterCourseId,
+            'tab' => ($examsTab ?? 'active') === 'ended' ? 'ended' : null,
+        ]));
         $isActiveTab = ($examsTab ?? 'active') === 'active';
+        $pf = $proctoringFocus ?? null;
+        $sessionsTabQuery = ['tab' => 'sessions'];
+        if (is_string($pf)) {
+            if (in_array($pf, ['flagged', 'auto_submitted', 'phone_detected', 'tab_switch_limit'], true)) {
+                $sessionsTabQuery['integrity'] = $pf;
+            } elseif ($pf === 'held_results') {
+                $sessionsTabQuery['status'] = 'held';
+            } elseif ($pf === 'assignments_grading') {
+                $sessionsTabQuery['status'] = 'pending_manual';
+            }
+        }
         $levelBadgePalette = [
             'bg-sky-100 text-sky-900 ring-sky-200/80',
             'bg-emerald-100 text-emerald-900 ring-emerald-200/80',
@@ -37,6 +57,9 @@
                     @endif
                     @if (! empty($filterCourseId))
                         <input type="hidden" name="course_id" value="{{ $filterCourseId }}" />
+                    @endif
+                    @if (! empty($pf))
+                        <input type="hidden" name="proctoring_focus" value="{{ $pf }}" />
                     @endif
                     <label for="exam-index-year" class="sr-only">{{ __('Academic year') }}</label>
                     <select
@@ -73,6 +96,29 @@
                 </p>
                 <a href="{{ $clearCourseFilterUrl }}" class="shrink-0 text-sm font-semibold text-sky-800 underline-offset-2 hover:underline">
                     {{ __('Clear filter') }}
+                </a>
+            </div>
+        @endif
+
+        @if (! empty($pf))
+            @php
+                $pfLabel = match ($pf) {
+                    'flagged' => __('Flagged sessions'),
+                    'auto_submitted' => __('Auto-submitted sessions'),
+                    'phone_detected' => __('Phone detected events'),
+                    'tab_switch_limit' => __('Tab switch limit reached'),
+                    'held_results' => __('Held results'),
+                    'assignments_grading' => __('Assignments awaiting grading'),
+                    default => $pf,
+                };
+            @endphp
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200/90 bg-white px-4 py-3 text-sm sm:px-5">
+                <p class="min-w-0 text-slate-800">
+                    <span class="font-semibold text-slate-900">{{ __('Showing assessments matching:') }}</span>
+                    <span class="ms-1 text-slate-700">{{ $pfLabel }}</span>
+                </p>
+                <a href="{{ $clearProctoringFilterUrl }}" class="shrink-0 text-sm font-semibold text-sky-800 underline-offset-2 hover:underline">
+                    {{ __('Clear proctoring filter') }}
                 </a>
             </div>
         @endif
@@ -204,7 +250,7 @@
                                         <span class="text-slate-200" aria-hidden="true"> | </span>
                                         <a href="{{ route('examiner.quizzes.workspace', $exam) }}" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:text-sky-800 hover:underline">{{ __('Edit') }}</a>
                                         <span class="text-slate-200" aria-hidden="true"> | </span>
-                                        <a href="{{ route('examiner.quizzes.workspace', ['exam' => $exam, 'tab' => 'sessions']) }}" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:text-sky-800 hover:underline">{{ __('Sessions') }}</a>
+                                        <a href="{{ route('examiner.quizzes.workspace', array_merge(['exam' => $exam], $sessionsTabQuery)) }}" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:text-sky-800 hover:underline">{{ __('Sessions') }}</a>
                                     </td>
                                 </tr>
                             @endforeach

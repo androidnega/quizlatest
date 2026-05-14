@@ -8,9 +8,11 @@ use App\Models\ClassCourse;
 use App\Models\ExaminerCourseAssignment;
 use App\Models\ExamSession;
 use App\Models\ExamSessionAnswer;
+use App\Models\ProctoringEvent;
 use App\Models\Quiz;
 use App\Models\Result;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
@@ -100,6 +102,58 @@ class DashboardController extends Controller
             })
             ->count();
 
+        $quizIds = Quiz::query()
+            ->where('created_by', $user->id)
+            ->whereIn('course_id', $manageableCourseIds)
+            ->when($yearFilter > 0, function ($q) use ($yearFilter) {
+                $q->where(function ($q2) use ($yearFilter) {
+                    $q2->whereNull('academic_year_id')
+                        ->orWhere('academic_year_id', $yearFilter);
+                });
+            })
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $proctoringFlaggedSessionsCount = $quizIds === [] ? 0 : ExamSession::query()
+            ->whereIn('exam_id', $quizIds)
+            ->where(function ($q): void {
+                $q->whereIn('risk_state', ['suspicious', 'critical', 'locked'])
+                    ->orWhereExists(function (Builder $sub): void {
+                        $sub->from('results')
+                            ->whereColumn('results.user_id', 'exam_sessions.student_id')
+                            ->whereColumn('results.quiz_id', 'exam_sessions.exam_id')
+                            ->where('results.status', 'held')
+                            ->selectRaw('1');
+                    });
+            })
+            ->count();
+
+        $autoSubmittedSessionsCount = $quizIds === [] ? 0 : ExamSession::query()
+            ->whereIn('exam_id', $quizIds)
+            ->whereNotNull('auto_submit_reason_code')
+            ->count();
+
+        $phoneDetectedEventsCount = $quizIds === [] ? 0 : ProctoringEvent::query()
+            ->whereIn('quiz_id', $quizIds)
+            ->where('event_type', 'phone_detected')
+            ->count();
+
+        $tabSwitchLimitSessionsCount = $quizIds === [] ? 0 : ExamSession::query()
+            ->whereIn('exam_id', $quizIds)
+            ->where('auto_submit_reason_code', 'tab_switch_limit')
+            ->count();
+
+        $assignmentsAwaitingGradingCount = $quizIds === [] ? 0 : Result::query()
+            ->whereIn('quiz_id', $quizIds)
+            ->whereHas('quiz', fn ($q) => $q->where('assessment_type', 'assignment'))
+            ->whereIn('status', ['held', 'pending_manual'])
+            ->count();
+
+        $dashboardQueryBase = array_filter([
+            'academic_year_id' => $yearFilter > 0 ? $yearFilter : null,
+        ]);
+
         return view('examiner.dashboard', [
             'academicYears' => AcademicYear::query()
                 ->where('university_id', $user->university_id)
@@ -111,6 +165,12 @@ class DashboardController extends Controller
             'resultsCount' => $resultsCount,
             'heldResultsCount' => $heldResultsCount,
             'pendingManualGradingCount' => $pendingManualGradingCount,
+            'proctoringFlaggedSessionsCount' => $proctoringFlaggedSessionsCount,
+            'autoSubmittedSessionsCount' => $autoSubmittedSessionsCount,
+            'phoneDetectedEventsCount' => $phoneDetectedEventsCount,
+            'tabSwitchLimitSessionsCount' => $tabSwitchLimitSessionsCount,
+            'assignmentsAwaitingGradingCount' => $assignmentsAwaitingGradingCount,
+            'dashboardProctoringQueryBase' => $dashboardQueryBase,
             'classesInScopeCount' => $classesInScopeCount,
             'assignedCoursesCount' => $assignedCoursesCount,
         ]);

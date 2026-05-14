@@ -108,7 +108,18 @@ export class ProctoringRuntimeEngine {
                 apiClient: this.apiClient,
             });
 
-        /** Server debounce: require consecutive misses before logging face_missing. */
+        this.phoneScoreThreshold = Number(options.performanceProfile?.phone_detection_confidence_threshold);
+        if (!Number.isFinite(this.phoneScoreThreshold) || this.phoneScoreThreshold <= 0) {
+            this.phoneScoreThreshold = 0.55;
+        }
+
+        this.externalDisplayCheckEnabled =
+            options.performanceProfile?.external_display_detection_enabled !== false &&
+            typeof window !== 'undefined' &&
+            typeof window.getScreenDetails === 'function';
+
+        this.lastFaceObstructEmitMs = 0;
+        this.screenDetailsTimer = null;
         this.faceMissStreak = 0;
         this.lastMultipleFacesEmitMs = 0;
         this.lastPhoneEmitMs = 0;
@@ -178,6 +189,11 @@ export class ProctoringRuntimeEngine {
 
         this.bindBrowserEvents();
 
+        if (this.externalDisplayCheckEnabled) {
+            this.screenDetailsTimer = setInterval(() => void this.checkExternalScreens(), 90000);
+            void this.checkExternalScreens();
+        }
+
         if (this.previewCanvas && this.faceLandmarker && this.videoElement) {
             this.startLocalPreviewLoop();
         }
@@ -242,6 +258,10 @@ export class ProctoringRuntimeEngine {
     async stop() {
         clearInterval(this.faceTimer);
         clearInterval(this.phoneTimer);
+        if (this.screenDetailsTimer) {
+            clearInterval(this.screenDetailsTimer);
+            this.screenDetailsTimer = null;
+        }
         if (this.localPreviewRafId) {
             window.cancelAnimationFrame(this.localPreviewRafId);
             this.localPreviewRafId = null;
@@ -252,6 +272,7 @@ export class ProctoringRuntimeEngine {
         }
         document.removeEventListener('visibilitychange', this.onVisibilityChange);
         document.removeEventListener('fullscreenchange', this.onFullscreenChange);
+        document.removeEventListener('webkitfullscreenchange', this.onFullscreenChange);
         window.removeEventListener('blur', this.onBlur);
         window.removeEventListener('resize', this.onResize);
 
@@ -269,7 +290,8 @@ export class ProctoringRuntimeEngine {
             }
         };
         this.onFullscreenChange = () => {
-            if (!document.fullscreenElement) {
+            const inFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (!inFs) {
                 void this.emitSensorEvent('fullscreen_exit', {}, true);
             }
         };
@@ -288,6 +310,7 @@ export class ProctoringRuntimeEngine {
 
         document.addEventListener('visibilitychange', this.onVisibilityChange);
         document.addEventListener('fullscreenchange', this.onFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', this.onFullscreenChange);
         window.addEventListener('blur', this.onBlur);
         window.addEventListener('resize', this.onResize);
     }
@@ -321,6 +344,32 @@ export class ProctoringRuntimeEngine {
             }
             return;
         }
+
+        if (faces === 1 && this.poseLandmarker) {
+            const poseRes = this.poseLandmarker.detectForVideo(this.videoElement, nowMs);
+            const plm = poseRes?.landmarks?.[0];
+            const faceLm = faceResult?.faceLandmarks?.[0];
+            if (plm && faceLm && faceLm.length > 5) {
+                const nose = faceLm[1] ?? faceLm[4];
+                const lw = plm[15];
+                const rw = plm[16];
+                if (nose && lw && rw) {
+                    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+                    const minw = Math.min(dist(nose, lw), dist(nose, rw));
+                    if (minw < 0.12) {
+                        const t = Date.now();
+                        if (t - this.lastFaceObstructEmitMs > 14000) {
+                            this.lastFaceObstructEmitMs = t;
+                            await this.emitSensorEvent(
+                                'face_obstructed',
+                                { source: 'pose_wrist_near_face', wrist_face_distance: minw },
+                                true,
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 
     async runPhoneDetection() {
@@ -329,7 +378,9 @@ export class ProctoringRuntimeEngine {
         }
 
         const predictions = await this.phoneModel.detect(this.videoElement);
-        const phone = predictions.find((item) => item.class === 'cell phone' && item.score >= 0.55);
+        const phone = predictions.find(
+            (item) => item.class === 'cell phone' && item.score >= this.phoneScoreThreshold,
+        );
         if (!phone) {
             return;
         }
@@ -349,6 +400,25 @@ export class ProctoringRuntimeEngine {
             },
             true,
         );
+    }
+
+    async checkExternalScreens() {
+        if (!this.externalDisplayCheckEnabled || typeof window.getScreenDetails !== 'function') {
+            return;
+        }
+        try {
+            const details = await window.getScreenDetails();
+            const n = details?.screens?.length ?? 0;
+            if (n > 1) {
+                await this.emitSensorEvent(
+                    'external_display_risk',
+                    { screen_count: n, source: 'window_management_api' },
+                    true,
+                );
+            }
+        } catch {
+            //
+        }
     }
 
     estimateHeadDirection(faceLandmarks, poseLandmarks) {

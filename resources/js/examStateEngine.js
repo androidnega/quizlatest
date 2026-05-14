@@ -5,6 +5,7 @@ const VALID_STATES = [
     'starting',
     'active',
     'warning',
+    'proctoring_blocked',
     'locked',
     'held',
     'auto_submitting',

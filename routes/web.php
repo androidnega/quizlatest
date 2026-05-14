@@ -122,6 +122,13 @@ Route::middleware('auth')->group(function () {
                 ->name('verification-image');
             Route::post('/{examSession}/proctoring-events', [ExamSessionController::class, 'logProctoringEvent'])->name('proctoring-events.store');
             Route::post('/{examSession}/proctoring-events/batch', [ExamSessionController::class, 'logProctoringEventBatch'])->name('proctoring-events.batch');
+            Route::post('/{examSession}/proctoring-overlay/clear', [ExamSessionController::class, 'clearProctoringOverlay'])
+                ->name('proctoring-overlay.clear');
+            Route::post('/{examSession}/assignment-files', [ExamSessionController::class, 'storeAssignmentSubmissionFile'])
+                ->middleware('throttle:30,1')
+                ->name('assignment-files.store');
+            Route::get('/{examSession}/assignment-files/{assignmentFile}', [ExamSessionController::class, 'downloadOwnAssignmentSubmissionFile'])
+                ->name('assignment-files.download');
             Route::post('/{examSession}/submit', [ExamSessionController::class, 'submit'])->name('submit');
             Route::post('/{examSession}/force-submit', [ExamSessionController::class, 'forceSubmit'])->name('force-submit');
             Route::get('/{examSession}/review-timeline', [ExamSessionController::class, 'reviewTimeline'])->name('review-timeline');
@@ -343,6 +350,7 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
                 Route::post('/{exam}/clone', [ExamBuilderController::class, 'cloneExam'])->name('exams.clone');
                 Route::post('/{exam}/release-assignment-grades', [ExamBuilderController::class, 'releaseAssignmentGrades'])->name('exams.release-assignment-grades');
                 Route::patch('/{exam}/schedule', [ExamBuilderController::class, 'updateSchedule'])->name('exams.schedule.update');
+                Route::patch('/{exam}/assignment-submission', [ExamBuilderController::class, 'updateAssignmentSubmissionSettings'])->name('exams.assignment-submission.update');
                 Route::patch('/{exam}/delivery', [ExamBuilderController::class, 'updateDeliverySettings'])->name('exams.delivery.update');
                 Route::patch('/{exam}/proctoring-options', [ExamBuilderController::class, 'updateProctoringExaminerChoices'])->name('exams.proctoring-options.update');
                 Route::patch('/{exam}/question-types', [ExamBuilderController::class, 'updateSelectedQuestionTypes'])->name('exams.question-types.update');
@@ -395,6 +403,8 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
                 ->name('exam-sessions.evidence.verification');
             Route::get('/exams/sessions/{examSession}/evidence/events/{proctoringEvent}', [SecureExamEvidenceController::class, 'eventSnapshot'])
                 ->name('exam-sessions.evidence.event');
+            Route::get('/exams/sessions/{examSession}/assignment-files/{assignmentFile}', [ExaminerExamSessionReviewController::class, 'downloadAssignmentSubmission'])
+                ->name('exam-sessions.assignment-files.download');
             Route::get('/exams/sessions/{examSession}', [ExaminerExamSessionReviewController::class, 'show'])->name('exam-sessions.show');
         });
 });

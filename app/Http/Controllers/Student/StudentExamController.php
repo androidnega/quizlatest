@@ -42,6 +42,10 @@ class StudentExamController extends Controller
         $assignmentClipboardBlock = $isAssignmentMode
             && AssessmentProctoringDefaults::assignmentClipboardBlockEnabled($exam?->proctoring_settings);
 
+        $examClipboardLock = ! $isAssignmentMode && $examPolicy->isExamClipboardLockEnabled();
+        $examScreenshotMitigation = ! $isAssignmentMode && $examPolicy->isExamScreenshotMitigationEnabled();
+        $examScreenRecordMitigation = ! $isAssignmentMode && $examPolicy->isExamScreenRecordMitigationEnabled();
+
         return view('student.exam.take', [
             'examSession' => $examSession,
             'enableLiveSockets' => $gate->enableLiveSockets(),
@@ -49,6 +53,9 @@ class StudentExamController extends Controller
             'requireCameraMonitoring' => $requireCameraMonitoring,
             'isAssignmentMode' => $isAssignmentMode,
             'assignmentClipboardBlock' => $assignmentClipboardBlock,
+            'examClipboardLock' => $examClipboardLock,
+            'examScreenshotMitigation' => $examScreenshotMitigation,
+            'examScreenRecordMitigation' => $examScreenRecordMitigation,
             'documentTitle' => $isAssignmentMode ? __('Assignment') : __('Exam'),
         ]);
     }

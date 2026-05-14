@@ -1388,3 +1388,95 @@
         color: var(--qs-muted);
     }
 }
+
+/** Exam runtime: decorative mic level bars (levels driven by JS where audio is available) */
+.qs-exam-sound-wave span {
+    display: inline-block;
+    height: 10px;
+    animation: qs-exam-sound-wave 1s infinite ease-in-out;
+    transform-origin: bottom center;
+}
+
+.qs-exam-sound-wave span:nth-child(2) {
+    animation-delay: 0.08s;
+}
+.qs-exam-sound-wave span:nth-child(3) {
+    animation-delay: 0.16s;
+}
+.qs-exam-sound-wave span:nth-child(4) {
+    animation-delay: 0.24s;
+}
+.qs-exam-sound-wave span:nth-child(5) {
+    animation-delay: 0.32s;
+}
+.qs-exam-sound-wave span:nth-child(6) {
+    animation-delay: 0.4s;
+}
+.qs-exam-sound-wave span:nth-child(7) {
+    animation-delay: 0.48s;
+}
+
+@keyframes qs-exam-sound-wave {
+    0%,
+    100% {
+        height: 8px;
+        opacity: 0.45;
+    }
+    50% {
+        height: 22px;
+        opacity: 1;
+    }
+}
+
+/**
+ * Exam prepare: on the camera verification step, lock layout to one viewport height
+ * so the page does not scroll (camera + hints fit the screen).
+ */
+html:has(#panel-snapshot:not(.hidden)),
+html:has(#panel-snapshot:not(.hidden)) body {
+    height: 100%;
+    max-height: 100dvh;
+    overflow: hidden;
+}
+
+body:has(#panel-snapshot:not(.hidden)) main {
+    min-height: 0;
+    max-height: 100dvh;
+    height: 100dvh;
+    width: 100%;
+    overflow: hidden;
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+}
+
+body:has(#panel-snapshot:not(.hidden)) #qs-exam-prepare-root {
+    flex: 1 1 0%;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    width: 100%;
+    justify-content: flex-start;
+    overflow: hidden;
+}
+
+body:has(#panel-snapshot:not(.hidden)) #exam-prepare-inner {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+body:has(#panel-snapshot:not(.hidden)) #exam-prepare-surface {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0.75rem;
+    gap: 0.375rem;
+}
+
+body:has(#panel-snapshot:not(.hidden)) #panel-snapshot {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+}

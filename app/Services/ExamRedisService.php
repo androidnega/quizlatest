@@ -250,7 +250,7 @@ final class ExamRedisService
             } catch (\Throwable $e) {
                 Log::warning('exam_redis.exam_config_write_failed', ['error' => $e->getMessage()]);
                 if ($this->gate->useCacheBackedExamRuntimeFallbacks()) {
-                    Cache::put($cacheKey, $quiz, $ttl);
+                    Cache::put($cacheKey, $this->quizToRow($quiz), $ttl);
                 }
             }
 
@@ -258,10 +258,25 @@ final class ExamRedisService
         }
 
         if ($this->gate->useCacheBackedExamRuntimeFallbacks()) {
-            /** @var Quiz $cached */
-            $cached = Cache::remember($cacheKey, $ttl, $loader);
+            $raw = Cache::get($cacheKey);
+            if (is_array($raw) && isset($raw['id']) && (int) $raw['id'] === $examId) {
+                return $this->quizFromCacheRow($raw);
+            }
+            if ($raw instanceof Quiz) {
+                return $raw;
+            }
+            if ($raw !== null) {
+                Log::warning('exam_cache.quiz_config_unusable', [
+                    'exam_id' => $examId,
+                    'type' => get_debug_type($raw),
+                ]);
+                Cache::forget($cacheKey);
+            }
 
-            return $cached;
+            $quiz = $loader();
+            Cache::put($cacheKey, $this->quizToRow($quiz), $ttl);
+
+            return $quiz;
         }
 
         return $loader();
@@ -390,6 +405,8 @@ final class ExamRedisService
             'id' => (int) $quiz->id,
             'share_token' => filled($quiz->share_token) ? (string) $quiz->share_token : null,
             'university_id' => $quiz->university_id !== null ? (int) $quiz->university_id : null,
+            'academic_year_id' => $quiz->academic_year_id !== null ? (int) $quiz->academic_year_id : null,
+            'term_id' => $quiz->term_id !== null ? (int) $quiz->term_id : null,
             'course_id' => $quiz->course_id !== null ? (int) $quiz->course_id : null,
             'created_by' => $quiz->created_by !== null ? (int) $quiz->created_by : null,
             'title' => (string) $quiz->title,
@@ -406,6 +423,8 @@ final class ExamRedisService
             'proctoring_settings' => is_array($quiz->proctoring_settings) ? $quiz->proctoring_settings : [],
             'start_time' => $quiz->start_time?->toAtomString(),
             'end_time' => $quiz->end_time?->toAtomString(),
+            'due_at' => $quiz->due_at?->toAtomString(),
+            'grades_released_at' => $quiz->grades_released_at?->toAtomString(),
         ];
     }
 
@@ -419,6 +438,8 @@ final class ExamRedisService
             'id' => (int) $row['id'],
             'share_token' => $row['share_token'] ?? null,
             'university_id' => $row['university_id'] ?? null,
+            'academic_year_id' => $row['academic_year_id'] ?? null,
+            'term_id' => $row['term_id'] ?? null,
             'course_id' => $row['course_id'] ?? null,
             'created_by' => $row['created_by'] ?? null,
             'title' => (string) ($row['title'] ?? ''),
@@ -435,6 +456,8 @@ final class ExamRedisService
             'proctoring_settings' => is_array($row['proctoring_settings'] ?? null) ? $row['proctoring_settings'] : [],
             'start_time' => $row['start_time'] ?? $row['available_from'] ?? null,
             'end_time' => $row['end_time'] ?? $row['available_to'] ?? null,
+            'due_at' => $row['due_at'] ?? null,
+            'grades_released_at' => $row['grades_released_at'] ?? null,
         ]);
         $quiz->exists = true;
         $quiz->syncOriginal();

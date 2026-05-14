@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Examiner;
 
 use App\Http\Controllers\Controller;
+use App\Models\AssignmentSubmissionFile;
 use App\Models\Classroom;
 use App\Models\Course;
 use App\Models\ExaminerCourseAssignment;
@@ -30,7 +31,23 @@ class ExamSessionReviewController extends Controller
     private const RISK_STATES = ['normal', 'warning', 'suspicious', 'critical', 'locked'];
 
     /** @var list<string> */
-    private const VIOLATION_EVENT_TYPES = ['tab_switch', 'phone_detected', 'face_missing', 'fullscreen_exit', 'essay_clipboard_attempt'];
+    private const INTEGRITY_SESSION_FILTERS = ['flagged', 'auto_submitted', 'phone_detected', 'tab_switch_limit'];
+
+    /** @var list<string> */
+    private const VIOLATION_EVENT_TYPES = [
+        'tab_switch',
+        'phone_detected',
+        'face_missing',
+        'face_covered',
+        'face_obstructed',
+        'face_not_clear',
+        'fullscreen_exit',
+        'essay_clipboard_attempt',
+        'exam_integrity_signal',
+        'possible_screenshot_attempt',
+        'external_display_risk',
+        'proctoring_overlay_resolved',
+    ];
 
     /**
      * Data for the Sessions tab inside the quiz workspace (no full-page navigation).
@@ -66,6 +83,38 @@ class ExamSessionReviewController extends Controller
         $riskFilter = $request->query('risk_state');
         if (is_string($riskFilter) && in_array($riskFilter, self::RISK_STATES, true)) {
             $query->where('risk_state', $riskFilter);
+        }
+
+        $integrityFilterRaw = $request->query('integrity');
+        $integrityFilter = is_string($integrityFilterRaw) ? $integrityFilterRaw : null;
+        if ($integrityFilter !== null && in_array($integrityFilter, self::INTEGRITY_SESSION_FILTERS, true)) {
+            $examId = (int) $exam->id;
+            match ($integrityFilter) {
+                'flagged' => $query->where(function ($q) use ($examId): void {
+                    $q->whereIn('risk_state', ['suspicious', 'critical', 'locked'])
+                        ->orWhereExists(function (Builder $sub) use ($examId): void {
+                            $sub->from('results')
+                                ->whereColumn('results.user_id', 'exam_sessions.student_id')
+                                ->where('results.quiz_id', $examId)
+                                ->where('results.status', 'held')
+                                ->selectRaw('1');
+                        });
+                }),
+                'auto_submitted' => $query->whereNotNull('auto_submit_reason_code'),
+                'phone_detected' => $query->where(function ($q) use ($examId): void {
+                    $q->where('auto_submit_reason_code', 'phone_detected')
+                        ->orWhereExists(function (Builder $sub) use ($examId): void {
+                            $sub->from('proctoring_events')
+                                ->whereColumn('proctoring_events.user_id', 'exam_sessions.student_id')
+                                ->where('proctoring_events.quiz_id', $examId)
+                                ->where('proctoring_events.event_type', 'phone_detected')
+                                ->whereColumn('proctoring_events.metadata->session_id', 'exam_sessions.session_id')
+                                ->selectRaw('1');
+                        });
+                }),
+                'tab_switch_limit' => $query->where('auto_submit_reason_code', 'tab_switch_limit'),
+                default => null,
+            };
         }
 
         $search = $request->query('q');
@@ -115,6 +164,9 @@ class ExamSessionReviewController extends Controller
             'exam' => $exam->loadMissing('course:id,code,title'),
             'sessions' => $sessions,
             'riskStates' => self::RISK_STATES,
+            'integrityFilter' => $integrityFilter !== null && in_array($integrityFilter, self::INTEGRITY_SESSION_FILTERS, true)
+                ? $integrityFilter
+                : null,
             'analytics' => $analytics,
             'resultsByClassCount' => $resultsByClassCount,
             'overviewAttemptsCount' => $overviewAttemptsCount,
@@ -134,7 +186,7 @@ class ExamSessionReviewController extends Controller
         $this->authorize('manageResults', $exam);
 
         $params = ['exam' => $exam, 'tab' => 'sessions'];
-        foreach (['status', 'risk_state', 'q', 'page'] as $key) {
+        foreach (['status', 'risk_state', 'integrity', 'q', 'page'] as $key) {
             $v = $request->query($key);
             if ($v !== null && $v !== '') {
                 $params[$key] = $v;
@@ -208,6 +260,38 @@ class ExamSessionReviewController extends Controller
         $riskFilter = $request->query('risk_state');
         if (is_string($riskFilter) && in_array($riskFilter, self::RISK_STATES, true)) {
             $query->where('risk_state', $riskFilter);
+        }
+
+        $integrityFilterRaw = $request->query('integrity');
+        $integrityFilter = is_string($integrityFilterRaw) ? $integrityFilterRaw : null;
+        if ($integrityFilter !== null && in_array($integrityFilter, self::INTEGRITY_SESSION_FILTERS, true)) {
+            $examId = (int) $exam->id;
+            match ($integrityFilter) {
+                'flagged' => $query->where(function ($q) use ($examId): void {
+                    $q->whereIn('risk_state', ['suspicious', 'critical', 'locked'])
+                        ->orWhereExists(function (Builder $sub) use ($examId): void {
+                            $sub->from('results')
+                                ->whereColumn('results.user_id', 'exam_sessions.student_id')
+                                ->where('results.quiz_id', $examId)
+                                ->where('results.status', 'held')
+                                ->selectRaw('1');
+                        });
+                }),
+                'auto_submitted' => $query->whereNotNull('auto_submit_reason_code'),
+                'phone_detected' => $query->where(function ($q) use ($examId): void {
+                    $q->where('auto_submit_reason_code', 'phone_detected')
+                        ->orWhereExists(function (Builder $sub) use ($examId): void {
+                            $sub->from('proctoring_events')
+                                ->whereColumn('proctoring_events.user_id', 'exam_sessions.student_id')
+                                ->where('proctoring_events.quiz_id', $examId)
+                                ->where('proctoring_events.event_type', 'phone_detected')
+                                ->whereColumn('proctoring_events.metadata->session_id', 'exam_sessions.session_id')
+                                ->selectRaw('1');
+                        });
+                }),
+                'tab_switch_limit' => $query->where('auto_submit_reason_code', 'tab_switch_limit'),
+                default => null,
+            };
         }
 
         $search = $request->query('q');
@@ -493,9 +577,15 @@ class ExamSessionReviewController extends Controller
             'at' => $e->created_at,
             'event_type' => $e->event_type,
             'action' => $e->action_taken ?? '—',
+            'metadata_summary' => $this->summarizeProctoringMetadata(is_array($e->metadata) ? $e->metadata : []),
             'is_warning' => ($e->action_taken ?? '') === 'warn' || $e->flagged,
             'is_auto_submit' => ($e->action_taken ?? '') === 'autosubmit',
         ]);
+
+        $assignmentSubmissionFiles = AssignmentSubmissionFile::query()
+            ->where('exam_session_id', $examSession->id)
+            ->orderBy('id')
+            ->get(['id', 'original_filename', 'mime_type', 'file_size', 'uploaded_at']);
 
         $thumbnails = [];
         foreach ($events as $e) {
@@ -556,7 +646,44 @@ class ExamSessionReviewController extends Controller
             'classResultsUrl' => $classResultsUrl,
             'isAssignmentSession' => $isAssignmentSession,
             'assignmentSessionContext' => $assignmentSessionContext,
+            'assignmentSubmissionFiles' => $assignmentSubmissionFiles,
         ]);
+    }
+
+    public function downloadAssignmentSubmission(
+        Request $request,
+        ExamSession $examSession,
+        AssignmentSubmissionFile $assignmentFile,
+        SensitiveStorageService $sensitiveStorage,
+    ): StreamedResponse {
+        $this->authorize('view', $examSession);
+        abort_unless((int) $assignmentFile->exam_session_id === (int) $examSession->id, 404);
+
+        return $sensitiveStorage->downloadResponse($assignmentFile->stored_path, $assignmentFile->original_filename);
+    }
+
+    private function summarizeProctoringMetadata(array $metadata): string
+    {
+        $payload = $metadata['payload'] ?? [];
+        if (! is_array($payload)) {
+            $payload = [];
+        }
+
+        $parts = [];
+        if (isset($payload['confidence']) && is_numeric($payload['confidence'])) {
+            $parts[] = 'confidence '.round((float) $payload['confidence'], 3);
+        }
+        if (isset($payload['keys']) && is_string($payload['keys'])) {
+            $parts[] = 'keys: '.$payload['keys'];
+        }
+        if (isset($payload['screen_count']) && is_numeric($payload['screen_count'])) {
+            $parts[] = 'screens '.(int) $payload['screen_count'];
+        }
+        if (isset($payload['obstruction_signal']) && is_string($payload['obstruction_signal'])) {
+            $parts[] = 'signal: '.$payload['obstruction_signal'];
+        }
+
+        return $parts !== [] ? implode(' · ', array_slice($parts, 0, 5)) : '—';
     }
 
     private function scopedResultSubquery(Builder $sub, int $quizId, ?string $status = null): void

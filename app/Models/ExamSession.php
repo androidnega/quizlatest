@@ -27,6 +27,11 @@ class ExamSession extends Model
         'pause_segment_started_at',
         'accumulated_pause_seconds',
         'submitted_late',
+        'tab_switch_count',
+        'auto_submit_reason_code',
+        'proctoring_blur_active',
+        'proctoring_blur_reason',
+        'face_covered_strike_count',
     ];
 
     protected $casts = [
@@ -40,6 +45,9 @@ class ExamSession extends Model
         'pause_segment_started_at' => 'datetime',
         'accumulated_pause_seconds' => 'integer',
         'submitted_late' => 'boolean',
+        'tab_switch_count' => 'integer',
+        'proctoring_blur_active' => 'boolean',
+        'face_covered_strike_count' => 'integer',
     ];
 
     public function student(): BelongsTo
@@ -65,6 +73,17 @@ class ExamSession extends Model
     public function sessionQuestions(): HasMany
     {
         return $this->hasMany(ExamSessionQuestion::class)->orderBy('display_order');
+    }
+
+    public function assignmentSubmissionFiles(): HasMany
+    {
+        return $this->hasMany(AssignmentSubmissionFile::class);
+    }
+
+    /** @deprecated Use assignmentSubmissionFiles() */
+    public function assignmentFiles(): HasMany
+    {
+        return $this->assignmentSubmissionFiles();
     }
 
     public function getRouteKeyName(): string

@@ -21,7 +21,20 @@ class StudentExamEntryController extends Controller
         private readonly ProctoringGlobalControlService $globalControl,
     ) {}
 
+    public function instructions(Quiz $quiz): View|RedirectResponse
+    {
+        return $this->renderExamGateView($quiz, 'student.exam.instructions');
+    }
+
     public function prepare(Quiz $quiz): View|RedirectResponse
+    {
+        return $this->renderExamGateView($quiz, 'student.exam.prepare');
+    }
+
+    /**
+     * @param  view-string  $view
+     */
+    private function renderExamGateView(Quiz $quiz, string $view): View|RedirectResponse
     {
         $user = auth()->user();
         abort_unless($user && $user->role === 'student', 403);
@@ -56,14 +69,18 @@ class StudentExamEntryController extends Controller
 
         $quiz->load(['course:id,code,title']);
 
-        return view('student.exam.prepare', [
+        if ($view === 'student.exam.prepare') {
+            return view($view, [
+                'quiz' => $quiz,
+                'isAssignment' => $quiz->isAssignment(),
+                'snapshotRequired' => $this->examPolicy->isExamStartSnapshotRequiredForQuiz($quiz),
+                'entryBlocked' => $this->globalControl->blocksExamStarts(),
+            ]);
+        }
+
+        return view($view, [
             'quiz' => $quiz,
             'isAssignment' => $quiz->isAssignment(),
-            'otpEnabled' => $quiz->isAssignment() ? false : $this->examPolicy->isOtpEnabled(),
-            'smsEnabled' => $this->examPolicy->isSmsEnabled(),
-            'snapshotRequired' => $this->examPolicy->isExamStartSnapshotRequiredForQuiz($quiz),
-            'otpExpirySeconds' => $this->examPolicy->getOtpExpirySeconds(),
-            'entryBlocked' => $this->globalControl->blocksExamStarts(),
         ]);
     }
 

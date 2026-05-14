@@ -13,6 +13,7 @@ import {
     listPendingForSession,
 } from './examAnswerOfflineQueue';
 import { attachEssayAntiClipboard, ESSAY_CLIPBOARD_WARNING_MESSAGE } from './essayAntiClipboard';
+import { attachExamIntegritySurface } from './examIntegritySurface';
 
 const DEBOUNCE_MS = 1600;
 const POLL_MS = 12000;
@@ -22,6 +23,94 @@ const SUBMIT_PERSIST_INTERVAL_MS = 12000;
 /** Max wall-clock time for background submit retries after initial failures. */
 const SUBMIT_PERSIST_MAX_MS = 15 * 60 * 1000;
 const FULLSCREEN_EXIT_NOTICE_MS = 7000;
+
+function isExamDocumentFullscreen() {
+    const d = document;
+    return !!(
+        d.fullscreenElement ||
+        d.webkitFullscreenElement ||
+        d.mozFullScreenElement ||
+        d.msFullscreenElement
+    );
+}
+
+/**
+ * Best-effort fullscreen for the exam (requires a recent user gesture in most browsers).
+ * Tries the document first, then `#exam-app`, with vendor prefixes — improves Safari / Firefox when returning to an attempt.
+ */
+async function requestExamFullscreen() {
+    if (isExamDocumentFullscreen()) {
+        return;
+    }
+
+    /** @param {Element | null} node */
+    async function tryNode(node) {
+        if (!node) {
+            return;
+        }
+        const el = /** @type {Element & { webkitRequestFullscreen?: () => void; mozRequestFullScreen?: () => Promise<void> | void; msRequestFullscreen?: () => Promise<void> | void }} */ (
+            node
+        );
+        try {
+            if (typeof el.requestFullscreen === 'function') {
+                await el.requestFullscreen();
+            }
+        } catch {
+            //
+        }
+        if (isExamDocumentFullscreen()) {
+            return;
+        }
+        try {
+            if (typeof el.webkitRequestFullscreen === 'function') {
+                await Promise.resolve(el.webkitRequestFullscreen());
+            }
+        } catch {
+            //
+        }
+        if (isExamDocumentFullscreen()) {
+            return;
+        }
+        try {
+            if (typeof el.mozRequestFullScreen === 'function') {
+                await Promise.resolve(el.mozRequestFullScreen());
+            }
+        } catch {
+            //
+        }
+        if (isExamDocumentFullscreen()) {
+            return;
+        }
+        try {
+            if (typeof el.msRequestFullscreen === 'function') {
+                await Promise.resolve(el.msRequestFullscreen());
+            }
+        } catch {
+            //
+        }
+    }
+
+    await tryNode(document.documentElement);
+    if (isExamDocumentFullscreen()) {
+        return;
+    }
+    await tryNode(document.getElementById('exam-app'));
+}
+
+function fullscreenGateSupported() {
+    /** @param {Element | null} node */
+    const can = (node) =>
+        !!(
+            node &&
+            (typeof node.requestFullscreen === 'function' ||
+                typeof /** @type {Element & { webkitRequestFullscreen?: unknown }} */ (node).webkitRequestFullscreen ===
+                    'function' ||
+                typeof /** @type {Element & { mozRequestFullScreen?: unknown }} */ (node).mozRequestFullScreen ===
+                    'function' ||
+                typeof /** @type {Element & { msRequestFullscreen?: unknown }} */ (node).msRequestFullscreen === 'function')
+        );
+    return can(document.documentElement) || can(document.getElementById('exam-app'));
+}
 
 function meta(name) {
     return document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') ?? '';
@@ -89,6 +178,65 @@ function escapeHtml(s) {
     return d.innerHTML;
 }
 
+/** @param {string} type */
+function questionTypeLabel(type) {
+    switch (type) {
+        case 'mcq':
+            return 'Multiple choice';
+        case 'true_false':
+            return 'True / false';
+        case 'fill_blank':
+            return 'Fill in the blank';
+        case 'essay':
+            return 'Written response';
+        default:
+            return type;
+    }
+}
+
+function questionFlagStorageKey(sessionIdStr) {
+    return `qs_exam_q_flags_${sessionIdStr}`;
+}
+
+/** @returns {Map<number, true>} */
+function loadQuestionFlags(sessionIdStr) {
+    const m = new Map();
+    try {
+        const raw = localStorage.getItem(questionFlagStorageKey(sessionIdStr));
+        if (!raw) {
+            return m;
+        }
+        const o = JSON.parse(raw);
+        if (o && typeof o === 'object') {
+            for (const [k, v] of Object.entries(o)) {
+                if (v) {
+                    const id = Number(k);
+                    if (Number.isFinite(id)) {
+                        m.set(id, true);
+                    }
+                }
+            }
+        }
+    } catch {
+        //
+    }
+
+    return m;
+}
+
+/** @param {Map<number, true>} map */
+function persistQuestionFlags(sessionIdStr, map) {
+    try {
+        const o = {};
+        for (const [k] of map) {
+            o[String(k)] = true;
+        }
+        localStorage.setItem(questionFlagStorageKey(sessionIdStr), JSON.stringify(o));
+    } catch {
+        //
+    }
+}
+
 function flattenQuestions(sections) {
     const out = [];
     for (const sec of sections || []) {
@@ -123,6 +271,9 @@ async function main() {
     const requireCameraMonitoring = meta('qs-require-camera-monitoring') === '1';
     const assignmentMode = meta('qs-assignment-mode') === '1';
     const assignmentClipboardBlock = meta('qs-assignment-clipboard-block') === '1';
+    const examClipboardLock = meta('qs-exam-clipboard-lock') === '1';
+    const examScreenshotMitigation = meta('qs-exam-screenshot-mitigation') === '1';
+    const examScreenRecordMitigation = meta('qs-exam-screen-record-mitigation') === '1';
     if (!sessionId || !examId) {
         return;
     }
@@ -134,11 +285,6 @@ async function main() {
         subtitle: document.getElementById('exam-subtitle'),
         timer: document.getElementById('exam-timer'),
         nav: document.getElementById('question-nav'),
-        answerSummary: document.getElementById('exam-answer-summary'),
-        navActions: document.getElementById('exam-nav-actions'),
-        btnQBack: document.getElementById('btn-q-back'),
-        btnQNext: document.getElementById('btn-q-next'),
-        questionProgress: document.getElementById('question-progress-label'),
         main: document.getElementById('question-container'),
         loading: document.getElementById('exam-loading'),
         banner: document.getElementById('exam-banner'),
@@ -153,6 +299,9 @@ async function main() {
         localProctorHint: document.getElementById('proctoring-local-hint'),
         videoStatus: document.getElementById('video-status'),
         essayClipboardToast: document.getElementById('essay-clipboard-toast'),
+        recordingBadge: document.getElementById('exam-recording-badge'),
+        fullscreenGate: document.getElementById('exam-fullscreen-gate'),
+        btnFullscreenGate: document.getElementById('btn-fullscreen-gate'),
     };
 
     /** Always available so essay clipboard attempts log even if camera/proctoring init fails. */
@@ -161,9 +310,44 @@ async function main() {
         apiClient: axios,
         flushIntervalMs: 4500,
         maxBatch: 14,
+        onFlushResult: (data) => {
+            if (!data || typeof data !== 'object') {
+                return;
+            }
+            if (data.status === 'submitted_held' && !serverDone) {
+                serverDone = true;
+                submitInputLock = false;
+                stopSubmitPersistence();
+                stopTimer();
+                stopHeartbeat();
+                updateBanner(
+                    typeof data.message === 'string' && data.message
+                        ? data.message
+                        : 'Your assessment has been submitted and is held for review.',
+                    true,
+                );
+                examStateEngine.syncFromBackend({
+                    ...(latestPayload || {}),
+                    session_status: 'submitted',
+                    exam_ui_state: 'held',
+                    exam_status: 'submitted_held',
+                });
+                setSaveIndicator('Held for review', true);
+                if (els.btnSubmit) {
+                    els.btnSubmit.disabled = true;
+                }
+                syncControlDisabled();
+                syncFullscreenGate();
+                hideExamTabSwitchModal();
+            }
+            if (typeof data.client_message === 'string' && data.client_message !== '' && !serverDone) {
+                updateBanner(data.client_message, true);
+            }
+        },
     });
 
     let essayClipboardToastTimer = null;
+    let micLevelMeterFrame = null;
     function showEssayClipboardWarning() {
         const toast = els.essayClipboardToast;
         if (!toast) {
@@ -196,6 +380,47 @@ async function main() {
             .catch(() => {});
     }
 
+    function enqueueExamIntegritySignal(signal, detail = {}) {
+        const md = {
+            session_id: sessionId,
+            student_id: studentId,
+            exam_id: examId,
+            signal,
+        };
+        if (detail.question_id != null && Number.isFinite(Number(detail.question_id))) {
+            md.question_id = Number(detail.question_id);
+        }
+        void proctoringBatcher
+            .enqueue({
+                event_type: 'exam_integrity_signal',
+                flagged: false,
+                metadata: md,
+            })
+            .catch(() => {});
+        if (!assignmentMode && (signal === 'printscreen_key' || signal === 'capture_shortcut')) {
+            void proctoringBatcher
+                .enqueue({
+                    event_type: 'possible_screenshot_attempt',
+                    flagged: false,
+                    metadata: {
+                        ...md,
+                        keys: signal,
+                        detection_note: 'Best-effort only; browsers cannot detect every screenshot.',
+                    },
+                })
+                .catch(() => {});
+        }
+    }
+
+    void attachExamIntegritySurface({
+        root: document.getElementById('exam-app'),
+        assignmentMode,
+        clipboardLock: examClipboardLock,
+        screenshotMitigation: examScreenshotMitigation,
+        screenRecordMitigation: examScreenRecordMitigation,
+        enqueueSignal: enqueueExamIntegritySignal,
+    });
+
     const examStateEngine = new ExamStateEngine();
     examStateEngine.configureApi(axios);
     examStateEngine.sessionRouteKey = sessionId;
@@ -204,6 +429,8 @@ async function main() {
     let currentIdx = 0;
     /** Furthest question index the student has reached (unlocks forward progress). */
     let furthestIdx = 0;
+    /** @type {Map<number, true>} */
+    const questionFlags = loadQuestionFlags(sessionId);
     let latestPayload = null;
     let timerHandle = null;
     /** Server has accepted submission (terminal for answers). */
@@ -251,6 +478,9 @@ async function main() {
             return;
         }
         els.pauseOverlay.classList.toggle('hidden', !show);
+        if (show) {
+            document.getElementById('exam-tab-switch-modal')?.classList.add('hidden');
+        }
     }
 
     function applyTimerPausedFromState(data) {
@@ -388,21 +618,120 @@ async function main() {
         return c;
     }
 
-    function updateAnswerSummary() {
-        const el = els.answerSummary;
-        if (!el || !flatQuestions.length) {
+    function updateNavStats() {
+        const answeredEl = document.getElementById('nav-count-answered');
+        if (!answeredEl) {
             return;
         }
+        const flaggedEl = document.getElementById('nav-count-flagged');
+        const leftEl = document.getElementById('nav-count-left');
         const n = flatQuestions.length;
-        const done = countAnsweredQuestions();
-        el.innerHTML = '';
-        const p1 = document.createElement('p');
-        p1.innerHTML = `<span class="font-semibold text-emerald-700">Answered</span>: ${done} · <span class="font-semibold text-amber-800">Not answered</span>: ${n - done}`;
-        const p2 = document.createElement('p');
-        p2.className = 'text-[11px] text-qs-muted';
-        p2.textContent = 'Numbers: green ring = answered, amber = not yet. You cannot skip ahead of the first unanswered question.';
-        el.appendChild(p1);
-        el.appendChild(p2);
+        const answered = countAnsweredQuestions();
+        let flagged = 0;
+        for (const q of flatQuestions) {
+            if (questionFlags.has(q.id)) {
+                flagged += 1;
+            }
+        }
+        const left = Math.max(0, n - answered);
+        if (answeredEl) {
+            answeredEl.textContent = String(answered);
+        }
+        if (flaggedEl) {
+            flaggedEl.textContent = String(flagged);
+        }
+        if (leftEl) {
+            leftEl.textContent = String(left);
+        }
+    }
+
+    function updateExamMetaPanel() {
+        const label = document.getElementById('exam-current-q-label');
+        const typeEl = document.getElementById('exam-current-q-type');
+        const fill = document.getElementById('exam-progress-fill');
+        const pl = document.getElementById('exam-progress-label');
+        const n = flatQuestions.length;
+        const q = flatQuestions[currentIdx];
+        if (!label) {
+            return;
+        }
+        if (!q || !n) {
+            label.textContent = '—';
+            if (typeEl) {
+                typeEl.textContent = '—';
+            }
+            if (fill) {
+                fill.style.width = '0%';
+            }
+            if (pl) {
+                pl.textContent = '—';
+            }
+
+            return;
+        }
+        label.textContent = `Q${currentIdx + 1}`;
+        if (typeEl) {
+            typeEl.textContent = questionTypeLabel(q.type);
+        }
+        const pct = Math.round(((currentIdx + 1) / n) * 100);
+        if (fill) {
+            fill.style.width = `${pct}%`;
+        }
+        if (pl) {
+            pl.textContent = `${pct}% · ${currentIdx + 1} / ${n}`;
+        }
+    }
+
+    function toggleCurrentQuestionFlag() {
+        const q = flatQuestions[currentIdx];
+        if (!q || effectiveInputsLocked()) {
+            return;
+        }
+        if (questionFlags.has(q.id)) {
+            questionFlags.delete(q.id);
+        } else {
+            questionFlags.set(q.id, true);
+        }
+        persistQuestionFlags(sessionId, questionFlags);
+        updateNavStats();
+        renderNav();
+        syncFlagButton();
+    }
+
+    function syncFlagButton() {
+        const btn = document.getElementById('btn-flag-question');
+        const q = flatQuestions[currentIdx];
+        if (!btn || !q) {
+            return;
+        }
+        const on = questionFlags.has(q.id);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.classList.toggle('border-amber-500', on);
+        btn.classList.toggle('bg-amber-50', on);
+        btn.classList.toggle('ring-2', on);
+        btn.classList.toggle('ring-amber-200', on);
+    }
+
+    function syncNavButtonsInQuestion() {
+        const n = flatQuestions.length;
+        const q = flatQuestions[currentIdx];
+        const atFrontier = currentIdx === furthestIdx;
+        const frontierComplete = q ? isQuestionFullyAnswered(q) : true;
+        const back = document.getElementById('btn-q-back');
+        const next = document.getElementById('btn-q-next');
+        if (back) {
+            back.disabled = currentIdx <= 0;
+        }
+        if (next) {
+            next.disabled = currentIdx >= n - 1 || (atFrontier && !frontierComplete);
+        }
+    }
+
+    function updateAnswerSummary() {
+        if (!flatQuestions.length) {
+            return;
+        }
+        updateNavStats();
     }
 
     function setSaveIndicator(text, ok = true) {
@@ -410,9 +739,10 @@ async function main() {
             return;
         }
         els.saveIndicator.textContent = text;
-        els.saveIndicator.classList.toggle('text-qs-muted', ok);
-        els.saveIndicator.classList.toggle('text-qs-danger', !ok);
+        els.saveIndicator.classList.toggle('text-slate-500', ok);
+        els.saveIndicator.classList.toggle('text-rose-600', !ok);
         els.saveIndicator.classList.toggle('font-medium', !ok);
+        els.saveIndicator.classList.remove('text-qs-muted', 'text-qs-danger');
     }
 
     function syncAssignmentStudentPanel(data) {
@@ -443,6 +773,43 @@ async function main() {
             parts.push(`Feedback: ${v.examiner_feedback}`);
         }
         gradeEl.textContent = parts.join(' · ');
+
+        const ex = data?.exam;
+        const fi = document.getElementById('assignment-file-input');
+        const fst = document.getElementById('assignment-file-status');
+        if (fi && fst && ex && typeof ex === 'object') {
+            const allow = Boolean(ex.assignment_allows_files);
+            const submitted = String(data?.session_status ?? '') === 'submitted';
+            fi.disabled = !allow || submitted || serverDone;
+            if (Array.isArray(ex.assignment_allowed_extensions) && ex.assignment_allowed_extensions.length) {
+                fi.accept = ex.assignment_allowed_extensions
+                    .map((x) => `.${String(x).replace(/^\./, '')}`)
+                    .join(',');
+            } else {
+                fi.accept = '.pdf,.doc,.docx,.txt,.png,.jpg,.jpeg';
+            }
+            if (!fi.dataset.qsBound) {
+                fi.dataset.qsBound = '1';
+                fi.addEventListener('change', () => {
+                    void (async () => {
+                        const file = fi.files?.[0];
+                        if (!file || serverDone) {
+                            return;
+                        }
+                        fst.textContent = `Selected: ${file.name}`;
+                        const fd = new FormData();
+                        fd.append('file', file);
+                        try {
+                            fst.textContent = 'Uploading…';
+                            await axios.post(`/exam-sessions/${encodeURIComponent(sessionId)}/assignment-files`, fd);
+                            fst.textContent = `Uploaded: ${file.name}`;
+                        } catch {
+                            fst.textContent = 'Upload failed — check type/size, then try again.';
+                        }
+                    })();
+                });
+            }
+        }
     }
 
     function updateBanner(message, show) {
@@ -560,7 +927,7 @@ async function main() {
     function syncControlDisabled() {
         const locked = effectiveInputsLocked();
         const controls = document.querySelectorAll(
-            '#question-container input, #question-container textarea, #question-container button[data-q-action], #exam-nav-actions button[data-q-action]',
+            '#question-container input, #question-container textarea, #question-container button[data-q-action], #btn-fullscreen',
         );
         controls.forEach((el) => {
             el.disabled = locked;
@@ -646,6 +1013,8 @@ async function main() {
             els.btnSubmit.disabled = true;
             els.btnSubmit.textContent = submitUiDefaultText;
         }
+        syncFullscreenGate();
+        hideExamTabSwitchModal();
     }
 
     /**
@@ -733,60 +1102,42 @@ async function main() {
         if (!canNavigateTo(i)) {
             return;
         }
+        if (i !== currentIdx) {
+            void flushDebouncerForQuestion(flatQuestions[currentIdx].id);
+        }
         currentIdx = i;
         renderQuestion();
         renderNav();
-        syncQuestionNavButtons();
+        syncNavButtonsInQuestion();
     }
 
     async function advanceQuestionNext() {
         if (currentIdx >= flatQuestions.length - 1) {
             return;
         }
-        if (currentIdx === furthestIdx) {
-            const q = flatQuestions[currentIdx];
-            if (!isQuestionFullyAnswered(q)) {
-                return;
-            }
-            await flushDebouncerForQuestion(q.id);
+        const q = flatQuestions[currentIdx];
+        if (currentIdx === furthestIdx && !isQuestionFullyAnswered(q)) {
+            return;
         }
+        await flushDebouncerForQuestion(q.id);
         currentIdx += 1;
         pruneLocalPayloadFromServer();
         refreshFrontierFromAnswers();
         renderQuestion();
         renderNav();
         updateAnswerSummary();
-        syncQuestionNavButtons();
+        syncNavButtonsInQuestion();
     }
 
     function retreatQuestionBack() {
         if (currentIdx <= 0) {
             return;
         }
+        void flushDebouncerForQuestion(flatQuestions[currentIdx].id);
         currentIdx -= 1;
         renderQuestion();
         renderNav();
-        syncQuestionNavButtons();
-    }
-
-    function syncQuestionNavButtons() {
-        if (els.navActions) {
-            els.navActions.classList.remove('hidden');
-        }
-        const n = flatQuestions.length;
-        const q = flatQuestions[currentIdx];
-        const atFrontier = currentIdx === furthestIdx;
-        const frontierComplete = q ? isQuestionFullyAnswered(q) : true;
-        if (els.btnQBack) {
-            els.btnQBack.disabled = currentIdx <= 0;
-        }
-        if (els.btnQNext) {
-            els.btnQNext.disabled =
-                currentIdx >= n - 1 || (atFrontier && !frontierComplete);
-        }
-        if (els.questionProgress) {
-            els.questionProgress.textContent = `Question ${currentIdx + 1} of ${n} — complete each question in order; answered items in the list show a green ring.`;
-        }
+        syncNavButtonsInQuestion();
     }
 
     function renderNav() {
@@ -800,21 +1151,34 @@ async function main() {
             const allowed = canNavigateTo(i);
             const isCurrent = i === currentIdx;
             const answered = isQuestionFullyAnswered(q);
-            const ring = answered ? 'ring-2 ring-emerald-600/70' : 'ring-2 ring-amber-600/60';
-            btn.className =
-                'text-left text-sm px-2 py-1 rounded border w-full md:w-auto ' +
-                (isCurrent
-                    ? `bg-qs-accent/25 border-qs-accent font-semibold ${ring}`
-                    : allowed
-                      ? `border-qs-soft hover:bg-qs-card text-qs-text ${ring}`
-                      : 'border-qs-soft/60 text-qs-muted/50 cursor-not-allowed opacity-50');
+            const flagged = questionFlags.has(q.id);
+            let cls =
+                'relative flex h-8 min-w-8 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 ';
+            if (isCurrent) {
+                cls += 'border-slate-900 bg-slate-900 text-white shadow-sm ';
+            } else if (!allowed) {
+                cls += 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 ';
+            } else if (answered) {
+                cls += 'border-slate-300 bg-white text-slate-800 ring-2 ring-emerald-500/85 hover:border-slate-400 ';
+            } else {
+                cls += 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 ';
+            }
+            btn.className = cls.trim();
             btn.disabled = !allowed;
             btn.textContent = `${i + 1}`;
+            if (flagged) {
+                const dot = document.createElement('span');
+                dot.className = 'absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white';
+                dot.setAttribute('aria-hidden', 'true');
+                btn.appendChild(dot);
+            }
             btn.title = !allowed
-                ? 'Answer earlier questions first — you cannot skip ahead of the first unanswered question.'
-                : answered
-                  ? 'Answered'
-                  : 'Not answered yet';
+                ? 'Answer earlier questions first.'
+                : flagged
+                  ? 'Flagged for review'
+                  : answered
+                    ? 'Answered'
+                    : 'Not answered yet';
             btn.addEventListener('click', () => {
                 if (!allowed) {
                     return;
@@ -823,6 +1187,7 @@ async function main() {
             });
             els.nav.appendChild(btn);
         });
+        updateNavStats();
     }
 
     async function flushDebouncerForQuestion(questionId) {
@@ -854,7 +1219,7 @@ async function main() {
         }
         renderNav();
         updateAnswerSummary();
-        syncQuestionNavButtons();
+        syncNavButtonsInQuestion();
     }
 
     function scheduleSave(questionId, buildPayload) {
@@ -888,26 +1253,65 @@ async function main() {
             return;
         }
 
-        const wrap = document.createElement('div');
-        wrap.className = 'space-y-4 max-w-3xl';
+        const root = document.createElement('div');
+        root.className = 'space-y-6';
+        root.dataset.questionId = String(q.id);
 
-        const title = document.createElement('div');
-        title.className = 'text-sm text-qs-muted';
-        title.textContent = `Question ${currentIdx + 1} of ${flatQuestions.length} · ${q.marks} marks`;
+        const card = document.createElement('div');
+        card.className = 'overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm';
+
+        const head = document.createElement('div');
+        head.className = 'border-b border-slate-100 px-5 py-5 sm:px-8 sm:py-7';
+        const headRow = document.createElement('div');
+        headRow.className = 'flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between';
+
+        const titleCol = document.createElement('div');
+        titleCol.className = 'min-w-0';
+        const meta = document.createElement('p');
+        meta.className = 'text-xs font-extrabold uppercase tracking-widest text-slate-400';
+        meta.textContent = `Question ${currentIdx + 1} of ${flatQuestions.length}`;
+        const h = document.createElement('h2');
+        h.className =
+            'mt-4 max-w-3xl break-words text-2xl font-extrabold leading-snug text-slate-950 sm:text-3xl';
+        h.innerHTML = escapeHtml(q.question_text || '').replace(/\n/g, '<br/>');
+        const marks = document.createElement('p');
+        marks.className = 'mt-2 text-sm font-semibold text-slate-500';
+        marks.textContent = `${q.marks} marks · ${questionTypeLabel(q.type)}`;
+        titleCol.appendChild(meta);
+        titleCol.appendChild(h);
+        titleCol.appendChild(marks);
+
+        const flagBtn = document.createElement('button');
+        flagBtn.type = 'button';
+        flagBtn.id = 'btn-flag-question';
+        flagBtn.className =
+            'inline-flex shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50';
+        flagBtn.innerHTML = '<i class="fa-regular fa-flag me-2" aria-hidden="true"></i>Flag';
+        flagBtn.addEventListener('click', () => toggleCurrentQuestionFlag());
+
+        headRow.appendChild(titleCol);
+        headRow.appendChild(flagBtn);
+        head.appendChild(headRow);
 
         const body = document.createElement('div');
-        body.className = 'max-w-none text-base leading-relaxed text-qs-text';
-        body.innerHTML = escapeHtml(q.question_text || '').replace(/\n/g, '<br/>');
-
-        wrap.appendChild(title);
-        wrap.appendChild(body);
+        body.className = 'px-5 py-6 sm:px-8 sm:py-8';
 
         const saved = getEffectivePayload(q);
 
+        const applyMcqCardClasses = (labelEl, on) => {
+            labelEl.className =
+                'flex h-full min-h-0 min-w-0 cursor-pointer flex-col rounded-2xl border p-3 transition sm:p-4 ' +
+                (on ? 'border-2 border-slate-900 bg-slate-50' : 'border border-slate-200 bg-white hover:border-slate-400');
+        };
+
         if (q.type === 'mcq') {
             const optsRoot = document.createElement('div');
-            optsRoot.className = 'space-y-2';
             const opts = Array.isArray(q.options) ? q.options : [];
+            const maxOptLen = opts.reduce((m, o) => Math.max(m, String(o ?? '').length), 0);
+            const useTwoColGrid = opts.length >= 2 && maxOptLen <= 56;
+            optsRoot.className = useTwoColGrid
+                ? 'grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:gap-4 [&>*]:min-w-0'
+                : 'grid grid-cols-1 gap-3 [&>*]:min-w-0';
             const selected = new Set(
                 Array.isArray(saved?.selected)
                     ? saved.selected
@@ -916,19 +1320,41 @@ async function main() {
                       : [],
             );
             opts.forEach((label, idx) => {
+                const letter = String.fromCharCode(65 + idx);
                 const row = document.createElement('label');
-                row.className = 'flex items-start gap-2 cursor-pointer';
+                applyMcqCardClasses(row, selected.has(idx));
                 const cb = document.createElement('input');
                 cb.type = 'checkbox';
-                cb.className = 'mt-1';
+                cb.className = 'sr-only';
                 cb.checked = selected.has(idx);
-                cb.addEventListener('change', () => {
+                const syncRowStyles = () => {
                     const sel = [];
-                    optsRoot.querySelectorAll('input[type=checkbox]').forEach((box, j) => {
-                        if (box.checked) {
+                    optsRoot.querySelectorAll('label').forEach((lab, j) => {
+                        const box = /** @type {HTMLInputElement | null} */ (lab.querySelector('input'));
+                        const on = Boolean(box?.checked);
+                        applyMcqCardClasses(lab, on);
+                        const circ = lab.querySelector('[data-mcq-letter]');
+                        if (circ) {
+                            circ.className =
+                                'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-sm font-extrabold ' +
+                                (on
+                                    ? 'border-slate-900 bg-slate-900 text-white'
+                                    : 'border-slate-300 text-slate-600');
+                        }
+                        const io = lab.querySelector('[data-mcq-off]');
+                        const ii = lab.querySelector('[data-mcq-on]');
+                        if (io && ii) {
+                            io.classList.toggle('hidden', on);
+                            ii.classList.toggle('hidden', !on);
+                        }
+                        if (on) {
                             sel.push(j);
                         }
                     });
+                    return sel;
+                };
+                cb.addEventListener('change', () => {
+                    const sel = syncRowStyles();
                     lastLocalPayload.set(q.id, { type: 'mcq', selected: sel });
                     bumpLocalAnswerUi();
                     if (sel.length === 0) {
@@ -943,44 +1369,76 @@ async function main() {
                     scheduleSave(q.id, () => ({ type: 'mcq', selected: sel }));
                 });
                 row.appendChild(cb);
-                const span = document.createElement('span');
-                span.textContent = label;
-                row.appendChild(span);
+                const inner = document.createElement('div');
+                inner.className = 'flex min-h-0 min-w-0 w-full flex-1 items-center gap-3 sm:gap-4';
+                const circle = document.createElement('div');
+                circle.dataset.mcqLetter = '1';
+                circle.textContent = letter;
+                circle.className =
+                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-sm font-extrabold ' +
+                    (selected.has(idx)
+                        ? 'border-slate-900 bg-slate-900 text-white'
+                        : 'border-slate-300 text-slate-600');
+                const txt = document.createElement('div');
+                txt.className = 'min-w-0 flex-1 overflow-hidden';
+                const p = document.createElement('p');
+                p.className = 'break-words text-sm font-bold leading-snug text-slate-900 sm:text-base';
+                p.textContent = label;
+                txt.appendChild(p);
+                const iconOff = document.createElement('i');
+                iconOff.dataset.mcqOff = '1';
+                iconOff.className = selected.has(idx) ? 'hidden' : 'fa-regular fa-circle text-slate-300';
+                iconOff.setAttribute('aria-hidden', 'true');
+                const iconOn = document.createElement('i');
+                iconOn.dataset.mcqOn = '1';
+                iconOn.className = selected.has(idx)
+                    ? 'fa-solid fa-circle-check text-slate-900'
+                    : 'fa-solid fa-circle-check hidden text-slate-900';
+                iconOn.setAttribute('aria-hidden', 'true');
+                inner.appendChild(circle);
+                inner.appendChild(txt);
+                inner.appendChild(iconOff);
+                inner.appendChild(iconOn);
+                row.appendChild(inner);
                 optsRoot.appendChild(row);
             });
-            wrap.appendChild(optsRoot);
+            body.appendChild(optsRoot);
         } else if (q.type === 'true_false') {
             const row = document.createElement('div');
-            row.className = 'flex gap-4';
-            const mk = (val, label) => {
+            row.className = 'grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 [&>*]:min-w-0';
+            const mk = (val, lbl) => {
                 const lab = document.createElement('label');
-                lab.className = 'inline-flex items-center gap-2';
+                const on = saved?.value === val;
+                lab.className =
+                    'flex min-h-[44px] w-full min-w-0 cursor-pointer items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-center text-sm font-extrabold ' +
+                    (on ? 'border-2 border-slate-900 bg-slate-50 text-slate-900' : 'border border-slate-200 bg-white text-slate-600');
                 const rb = document.createElement('input');
                 rb.type = 'radio';
                 rb.name = `tf-${q.id}`;
-                rb.checked = saved?.value === val;
+                rb.className = 'sr-only peer';
+                rb.checked = on;
                 rb.addEventListener('change', () => {
                     lastLocalPayload.set(q.id, { type: 'true_false', value: val });
                     bumpLocalAnswerUi();
                     scheduleSave(q.id, () => ({ type: 'true_false', value: val }));
                 });
                 lab.appendChild(rb);
-                lab.appendChild(document.createTextNode(label));
+                lab.appendChild(document.createTextNode(lbl));
                 return lab;
             };
             row.appendChild(mk(true, 'True'));
             row.appendChild(mk(false, 'False'));
-            wrap.appendChild(row);
+            body.appendChild(row);
         } else if (q.type === 'fill_blank') {
             const n = fillBlankCount(q);
             const blanks = Array.isArray(saved?.blanks) ? saved.blanks : [];
             const blanksRoot = document.createElement('div');
-            blanksRoot.className = 'space-y-2';
+            blanksRoot.className = 'space-y-3';
             for (let i = 0; i < n; i += 1) {
                 const inp = document.createElement('input');
                 inp.type = 'text';
                 inp.className =
-                    'block w-full rounded border border-qs-soft bg-qs-bg px-3 py-2 text-qs-text shadow-sm focus:border-qs-accent focus:outline-none focus:ring-2 focus:ring-qs-accent/40';
+                    'block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/15';
                 inp.value = blanks[i] ?? '';
                 inp.addEventListener('input', () => {
                     const vals = [];
@@ -998,30 +1456,65 @@ async function main() {
                 }
                 blanksRoot.appendChild(inp);
             }
-            wrap.appendChild(blanksRoot);
+            body.appendChild(blanksRoot);
         } else if (q.type === 'essay') {
             const ta = document.createElement('textarea');
             ta.rows = 10;
             ta.className =
-                'block w-full rounded border border-qs-soft bg-qs-bg px-3 py-2 font-sans text-qs-text shadow-sm focus:border-qs-accent focus:outline-none focus:ring-2 focus:ring-qs-accent/40';
+                'block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-sans text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/15';
             ta.value = saved?.text ?? '';
             ta.addEventListener('input', () => {
                 lastLocalPayload.set(q.id, { type: 'essay', text: ta.value });
                 bumpLocalAnswerUi();
                 scheduleSave(q.id, () => ({ type: 'essay', text: ta.value }));
             });
-            if (!assignmentMode || assignmentClipboardBlock) {
+            const usePerQuestionEssayClipboard =
+                !examClipboardLock && (!assignmentMode || assignmentClipboardBlock);
+            if (usePerQuestionEssayClipboard) {
                 attachEssayAntiClipboard(ta, {
                     showWarning: showEssayClipboardWarning,
                     onBlocked: (actionType) => enqueueEssayClipboardAttempt(q.id, actionType),
                 });
             }
-            wrap.appendChild(ta);
+            body.appendChild(ta);
         }
 
-        els.main.appendChild(wrap);
+        const foot = document.createElement('div');
+        foot.className =
+            'mt-8 flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-stretch sm:justify-between sm:gap-4';
+        const backBtn = document.createElement('button');
+        backBtn.type = 'button';
+        backBtn.id = 'btn-q-back';
+        backBtn.dataset.qAction = 'back';
+        backBtn.className =
+            'inline-flex min-h-[48px] w-full min-w-0 shrink-0 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-extrabold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto sm:min-w-[10.5rem] sm:px-5';
+        backBtn.innerHTML = '<i class="fa-solid fa-arrow-left shrink-0" aria-hidden="true"></i><span class="min-w-0 truncate">Previous</span>';
+
+        const nextBtn = document.createElement('button');
+        nextBtn.type = 'button';
+        nextBtn.id = 'btn-q-next';
+        nextBtn.dataset.qAction = 'next';
+        nextBtn.className =
+            'inline-flex min-h-[48px] w-full min-w-0 shrink-0 items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-extrabold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40 sm:ms-auto sm:w-auto sm:min-w-[10.5rem] sm:px-6';
+        nextBtn.innerHTML =
+            '<span class="min-w-0 truncate">Next question</span><i class="fa-solid fa-arrow-right shrink-0" aria-hidden="true"></i>';
+
+        foot.appendChild(backBtn);
+        foot.appendChild(nextBtn);
+
+        card.appendChild(head);
+        card.appendChild(body);
+        card.appendChild(foot);
+        root.appendChild(card);
+        els.main.appendChild(root);
+
+        backBtn.addEventListener('click', () => retreatQuestionBack());
+        nextBtn.addEventListener('click', () => void advanceQuestionNext());
+
+        updateExamMetaPanel();
+        syncFlagButton();
+        syncNavButtonsInQuestion();
         syncControlDisabled();
-        syncQuestionNavButtons();
     }
 
     function applySubmittedFromState(data) {
@@ -1047,6 +1540,8 @@ async function main() {
                 els.btnSubmit.textContent = submitUiDefaultText;
             }
             syncControlDisabled();
+            syncFullscreenGate();
+            hideExamTabSwitchModal();
         }
     }
 
@@ -1059,9 +1554,19 @@ async function main() {
         if (data.exam?.title && els.title) {
             els.title.textContent = data.exam.title;
         }
-        if (els.subtitle && data.exam?.description) {
-            els.subtitle.textContent = data.exam.description;
-            els.subtitle.classList.remove('hidden');
+        if (els.subtitle && data.exam) {
+            const c = data.exam.course;
+            if (c && (c.code || c.title)) {
+                const parts = [c.code, c.title].filter(Boolean);
+                els.subtitle.textContent = parts.join(' · ');
+                els.subtitle.classList.remove('hidden');
+            } else if (data.exam.description) {
+                els.subtitle.textContent = data.exam.description;
+                els.subtitle.classList.remove('hidden');
+            } else {
+                els.subtitle.textContent = '';
+                els.subtitle.classList.add('hidden');
+            }
         }
 
         if (Array.isArray(data.sections)) {
@@ -1085,7 +1590,7 @@ async function main() {
                 }
                 renderNav();
                 updateAnswerSummary();
-                syncQuestionNavButtons();
+                syncNavButtonsInQuestion();
             }
         }
 
@@ -1094,14 +1599,14 @@ async function main() {
         applySubmittedFromState(data);
         applyTimerPausedFromState(data);
         syncAssignmentStudentPanel(data);
-
-        if (!serverDone && !timerPaused) {
-            startHeartbeat();
-        }
+        updateProctoringFromState(data);
+        startHeartbeat();
 
         ensureTimerClockRunning();
 
         await flushOfflineAnswerQueue();
+
+        syncFullscreenGate();
 
         return data;
     }
@@ -1176,12 +1681,17 @@ async function main() {
         }, SUBMIT_PERSIST_INTERVAL_MS);
     }
 
-    examStateEngine.subscribe(({ state }) => {
+    examStateEngine.subscribe(({ state, payload }) => {
+        const merged = { ...(latestPayload ?? {}), ...(payload ?? {}) };
+        updateProctoringFromState(merged);
         if (state === 'warning') {
             updateBanner('Warning: please stay focused on the exam.', true);
             if (!serverDone) {
                 applyRiskInputsDisabled(false);
             }
+        } else if (state === 'proctoring_blocked') {
+            updateBanner('Screen check: adjust your display setup to continue.', true);
+            applyRiskInputsDisabled(true);
         } else if (state === 'locked') {
             updateBanner('Exam locked by invigilator or policy.', true);
             applyRiskInputsDisabled(true);
@@ -1211,6 +1721,8 @@ async function main() {
                 els.btnSubmit.textContent = submitUiDefaultText;
             }
             syncControlDisabled();
+            syncFullscreenGate();
+            hideExamTabSwitchModal();
         } else if (state === 'active') {
             if (!serverDone) {
                 updateBanner('', false);
@@ -1218,6 +1730,17 @@ async function main() {
             }
         }
     });
+
+    function syncFullscreenGate() {
+        if (!els.fullscreenGate) {
+            return;
+        }
+        if (assignmentMode || serverDone || !fullscreenGateSupported()) {
+            els.fullscreenGate.classList.add('hidden');
+            return;
+        }
+        els.fullscreenGate.classList.toggle('hidden', isExamDocumentFullscreen());
+    }
 
     function hideFullscreenExitNotice() {
         if (fullscreenExitNoticeTimer) {
@@ -1243,27 +1766,205 @@ async function main() {
         fullscreenExitNoticeTimer = window.setTimeout(() => hideFullscreenExitNotice(), FULLSCREEN_EXIT_NOTICE_MS);
     }
 
-    document.addEventListener('fullscreenchange', () => {
-        if (document.fullscreenElement === document.documentElement) {
+    function onExamDocumentFullscreenChange() {
+        if (isExamDocumentFullscreen()) {
             examDocumentWasFullscreen = true;
             hideFullscreenExitNotice();
+            syncFullscreenGate();
             return;
         }
+        syncFullscreenGate();
         if (examDocumentWasFullscreen && !serverDone) {
             showFullscreenExitNotice();
         }
+    }
+
+    document.addEventListener('fullscreenchange', onExamDocumentFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onExamDocumentFullscreenChange);
+    document.addEventListener('mozfullscreenchange', onExamDocumentFullscreenChange);
+    document.addEventListener('MSFullscreenChange', onExamDocumentFullscreenChange);
+
+    if (!assignmentMode) {
+        window.addEventListener('pageshow', (ev) => {
+            if (serverDone) {
+                return;
+            }
+            const pe = /** @type {PageTransitionEvent} */ (ev);
+            if (pe.persisted) {
+                examDocumentWasFullscreen = isExamDocumentFullscreen();
+            }
+            requestAnimationFrame(() => {
+                syncFullscreenGate();
+            });
+        });
+    }
+
+    if (!assignmentMode) {
+        document.addEventListener(
+            'click',
+            () => {
+                if (serverDone || isExamDocumentFullscreen()) {
+                    return;
+                }
+                void requestExamFullscreen();
+            },
+            true,
+        );
+        void requestExamFullscreen();
+        requestAnimationFrame(() => {
+            void requestExamFullscreen();
+        });
+    }
+
+    syncFullscreenGate();
+
+    const TAB_SWITCH_WARN_MAX = 3;
+    let tabSwitchDocWasHidden = false;
+    let tabSwitchReturnCount = 0;
+    let proctoringOverlayClearing = false;
+
+    function proctoringBlurOverlayCopy(reason) {
+        const r = String(reason || '');
+        if (r === 'external_display') {
+            return 'We logged a possible extra display or extended desktop. Use a single screen or mirror one display only, then continue.';
+        }
+        if (r === 'face_obstruction') {
+            return 'We could not see your face clearly. Adjust your position so your face is unobstructed, then continue.';
+        }
+        return 'Adjust your screen setup to match your school’s rules, then continue when ready.';
+    }
+
+    function syncProctoringBlurOverlay(data) {
+        const root = document.getElementById('proctoring-review-overlay');
+        const btn = document.getElementById('btn-proctoring-overlay-continue');
+        const desc = document.getElementById('proctoring-review-overlay-desc');
+        if (!root) {
+            return;
+        }
+        const overlay = data?.proctoring_overlay && typeof data.proctoring_overlay === 'object' ? data.proctoring_overlay : {};
+        const active =
+            Boolean(overlay.active) ||
+            (typeof data?.exam_ui_state === 'string' && data.exam_ui_state === 'proctoring_blocked');
+        if (serverDone || !active) {
+            root.classList.add('hidden');
+            if (btn) {
+                btn.disabled = false;
+            }
+            return;
+        }
+        if (desc) {
+            desc.textContent = proctoringBlurOverlayCopy(overlay.reason);
+        }
+        root.classList.remove('hidden');
+        if (btn) {
+            btn.disabled = proctoringOverlayClearing;
+        }
+    }
+
+    function hideExamTabSwitchModal() {
+        document.getElementById('exam-tab-switch-modal')?.classList.add('hidden');
+        syncFullscreenGate();
+    }
+
+    function ensureExamTabSwitchDots() {
+        const host = document.getElementById('exam-tab-switch-dots');
+        if (!host || host.childElementCount > 0) {
+            return;
+        }
+        for (let i = 0; i < TAB_SWITCH_WARN_MAX; i += 1) {
+            const s = document.createElement('span');
+            s.className = 'h-2 w-2 shrink-0 rounded-full bg-slate-200';
+            host.appendChild(s);
+        }
+    }
+
+    function showExamTabSwitchModal() {
+        const root = document.getElementById('exam-tab-switch-modal');
+        if (!root || assignmentMode || serverDone) {
+            return;
+        }
+        if (els.pauseOverlay && !els.pauseOverlay.classList.contains('hidden')) {
+            return;
+        }
+        tabSwitchReturnCount += 1;
+        tabSwitchReturnCount = Math.max(tabSwitchReturnCount, Number(latestPayload?.tab_switch_count) || 0);
+        const displayLevel = Math.min(tabSwitchReturnCount, TAB_SWITCH_WARN_MAX);
+        ensureExamTabSwitchDots();
+        const host = document.getElementById('exam-tab-switch-dots');
+        const dots = host?.querySelectorAll('span');
+        dots?.forEach((d, i) => {
+            d.className = i < displayLevel ? 'h-2 w-2 shrink-0 rounded-full bg-red-500' : 'h-2 w-2 shrink-0 rounded-full bg-slate-200';
+        });
+        const lvl = document.getElementById('exam-tab-switch-level');
+        if (lvl) {
+            lvl.textContent = `Warning ${displayLevel} of ${TAB_SWITCH_WARN_MAX}`;
+        }
+        root.classList.remove('hidden');
+    }
+
+    if (!assignmentMode) {
+        document.addEventListener('visibilitychange', () => {
+            if (assignmentMode || serverDone) {
+                return;
+            }
+            if (document.visibilityState === 'hidden') {
+                tabSwitchDocWasHidden = true;
+                return;
+            }
+            if (document.visibilityState === 'visible' && tabSwitchDocWasHidden) {
+                tabSwitchDocWasHidden = false;
+                showExamTabSwitchModal();
+            }
+            if (document.visibilityState === 'visible') {
+                requestAnimationFrame(() => {
+                    syncFullscreenGate();
+                });
+            }
+        });
+        document.getElementById('btn-tab-switch-dismiss')?.addEventListener('click', () => {
+            hideExamTabSwitchModal();
+        });
+    }
+
+    document.getElementById('btn-proctoring-overlay-continue')?.addEventListener('click', () => {
+        if (serverDone || proctoringOverlayClearing) {
+            return;
+        }
+        void (async () => {
+            proctoringOverlayClearing = true;
+            const btn = document.getElementById('btn-proctoring-overlay-continue');
+            if (btn) {
+                btn.disabled = true;
+            }
+            try {
+                await axios.post(`/exam-sessions/${encodeURIComponent(sessionId)}/proctoring-overlay/clear`, {
+                    resolved_reason: 'student_cleared',
+                });
+                await fetchState();
+            } catch {
+                updateBanner('Could not clear the screen check. Try again or refresh if this persists.', true);
+            } finally {
+                proctoringOverlayClearing = false;
+                if (btn && !serverDone) {
+                    btn.disabled = false;
+                }
+                syncProctoringBlurOverlay(latestPayload ?? {});
+            }
+        })();
     });
 
-    els.btnFullscreen?.addEventListener('click', async () => {
-        try {
-            if (!document.fullscreenElement) {
-                await document.documentElement.requestFullscreen();
-            } else {
-                await document.exitFullscreen();
-            }
-        } catch {
-            //
+    els.btnFullscreen?.addEventListener('click', () => {
+        if (serverDone) {
+            return;
         }
+        void requestExamFullscreen();
+    });
+
+    els.btnFullscreenGate?.addEventListener('click', () => {
+        if (serverDone) {
+            return;
+        }
+        void requestExamFullscreen();
     });
 
     els.btnSubmit?.addEventListener('click', async () => {
@@ -1280,22 +1981,141 @@ async function main() {
         }
     });
 
-    function updateLocalProctoringHint(hint) {
-        const el = els.localProctorHint;
-        if (!el) {
+    function stopMicLevelMeter() {
+        if (micLevelMeterFrame) {
+            cancelAnimationFrame(micLevelMeterFrame);
+            micLevelMeterFrame = null;
+        }
+    }
+
+    /**
+     * @param {MediaStream} stream
+     */
+    function startMicLevelMeter(stream) {
+        stopMicLevelMeter();
+        const bar = document.getElementById('exam-mic-level-bar');
+        const label = document.getElementById('exam-mic-level-label');
+        const track = stream.getAudioTracks?.()[0];
+        if (!track || !bar) {
+            if (label) {
+                label.textContent = 'Off';
+                label.className = 'text-slate-400';
+            }
+
             return;
         }
+        let ctx;
+        try {
+            ctx = new AudioContext();
+        } catch {
+            if (label) {
+                label.textContent = '—';
+            }
+
+            return;
+        }
+        void ctx.resume().catch(() => {});
+        const src = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        src.connect(analyser);
+        const buf = new Uint8Array(analyser.frequencyBinCount);
+        const tick = () => {
+            micLevelMeterFrame = requestAnimationFrame(tick);
+            analyser.getByteFrequencyData(buf);
+            let s = 0;
+            for (let i = 0; i < buf.length; i += 1) {
+                s += buf[i];
+            }
+            const avg = s / buf.length / 255;
+            const pct = Math.min(100, Math.round(avg * 220 + 6));
+            bar.style.width = `${pct}%`;
+            if (label) {
+                if (pct < 12) {
+                    label.textContent = 'Quiet';
+                    label.className = 'text-emerald-700';
+                } else if (pct < 42) {
+                    label.textContent = 'Normal';
+                    label.className = 'text-emerald-700';
+                } else {
+                    label.textContent = 'Active';
+                    label.className = 'text-amber-700';
+                }
+            }
+        };
+        tick();
+    }
+
+    function updateProctoringFromState(data) {
+        const rs = document.getElementById('proctor-risk-score');
+        if (rs && data && typeof data.violation_score === 'number') {
+            rs.textContent = String(data.violation_score);
+        }
+        const risk = String(data?.risk_state ?? 'normal');
+        const eye = document.getElementById('proctor-eye-status');
+        if (eye) {
+            if (risk === 'locked') {
+                eye.textContent = 'Locked';
+                eye.className = 'text-rose-300';
+            } else if (['warning', 'suspicious', 'critical'].includes(risk)) {
+                eye.textContent = 'Warning';
+                eye.className = 'text-amber-300';
+            } else {
+                eye.textContent = 'Normal';
+                eye.className = 'text-emerald-300';
+            }
+        }
+
+        if (typeof data?.tab_switch_count === 'number' && !assignmentMode) {
+            tabSwitchReturnCount = Math.max(tabSwitchReturnCount, data.tab_switch_count);
+            const host = document.getElementById('exam-tab-switch-dots');
+            if (host && host.childElementCount > 0) {
+                const displayLevel = Math.min(Math.max(1, data.tab_switch_count), TAB_SWITCH_WARN_MAX);
+                const dots = host.querySelectorAll('span');
+                dots.forEach((d, i) => {
+                    d.className =
+                        i < displayLevel
+                            ? 'h-2 w-2 shrink-0 rounded-full bg-red-500'
+                            : 'h-2 w-2 shrink-0 rounded-full bg-slate-200';
+                });
+                const lvl = document.getElementById('exam-tab-switch-level');
+                if (lvl) {
+                    lvl.textContent = `Warning ${displayLevel} of ${TAB_SWITCH_WARN_MAX}`;
+                }
+            }
+        }
+
+        syncProctoringBlurOverlay(data);
+    }
+
+    function updateLocalProctoringHint(hint) {
+        const el = els.localProctorHint;
         const map = {
             ok: 'Face detected — stay centred in the frame.',
             no_face: 'Warning: your face is not visible. Centre yourself in the camera.',
             multiple: 'Warning: more than one face in view. Only you may be on camera.',
             off_center: 'Adjust your position so your face fills the green outline.',
         };
-        el.textContent = map[hint] || '';
+        if (el) {
+            el.textContent = map[hint] || '';
+        }
+        const face = document.getElementById('proctor-face-status');
+        if (face) {
+            if (hint === 'ok') {
+                face.textContent = 'Detected';
+            } else if (hint === 'no_face') {
+                face.textContent = 'Not visible';
+            } else if (hint === 'multiple') {
+                face.textContent = 'Multiple';
+            } else {
+                face.textContent = 'Adjust';
+            }
+        }
+        const eyeLine = document.getElementById('proctor-eye-line');
+        if (eyeLine) {
+            eyeLine.textContent = hint === 'ok' ? 'Eyes on screen' : 'Stay centred';
+        }
     }
-
-    els.btnQBack?.addEventListener('click', () => retreatQuestionBack());
-    els.btnQNext?.addEventListener('click', () => void advanceQuestionNext());
 
     els.btnResume?.addEventListener('click', async () => {
         if (serverDone) {
@@ -1350,7 +2170,8 @@ async function main() {
 
     try {
         if (!assignmentMode) {
-            const perf = await fetchProctoringCapability(axios);
+            const cap = await fetchProctoringCapability(axios);
+            const perf = { ...cap, ...(latestPayload?.proctoring_client || {}) };
             const runtime = new ProctoringRuntimeEngine({
                 videoElement: els.video,
                 sessionId,
@@ -1364,8 +2185,18 @@ async function main() {
             });
 
             if (requireCameraMonitoring) {
-                els.videoStatus?.classList.remove('hidden');
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                els.videoStatus?.classList?.remove('hidden');
+                let stream;
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                } catch {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                }
+                if (els.recordingBadge) {
+                    els.recordingBadge.classList.remove('hidden');
+                    els.recordingBadge.classList.add('inline-flex');
+                }
+                startMicLevelMeter(stream);
                 if (els.video) {
                     els.video.srcObject = stream;
                     await els.video.play().catch(() => {});
@@ -1385,6 +2216,10 @@ async function main() {
                 'Camera or proctoring initialization failed. You may continue answering; contact support if issues persist.',
                 true,
             );
+        }
+    } finally {
+        if (!assignmentMode) {
+            syncFullscreenGate();
         }
     }
 }

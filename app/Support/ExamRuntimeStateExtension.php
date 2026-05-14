@@ -6,6 +6,7 @@ use App\Models\ExamSession;
 use App\Models\ExamSessionQuestion;
 use App\Models\Question;
 use App\Models\Quiz;
+use App\Services\ProctoringOrchestratorService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -27,6 +28,8 @@ final class ExamRuntimeStateExtension
             return self::emptyRuntime();
         }
 
+        $exam->loadMissing('course');
+
         $now = now();
         $durationMinutes = (int) ($exam->duration_minutes ?? 0);
         $start = $examSession->start_time;
@@ -41,6 +44,9 @@ final class ExamRuntimeStateExtension
                 [
                     'timer_paused' => $timerPaused,
                     'timer_pause_reason' => $timerPaused ? 'disconnect' : null,
+                    'proctoring_overlay' => self::proctoringOverlayPayload($examSession),
+                    'tab_switch_count' => (int) ($examSession->tab_switch_count ?? 0),
+                    'proctoring_client' => self::studentProctoringClientHints($exam),
                 ],
             );
         }
@@ -125,6 +131,9 @@ final class ExamRuntimeStateExtension
             'assessment_type' => (string) ($exam->assessment_type ?? 'exam'),
             'due_at' => $exam->due_at?->toAtomString(),
             'submitted_late' => (bool) ($examSession->submitted_late ?? false),
+            'proctoring_overlay' => self::proctoringOverlayPayload($examSession),
+            'tab_switch_count' => (int) ($examSession->tab_switch_count ?? 0),
+            'proctoring_client' => self::studentProctoringClientHints($exam),
             'exam' => [
                 'id' => (int) $exam->id,
                 'title' => (string) $exam->title,
@@ -136,6 +145,11 @@ final class ExamRuntimeStateExtension
                 'start_time' => $exam->start_time?->toAtomString(),
                 'end_time' => $exam->end_time?->toAtomString(),
                 'grades_released_at' => $exam->grades_released_at?->toAtomString(),
+                'course' => self::coursePayload($exam),
+                'assignment_allows_text' => (bool) ($exam->assignment_allows_text ?? true),
+                'assignment_allows_files' => (bool) ($exam->assignment_allows_files ?? false),
+                'assignment_allowed_extensions' => $exam->assignment_allowed_extensions,
+                'assignment_max_file_kb' => $exam->assignment_max_file_kb,
             ],
             'sections' => $sectionsPayload,
             'saved_answers' => $savedAnswers,
@@ -154,6 +168,7 @@ final class ExamRuntimeStateExtension
         int $durationMinutes,
     ): array {
         $exam->load([
+            'course',
             'sections' => fn ($q) => $q->orderBy('section_order'),
             'sections.questions' => fn ($q) => $q->orderBy('question_order'),
         ]);
@@ -190,6 +205,9 @@ final class ExamRuntimeStateExtension
             'assessment_type' => (string) ($exam->assessment_type ?? 'exam'),
             'due_at' => $exam->due_at?->toAtomString(),
             'submitted_late' => (bool) ($examSession->submitted_late ?? false),
+            'proctoring_overlay' => self::proctoringOverlayPayload($examSession),
+            'tab_switch_count' => (int) ($examSession->tab_switch_count ?? 0),
+            'proctoring_client' => self::studentProctoringClientHints($exam),
             'exam' => [
                 'id' => (int) $exam->id,
                 'title' => (string) $exam->title,
@@ -201,9 +219,30 @@ final class ExamRuntimeStateExtension
                 'start_time' => $exam->start_time?->toAtomString(),
                 'end_time' => $exam->end_time?->toAtomString(),
                 'grades_released_at' => $exam->grades_released_at?->toAtomString(),
+                'course' => self::coursePayload($exam),
+                'assignment_allows_text' => (bool) ($exam->assignment_allows_text ?? true),
+                'assignment_allows_files' => (bool) ($exam->assignment_allows_files ?? false),
+                'assignment_allowed_extensions' => $exam->assignment_allowed_extensions,
+                'assignment_max_file_kb' => $exam->assignment_max_file_kb,
             ],
             'sections' => $sectionsPayload,
             'saved_answers' => self::buildSavedAnswersMap($examSession),
+        ];
+    }
+
+    /**
+     * @return array{code: string, title: string}|null
+     */
+    private static function coursePayload(Quiz $exam): ?array
+    {
+        $course = $exam->course;
+        if ($course === null) {
+            return null;
+        }
+
+        return [
+            'code' => (string) ($course->code ?? ''),
+            'title' => (string) ($course->title ?? ''),
         ];
     }
 
@@ -239,6 +278,51 @@ final class ExamRuntimeStateExtension
             'exam' => null,
             'sections' => [],
             'saved_answers' => [],
+            'proctoring_overlay' => ['active' => false, 'reason' => null, 'message' => null],
+            'tab_switch_count' => 0,
+            'proctoring_client' => null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private static function studentProctoringClientHints(?Quiz $exam): ?array
+    {
+        if ($exam === null) {
+            return null;
+        }
+
+        $normalized = ProctoringOrchestratorService::normalizeProctoringSettings(
+            is_array($exam->proctoring_settings) ? $exam->proctoring_settings : [],
+            $exam->id,
+        );
+
+        return [
+            'phone_detection_confidence_threshold' => (float) data_get($normalized, 'phone_detection_confidence_threshold', 0.55),
+            'screenshot_autosubmit_enabled' => (bool) ($normalized['screenshot_autosubmit_enabled'] ?? false),
+            'external_display_detection_enabled' => (bool) ($normalized['external_display_detection_enabled'] ?? true),
+        ];
+    }
+
+    /**
+     * @return array{active: bool, reason: ?string, message: ?string}
+     */
+    private static function proctoringOverlayPayload(ExamSession $examSession): array
+    {
+        $active = (bool) ($examSession->proctoring_blur_active ?? false);
+        $reason = $examSession->proctoring_blur_reason;
+        $message = match ((string) $reason) {
+            'external_display' => 'External display risk detected. Disconnect it to continue.',
+            'face_obstruction' => 'Your face must stay clearly visible. Adjust your camera, then continue when ready.',
+            'camera_lost' => 'Camera access was lost. Restore camera access to continue.',
+            default => $active ? 'Please resolve the issue shown above to continue.' : null,
+        };
+
+        return [
+            'active' => $active,
+            'reason' => $reason !== null && $reason !== '' ? (string) $reason : null,
+            'message' => $message,
         ];
     }
 

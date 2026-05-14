@@ -102,6 +102,7 @@ class Phase5aAssignmentUxAndRoutesTest extends AssignmentCourseworkFlowTest
         $this->assertStringContainsString('Phase 5A assignment UI', (string) $html);
         $this->assertStringContainsString('Read carefully before you answer.', (string) $html);
         $this->assertStringContainsString('name="qs-assignment-clipboard-block" content="1"', (string) $html);
+        $this->assertStringContainsString('name="qs-exam-clipboard-lock" content="0"', (string) $html);
         $this->assertStringContainsString('Copy and paste is disabled', (string) $html);
         $this->assertStringContainsString('id="proctoring-live-aside"', (string) $html);
         $this->assertMatchesRegularExpression('/id="proctoring-live-aside"[^>]*\bhidden\b/', (string) $html);
@@ -253,8 +254,13 @@ class Phase5aAssignmentUxAndRoutesTest extends AssignmentCourseworkFlowTest
         $html = $this->get(route('student.exam.take', $session))->assertOk()->getContent();
         $this->assertStringContainsString('id="exam-timer"', (string) $html);
         $this->assertStringContainsString('id="btn-fullscreen"', (string) $html);
+        $this->assertStringContainsString('id="exam-fullscreen-gate"', (string) $html);
+        $this->assertStringContainsString('id="exam-tab-switch-modal"', (string) $html);
         $this->assertStringNotContainsString('id="assignment-coursework-panel"', (string) $html);
         $this->assertStringContainsString('name="qs-assignment-mode" content="0"', (string) $html);
+        $this->assertStringContainsString('name="qs-exam-clipboard-lock" content="1"', (string) $html);
+        $this->assertStringContainsString('name="qs-exam-screenshot-mitigation" content="1"', (string) $html);
+        $this->assertStringContainsString('name="qs-exam-screen-record-mitigation" content="1"', (string) $html);
     }
 
     public function test_examiner_builder_shows_assignment_submission_stats(): void

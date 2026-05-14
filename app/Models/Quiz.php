@@ -33,6 +33,10 @@ class Quiz extends Model
         'end_time',
         'due_at',
         'grades_released_at',
+        'assignment_allows_text',
+        'assignment_allows_files',
+        'assignment_allowed_extensions',
+        'assignment_max_file_kb',
     ];
 
     protected $casts = [
@@ -45,6 +49,10 @@ class Quiz extends Model
         'grades_released_at' => 'datetime',
         'randomize_questions' => 'boolean',
         'randomize_options' => 'boolean',
+        'assignment_allows_text' => 'boolean',
+        'assignment_allows_files' => 'boolean',
+        'assignment_allowed_extensions' => 'array',
+        'assignment_max_file_kb' => 'integer',
     ];
 
     protected static function booted(): void
