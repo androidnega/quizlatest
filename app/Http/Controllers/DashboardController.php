@@ -72,7 +72,7 @@ class DashboardController extends Controller
     {
         $now = Carbon::now();
 
-        $user->loadMissing(['program', 'level', 'classroom', 'university']);
+        $user->loadMissing(['program.department', 'level', 'classroom.academicYearStruct', 'university']);
 
         $activeYearId = AcademicYear::activeForUniversity((int) $user->university_id)?->id;
 
@@ -81,6 +81,8 @@ class DashboardController extends Controller
             $cid = Classroom::query()->whereKey($user->class_id)->value('academic_year_id');
             $classYearOk = $cid === null || (int) $cid === (int) $activeYearId;
         }
+
+        $studentProfileSummary = $this->buildStudentProfileSummary($user);
 
         $activeSession = ExamSession::query()
             ->where('student_id', $user->id)
@@ -113,11 +115,6 @@ class DashboardController extends Controller
                 ->get();
         }
 
-        $submittedExamIds = ExamSession::query()
-            ->where('student_id', $user->id)
-            ->where('status', 'submitted')
-            ->pluck('exam_id');
-
         $examIds = $publishedExams->pluck('id');
         $sessionsLatestByExam = collect();
         if ($examIds->isNotEmpty()) {
@@ -143,63 +140,7 @@ class DashboardController extends Controller
             $sessionsLatestByExam,
             $resultsByQuiz,
             $now,
-            $activeSession,
         );
-
-        $availableNow = collect();
-        $upcoming = collect();
-
-        foreach ($publishedExams as $exam) {
-            if ($submittedExamIds->contains($exam->id)) {
-                continue;
-            }
-
-            if ($activeSession !== null && (int) $activeSession->exam_id !== (int) $exam->id) {
-                continue;
-            }
-
-            $from = $exam->start_time;
-            $to = $exam->end_time;
-
-            if ($from !== null && $now->lt($from)) {
-                $upcoming->push($exam);
-
-                continue;
-            }
-
-            if ($to !== null && $now->gt($to)) {
-                continue;
-            }
-
-            $availableNow->push($exam);
-        }
-
-        $availableNow = $availableNow->sort(function (Quiz $a, Quiz $b) {
-            $aEnd = $a->end_time?->timestamp;
-            $bEnd = $b->end_time?->timestamp;
-            $aKey = $aEnd ?? PHP_INT_MAX;
-            $bKey = $bEnd ?? PHP_INT_MAX;
-            if ($aKey !== $bKey) {
-                return $aKey <=> $bKey;
-            }
-
-            return ($b->start_time?->timestamp ?? 0) <=> ($a->start_time?->timestamp ?? 0);
-        })->values();
-
-        $upcoming = $upcoming->sortBy(function (Quiz $exam) {
-            return $exam->start_time?->timestamp ?? PHP_INT_MAX;
-        })->values();
-
-        $gradedCount = Result::query()
-            ->where('user_id', $user->id)
-            ->where('status', 'graded')
-            ->when($activeYearId !== null, function ($q) use ($activeYearId) {
-                $q->where(function ($q2) use ($activeYearId) {
-                    $q2->whereNull('academic_year_id')
-                        ->orWhere('academic_year_id', $activeYearId);
-                });
-            })
-            ->count();
 
         $heldResults = Result::query()
             ->where('user_id', $user->id)
@@ -243,38 +184,39 @@ class DashboardController extends Controller
                 ->get();
         }
 
-        $heroAwaitingResult = null;
-        if ($activeSession === null && $availableNow->isEmpty() && $upcoming->isEmpty()) {
-            $heroAwaitingResult = Result::query()
-                ->where('user_id', $user->id)
-                ->whereIn('status', ['pending_manual', 'held'])
-                ->when($activeYearId !== null, function ($q) use ($activeYearId) {
-                    $q->where(function ($q2) use ($activeYearId) {
-                        $q2->whereNull('academic_year_id')
-                            ->orWhere('academic_year_id', $activeYearId);
-                    });
-                })
-                ->with(['quiz:id,title', 'quiz.course:id,code,title'])
-                ->orderByDesc('submitted_at')
-                ->orderByDesc('id')
-                ->first();
-        }
-
         return [
             'user' => $user,
+            'studentProfileSummary' => $studentProfileSummary,
             'activeSession' => $activeSession,
-            'availableExams' => $availableNow,
-            'upcomingExams' => $upcoming,
-            'gradedResultsCount' => $gradedCount,
             'heldResults' => $heldResults,
             'pendingManualResults' => $pendingManual,
             'classYearOk' => $classYearOk,
             'practiceEnabled' => $practiceEnabled,
             'practiceQuizCount' => $practiceQuizCount,
             'recentPracticeScores' => $recentPracticeScores,
-            'submittedExamsCount' => $submittedExamIds->unique()->count(),
-            'heroAwaitingResult' => $heroAwaitingResult,
             'studentAssessmentDeck' => $studentAssessmentDeck,
+        ];
+    }
+
+    /**
+     * @return array<string, string|null>
+     */
+    private function buildStudentProfileSummary(User $user): array
+    {
+        $user->loadMissing(['program.department', 'level', 'classroom.academicYearStruct']);
+
+        $c = $user->classroom;
+        $yearLabel = $c?->academicYearStruct?->name ?? ($c?->academic_year !== null && $c->academic_year !== '' ? (string) $c->academic_year : null);
+
+        return [
+            'name' => (string) $user->name,
+            'index_number' => filled($user->index_number) ? (string) $user->index_number : null,
+            'class' => $c ? trim($c->name.' '.(string) ($c->section ?? '')) : null,
+            'program' => $user->program?->name,
+            'level' => $user->level?->name ?? $user->level?->code,
+            'department' => $user->program?->department?->name,
+            'academic_year' => $yearLabel,
+            'semester' => null,
         ];
     }
 
@@ -289,22 +231,22 @@ class DashboardController extends Controller
         Collection $sessionsLatestByExam,
         Collection $resultsByQuiz,
         Carbon $now,
-        ?ExamSession $activeSession,
     ): array {
         $sections = [
-            'active' => [],
-            'upcoming' => [],
+            'active_now' => [],
+            'continue' => [],
             'assignments_due' => [],
-            'submitted_pending' => [],
-            'released' => [],
-            'closed' => [],
+            'upcoming' => [],
+            'submitted_work' => [],
+            'results_released' => [],
+            'closed_missed' => [],
         ];
 
         foreach ($publishedExams as $exam) {
             /** @var Quiz $exam */
             $session = $sessionsLatestByExam->get($exam->id);
             $result = $resultsByQuiz->get($exam->id);
-            $row = $this->mapStudentAssessmentDeckRow($exam, $session, $result, $now, $activeSession);
+            $row = $this->mapStudentAssessmentDeckRow($exam, $session, $result, $now);
             if ($row === null) {
                 continue;
             }
@@ -324,7 +266,6 @@ class DashboardController extends Controller
         ?ExamSession $session,
         ?Result $result,
         Carbon $now,
-        ?ExamSession $activeSession,
     ): ?array {
         $isAssignment = $exam->isAssignment();
         $typeLabel = match ($exam->assessment_type) {
@@ -345,15 +286,19 @@ class DashboardController extends Controller
         if ($isAssignment) {
             $attachmentReq = (bool) ($exam->assignment_attachment_required ?? false);
             $submissionFormat = match (true) {
-                $allowsText && $allowsFiles && $attachmentReq => __('Text and file (required upload)'),
-                $allowsText && $allowsFiles => __('Text and optional file'),
-                $allowsText => __('Text only'),
-                $allowsFiles => __('File only'),
+                $allowsText && $allowsFiles && $attachmentReq => __('Typed response · file required'),
+                $allowsText && $allowsFiles => __('Typed response · optional file'),
+                $allowsText => __('Typed response'),
+                $allowsFiles => __('File upload only'),
                 default => __('—'),
             };
         } else {
             $submissionFormat = __('In-app questions');
         }
+
+        $pasteNotice = ($isAssignment && (bool) ($exam->assignment_disable_paste ?? false))
+            ? __('Paste disabled')
+            : null;
 
         $dueLine = $isAssignment && $exam->due_at
             ? __('Due :d', ['d' => $exam->due_at->timezone((string) config('app.timezone'))->format('M j, H:i')])
@@ -361,118 +306,174 @@ class DashboardController extends Controller
                 ? __('Closes :d', ['d' => $exam->end_time->timezone((string) config('app.timezone'))->format('M j, H:i')])
                 : null);
 
+        $timeLimitLine = ! $isAssignment && $exam->duration_minutes
+            ? __('Time limit: :n min', ['n' => (int) $exam->duration_minutes])
+            : null;
+
         $inProgress = $session !== null && in_array($session->status, ['active', 'paused'], true);
         $submitted = $session !== null && $session->status === 'submitted';
 
         if ($inProgress) {
             return [
-                'section' => 'active',
+                'section' => 'continue',
                 'title' => (string) $exam->title,
                 'course_line' => $courseLine,
                 'type_label' => $typeLabel,
                 'submission_format' => $submissionFormat,
                 'due_line' => $dueLine,
+                'time_limit_line' => $timeLimitLine,
+                'paste_notice' => $pasteNotice,
                 'status_label' => __('In progress'),
                 'action_label' => __('Continue'),
                 'action_href' => route('student.exam.take', $session),
+                'secondary_label' => null,
+                'secondary_href' => null,
                 'is_assignment' => $isAssignment,
             ];
         }
 
         if ($submitted && $session !== null) {
             $rStatus = (string) ($result?->status ?? 'pending_manual');
-            if ($rStatus === 'held') {
+            $auto = filled($session->auto_submit_reason_code);
+
+            if ($auto) {
                 return [
-                    'section' => 'submitted_pending',
+                    'section' => 'submitted_work',
                     'title' => (string) $exam->title,
                     'course_line' => $courseLine,
                     'type_label' => $typeLabel,
                     'submission_format' => $submissionFormat,
                     'due_line' => $dueLine,
+                    'time_limit_line' => $timeLimitLine,
+                    'paste_notice' => $pasteNotice,
+                    'status_label' => __('Submitted for review'),
+                    'action_label' => __('View submission'),
+                    'action_href' => route('student.results.show', $session),
+                    'secondary_label' => null,
+                    'secondary_href' => null,
+                    'is_assignment' => $isAssignment,
+                ];
+            }
+            if ($rStatus === 'held') {
+                return [
+                    'section' => 'submitted_work',
+                    'title' => (string) $exam->title,
+                    'course_line' => $courseLine,
+                    'type_label' => $typeLabel,
+                    'submission_format' => $submissionFormat,
+                    'due_line' => $dueLine,
+                    'time_limit_line' => $timeLimitLine,
+                    'paste_notice' => $pasteNotice,
                     'status_label' => __('Held for review'),
                     'action_label' => __('Awaiting review'),
                     'action_href' => route('student.results.show', $session),
+                    'secondary_label' => null,
+                    'secondary_href' => null,
                     'is_assignment' => $isAssignment,
                 ];
             }
             if ($rStatus === 'pending_manual') {
                 return [
-                    'section' => 'submitted_pending',
+                    'section' => 'submitted_work',
                     'title' => (string) $exam->title,
                     'course_line' => $courseLine,
                     'type_label' => $typeLabel,
                     'submission_format' => $submissionFormat,
                     'due_line' => $dueLine,
+                    'time_limit_line' => $timeLimitLine,
+                    'paste_notice' => $pasteNotice,
                     'status_label' => __('Awaiting grading'),
                     'action_label' => $isAssignment ? __('View submission') : __('View status'),
                     'action_href' => route('student.results.show', $session),
+                    'secondary_label' => null,
+                    'secondary_href' => null,
                     'is_assignment' => $isAssignment,
                 ];
             }
             if ($rStatus === 'graded' && $isAssignment && ! $exam->assignmentGradesVisibleToStudents()) {
                 return [
-                    'section' => 'submitted_pending',
+                    'section' => 'submitted_work',
                     'title' => (string) $exam->title,
                     'course_line' => $courseLine,
                     'type_label' => $typeLabel,
                     'submission_format' => $submissionFormat,
                     'due_line' => $dueLine,
-                    'status_label' => __('Graded — results not released yet'),
-                    'action_label' => __('View submission'),
+                    'time_limit_line' => $timeLimitLine,
+                    'paste_notice' => $pasteNotice,
+                    'status_label' => __('Awaiting release'),
+                    'action_label' => $isAssignment ? __('View submission') : __('View status'),
                     'action_href' => route('student.results.show', $session),
+                    'secondary_label' => null,
+                    'secondary_href' => null,
                     'is_assignment' => true,
                 ];
             }
-            if ($rStatus === 'graded') {
+            if (in_array($rStatus, ['graded', 'published'], true)) {
+                $gradesVisible = $isAssignment ? $exam->assignmentGradesVisibleToStudents() : true;
+                if (! $gradesVisible) {
+                    return [
+                        'section' => 'submitted_work',
+                        'title' => (string) $exam->title,
+                        'course_line' => $courseLine,
+                        'type_label' => $typeLabel,
+                        'submission_format' => $submissionFormat,
+                        'due_line' => $dueLine,
+                        'time_limit_line' => $timeLimitLine,
+                        'paste_notice' => $pasteNotice,
+                        'status_label' => __('Awaiting release'),
+                        'action_label' => __('View submission'),
+                        'action_href' => route('student.results.show', $session),
+                        'secondary_label' => null,
+                        'secondary_href' => null,
+                        'is_assignment' => true,
+                    ];
+                }
+
+                $scoreLine = null;
+                if ($result && (float) ($exam->total_marks ?? 0) > 0) {
+                    $scoreLine = __('Score: :s / :m', [
+                        's' => is_numeric($result->score) ? number_format((float) $result->score, 1) : (string) $result->score,
+                        'm' => number_format((float) $exam->total_marks, 1),
+                    ]);
+                }
+
+                $pdfHref = $rStatus === 'graded' ? route('student.results.pdf', $session) : null;
+
                 return [
-                    'section' => 'released',
+                    'section' => 'results_released',
                     'title' => (string) $exam->title,
                     'course_line' => $courseLine,
                     'type_label' => $typeLabel,
                     'submission_format' => $submissionFormat,
                     'due_line' => $dueLine,
+                    'time_limit_line' => $timeLimitLine,
+                    'paste_notice' => $pasteNotice,
                     'status_label' => __('Result released'),
+                    'score_line' => $scoreLine,
                     'action_label' => __('View result'),
                     'action_href' => route('student.results.show', $session),
+                    'secondary_label' => $pdfHref ? __('PDF') : null,
+                    'secondary_href' => $pdfHref,
                     'is_assignment' => $isAssignment,
                 ];
             }
 
             return [
-                'section' => 'submitted_pending',
+                'section' => 'submitted_work',
                 'title' => (string) $exam->title,
                 'course_line' => $courseLine,
                 'type_label' => $typeLabel,
                 'submission_format' => $submissionFormat,
                 'due_line' => $dueLine,
+                'time_limit_line' => $timeLimitLine,
+                'paste_notice' => $pasteNotice,
                 'status_label' => __('Submitted'),
                 'action_label' => __('View status'),
                 'action_href' => route('student.results.show', $session),
+                'secondary_label' => null,
+                'secondary_href' => null,
                 'is_assignment' => $isAssignment,
             ];
-        }
-
-        if (! $exam->isAvailableForStudentToStart($now)) {
-            if (! $submitted) {
-                return [
-                    'section' => 'closed',
-                    'title' => (string) $exam->title,
-                    'course_line' => $courseLine,
-                    'type_label' => $typeLabel,
-                    'submission_format' => $submissionFormat,
-                    'due_line' => $dueLine,
-                    'status_label' => $isAssignment ? __('Missed or closed') : __('Closed'),
-                    'action_label' => __('Closed'),
-                    'action_href' => null,
-                    'is_assignment' => $isAssignment,
-                ];
-            }
-
-            return null;
-        }
-
-        if ($activeSession !== null && (int) $activeSession->exam_id !== (int) $exam->id) {
-            return null;
         }
 
         $from = $exam->start_time;
@@ -484,11 +485,38 @@ class DashboardController extends Controller
                 'type_label' => $typeLabel,
                 'submission_format' => $submissionFormat,
                 'due_line' => $dueLine,
-                'status_label' => __('Not started'),
-                'action_label' => __('Opens soon'),
-                'action_href' => route('student.exam.prepare', $exam),
+                'time_limit_line' => $timeLimitLine,
+                'paste_notice' => $pasteNotice,
+                'status_label' => __('Not open yet'),
+                'action_label' => __('Preparation'),
+                'action_href' => route('student.exam.instructions', $exam),
+                'secondary_label' => null,
+                'secondary_href' => null,
                 'is_assignment' => $isAssignment,
             ];
+        }
+
+        if (! $exam->isAvailableForStudentToStart($now)) {
+            if (! $submitted) {
+                return [
+                    'section' => 'closed_missed',
+                    'title' => (string) $exam->title,
+                    'course_line' => $courseLine,
+                    'type_label' => $typeLabel,
+                    'submission_format' => $submissionFormat,
+                    'due_line' => $dueLine,
+                    'time_limit_line' => $timeLimitLine,
+                    'paste_notice' => $pasteNotice,
+                    'status_label' => $isAssignment ? __('Missed') : __('Closed'),
+                    'action_label' => $isAssignment ? __('No submission') : __('Closed'),
+                    'action_href' => null,
+                    'secondary_label' => null,
+                    'secondary_href' => null,
+                    'is_assignment' => $isAssignment,
+                ];
+            }
+
+            return null;
         }
 
         if ($isAssignment) {
@@ -499,9 +527,13 @@ class DashboardController extends Controller
                 'type_label' => $typeLabel,
                 'submission_format' => $submissionFormat,
                 'due_line' => $dueLine,
-                'status_label' => __('Not started'),
-                'action_label' => __('View assignment'),
+                'time_limit_line' => $timeLimitLine,
+                'paste_notice' => $pasteNotice,
+                'status_label' => __('Not submitted'),
+                'action_label' => __('Submit assignment'),
                 'action_href' => route('student.exam.prepare', $exam),
+                'secondary_label' => null,
+                'secondary_href' => null,
                 'is_assignment' => true,
             ];
         }
@@ -510,19 +542,23 @@ class DashboardController extends Controller
             'quiz' => __('Start quiz'),
             'exam' => __('Start exam'),
             'mid' => __('Start mid-semester'),
-            default => __('Start assessment'),
+            default => __('Start'),
         };
 
         return [
-            'section' => 'active',
+            'section' => 'active_now',
             'title' => (string) $exam->title,
             'course_line' => $courseLine,
             'type_label' => $typeLabel,
             'submission_format' => $submissionFormat,
             'due_line' => $dueLine,
-            'status_label' => __('Not started'),
+            'time_limit_line' => $timeLimitLine,
+            'paste_notice' => $pasteNotice,
+            'status_label' => __('Open now'),
             'action_label' => $startLabel,
             'action_href' => route('student.exam.prepare', $exam),
+            'secondary_label' => __('Preparation'),
+            'secondary_href' => route('student.exam.instructions', $exam),
             'is_assignment' => false,
         ];
     }

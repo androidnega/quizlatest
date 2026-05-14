@@ -102,17 +102,14 @@ final class StudentDashboardDigestService
 
     private function rotatingTip(User $user, Carbon $now): string
     {
+        if (! (bool) config('student-dashboard.show_rotating_tips', false)) {
+            return '';
+        }
+
         $tips = [
             __('Use the bathroom before starting — the timer will not pause.'),
             __('Close extra tabs so notifications do not pull you away mid-quiz.'),
             __('Charge your laptop or plug in before you begin.'),
-            __('Have water nearby; keep the desk clear of anything not allowed.'),
-            __('Read each question twice before selecting an answer.'),
-            __('If something looks wrong, stop and alert your invigilator before continuing.'),
-            __('Stretch your shoulders once before you sit down — small reset, less tension.'),
-            __('Check your Wi‑Fi signal; a wired connection is steadier when available.'),
-            __('Note the time window on the card so you are not surprised by auto-submit.'),
-            __('If audio is required, test volume once during the permission step.'),
         ];
 
         $idx = ((int) floor($now->timestamp / 86400) + (int) $user->id) % max(1, count($tips));

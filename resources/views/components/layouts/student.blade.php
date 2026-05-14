@@ -22,6 +22,7 @@
             $revisionActive = request()->routeIs('student.practice.revision');
             $practiceHubActive = $revisionActive || request()->routeIs('student.practice.index');
             $assignmentsActive = request()->routeIs('student.assignments.*');
+            $studentWorkHref = route('dashboard') . '#student-work';
         @endphp
         <div
             x-data="{
@@ -79,7 +80,8 @@
                     <p class="text-xs font-semibold uppercase tracking-wide text-qs-muted">{{ config('app.name') }}</p>
                 </div>
                 <nav class="flex-1 space-y-0.5 overflow-y-auto overscroll-y-contain px-2 py-3 [-webkit-overflow-scrolling:touch]">
-                    <x-ui.sidebar-link :href="route('dashboard')" :active="$dashActive" icon="house" always-show-label>{{ __('Home') }}</x-ui.sidebar-link>
+                    <x-ui.sidebar-link :href="route('dashboard')" :active="$dashActive" icon="house" always-show-label>{{ __('Dashboard') }}</x-ui.sidebar-link>
+                    <x-ui.sidebar-link :href="$studentWorkHref" :active="false" icon="clipboard-list" always-show-label>{{ __('Assessments') }}</x-ui.sidebar-link>
                     <x-ui.sidebar-link :href="route('student.assignments.index')" :active="$assignmentsActive" icon="clipboard-check" always-show-label>{{ __('Assignments') }}</x-ui.sidebar-link>
                     <x-ui.sidebar-link :href="route('student.results.index')" :active="$resultsActive" icon="square-poll-vertical" always-show-label>{{ __('Results') }}</x-ui.sidebar-link>
                     @if (! empty($studentPracticeNavEnabled))
@@ -115,7 +117,8 @@
                     </button>
                 </div>
                 <nav class="flex flex-1 flex-col space-y-0.5 overflow-y-auto p-2">
-                    <x-ui.sidebar-link :href="route('dashboard')" :active="$dashActive" icon="house">{{ __('Home') }}</x-ui.sidebar-link>
+                    <x-ui.sidebar-link :href="route('dashboard')" :active="$dashActive" icon="house">{{ __('Dashboard') }}</x-ui.sidebar-link>
+                    <x-ui.sidebar-link :href="$studentWorkHref" :active="false" icon="clipboard-list">{{ __('Assessments') }}</x-ui.sidebar-link>
                     <x-ui.sidebar-link :href="route('student.assignments.index')" :active="$assignmentsActive" icon="clipboard-check">{{ __('Assignments') }}</x-ui.sidebar-link>
                     <x-ui.sidebar-link :href="route('student.results.index')" :active="$resultsActive" icon="square-poll-vertical">{{ __('Results') }}</x-ui.sidebar-link>
                     @if (! empty($studentPracticeNavEnabled))
@@ -172,26 +175,19 @@
                     <div class="qs-student-nav-dock__inner">
                         <a href="{{ route('dashboard') }}" class="qs-student-nav-dock__a {{ $dashActive ? 'qs-student-nav-dock__a--active' : '' }}">
                             <i class="fa-solid fa-house qs-student-nav-dock__icon" aria-hidden="true"></i>
-                            <span>{{ __('Home') }}</span>
+                            <span>{{ __('Dashboard') }}</span>
+                        </a>
+                        <a href="{{ $studentWorkHref }}" class="qs-student-nav-dock__a">
+                            <i class="fa-solid fa-clipboard-list qs-student-nav-dock__icon" aria-hidden="true"></i>
+                            <span>{{ __('Assessments') }}</span>
+                        </a>
+                        <a href="{{ route('student.assignments.index') }}" class="qs-student-nav-dock__a {{ $assignmentsActive ? 'qs-student-nav-dock__a--active' : '' }}">
+                            <i class="fa-solid fa-file-pen qs-student-nav-dock__icon" aria-hidden="true"></i>
+                            <span>{{ __('Assignments') }}</span>
                         </a>
                         <a href="{{ route('student.results.index') }}" class="qs-student-nav-dock__a {{ $resultsActive ? 'qs-student-nav-dock__a--active' : '' }}">
                             <i class="fa-solid fa-square-poll-vertical qs-student-nav-dock__icon" aria-hidden="true"></i>
                             <span>{{ __('Results') }}</span>
-                        </a>
-                        @if (! empty($studentPracticeNavEnabled))
-                            <a href="{{ route('student.practice.revision') }}" class="qs-student-nav-dock__a {{ $practiceHubActive ? 'qs-student-nav-dock__a--active' : '' }}">
-                                <i class="fa-solid fa-book-open-reader qs-student-nav-dock__icon" aria-hidden="true"></i>
-                                <span>{{ __('Study') }}</span>
-                            </a>
-                        @else
-                            <a href="{{ route('student.practice.revision') }}" class="qs-student-nav-dock__a {{ $revisionActive ? 'qs-student-nav-dock__a--active' : '' }}">
-                                <i class="fa-solid fa-book-open-reader qs-student-nav-dock__icon" aria-hidden="true"></i>
-                                <span>{{ __('Study') }}</span>
-                            </a>
-                        @endif
-                        <a href="{{ route('profile.edit') }}" class="qs-student-nav-dock__a {{ $profileActive ? 'qs-student-nav-dock__a--active' : '' }}">
-                            <i class="fa-solid fa-user qs-student-nav-dock__icon" aria-hidden="true"></i>
-                            <span>{{ __('Profile') }}</span>
                         </a>
                     </div>
                 </nav>

@@ -3,6 +3,16 @@
 return [
     /*
     |--------------------------------------------------------------------------
+    | Rotating tips (student dashboard)
+    |--------------------------------------------------------------------------
+    |
+    | Disabled by default so the home screen stays focused on real work items.
+    |
+    */
+    'show_rotating_tips' => (bool) env('DASHBOARD_SHOW_ROTATING_TIPS', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Optional institution policy banner (student dashboard)
     |--------------------------------------------------------------------------
     |

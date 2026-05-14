@@ -117,10 +117,12 @@ class StudentDashboardDigestTest extends TestCase
             ->assertDontSee('Fullscreen policy updated', false);
     }
 
-    public function test_student_dashboard_tip_includes_dismiss_control(): void
+    public function test_student_dashboard_tip_includes_dismiss_control_when_tips_enabled(): void
     {
         $this->seed(InitialSetupSeeder::class);
         $student = User::query()->where('role', 'student')->firstOrFail();
+
+        config(['student-dashboard.show_rotating_tips' => true]);
 
         $this->actingAs($student)
             ->get(route('dashboard'))
