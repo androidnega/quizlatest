@@ -547,7 +547,9 @@ class ExamBuilderController extends Controller
             'due_at' => $dueAt,
         ], $creatingAssignment ? [
             'assignment_allows_text' => true,
-            'assignment_allows_files' => false,
+            'assignment_allows_files' => true,
+            'assignment_attachment_required' => false,
+            'assignment_disable_paste' => true,
             'assignment_allowed_extensions' => ['pdf', 'docx', 'txt'],
             'assignment_max_file_kb' => 5120,
         ] : []));
@@ -1103,6 +1105,19 @@ class ExamBuilderController extends Controller
             ]);
         }
 
+        $allowsText = $request->boolean('assignment_allows_text');
+        $allowsFiles = $request->boolean('assignment_allows_files');
+        $attachmentRequired = $allowsFiles && $request->boolean('assignment_attachment_required');
+        $disablePaste = $allowsText && $request->boolean('assignment_disable_paste');
+
+        if (! $allowsFiles) {
+            $attachmentRequired = false;
+        }
+
+        if (! $allowsText && $allowsFiles) {
+            $attachmentRequired = true;
+        }
+
         $rawExt = trim((string) ($validated['assignment_allowed_extensions'] ?? ''));
         $extArr = $rawExt === ''
             ? (array) ($exam->assignment_allowed_extensions ?? ['pdf', 'docx', 'txt'])
@@ -1112,8 +1127,10 @@ class ExamBuilderController extends Controller
             ))));
 
         $exam->update([
-            'assignment_allows_text' => $request->boolean('assignment_allows_text'),
-            'assignment_allows_files' => $request->boolean('assignment_allows_files'),
+            'assignment_allows_text' => $allowsText,
+            'assignment_allows_files' => $allowsFiles,
+            'assignment_attachment_required' => $attachmentRequired,
+            'assignment_disable_paste' => $disablePaste,
             'assignment_allowed_extensions' => $extArr,
             'assignment_max_file_kb' => (int) ($validated['assignment_max_file_kb'] ?? ($exam->assignment_max_file_kb ?? 5120)),
         ]);

@@ -619,6 +619,26 @@ class ExamSessionReviewController extends Controller
         }
 
         $isAssignmentSession = (bool) ($exam?->isAssignment());
+        $assignmentStudentResponse = null;
+        $assignmentPasteAttemptCount = 0;
+        if ($isAssignmentSession) {
+            $assignmentPasteAttemptCount = $events->where('event_type', 'essay_clipboard_attempt')->count();
+            $examSession->loadMissing(['answers.question']);
+            foreach ($examSession->answers as $ans) {
+                $q = $ans->question;
+                if ($q?->type !== 'essay') {
+                    continue;
+                }
+                $pl = $ans->answer_payload;
+                if (is_array($pl) && isset($pl['text']) && is_string($pl['text'])) {
+                    $assignmentStudentResponse = $pl['text'];
+                } elseif (is_string($pl)) {
+                    $assignmentStudentResponse = $pl;
+                }
+                break;
+            }
+        }
+
         $assignmentSessionContext = null;
         if ($isAssignmentSession && $exam !== null) {
             $assignmentSessionContext = [
@@ -626,6 +646,10 @@ class ExamSessionReviewController extends Controller
                 'due_at' => $exam->due_at,
                 'grades_released' => $exam->grades_released_at !== null,
                 'submitted_late' => (bool) $examSession->submitted_late,
+                'allows_text' => (bool) ($exam->assignment_allows_text ?? true),
+                'allows_files' => (bool) ($exam->assignment_allows_files ?? false),
+                'attachment_required' => (bool) ($exam->assignment_attachment_required ?? false),
+                'disable_paste' => (bool) ($exam->assignment_disable_paste ?? true),
             ];
         }
 
@@ -647,6 +671,8 @@ class ExamSessionReviewController extends Controller
             'isAssignmentSession' => $isAssignmentSession,
             'assignmentSessionContext' => $assignmentSessionContext,
             'assignmentSubmissionFiles' => $assignmentSubmissionFiles,
+            'assignmentStudentResponse' => $assignmentStudentResponse,
+            'assignmentPasteAttemptCount' => $assignmentPasteAttemptCount,
         ]);
     }
 
@@ -681,6 +707,12 @@ class ExamSessionReviewController extends Controller
         }
         if (isset($payload['obstruction_signal']) && is_string($payload['obstruction_signal'])) {
             $parts[] = 'signal: '.$payload['obstruction_signal'];
+        }
+        if (isset($metadata['question_id']) && is_numeric($metadata['question_id'])) {
+            $parts[] = 'question '.(int) $metadata['question_id'];
+        }
+        if (isset($metadata['action_type']) && is_string($metadata['action_type'])) {
+            $parts[] = 'clipboard: '.$metadata['action_type'];
         }
 
         return $parts !== [] ? implode(' · ', array_slice($parts, 0, 5)) : '—';

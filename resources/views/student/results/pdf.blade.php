@@ -2,7 +2,7 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
-    <title>{{ __('Exam result') }}</title>
+    <title>{{ $documentTitle ?? __('Assessment result') }}</title>
     <style>
         body { font-family: DejaVu Sans, sans-serif; font-size: 11px; color: #0f172a; }
         h1 { font-size: 16px; margin: 0 0 12px; }
@@ -14,7 +14,7 @@
     </style>
 </head>
 <body>
-    <h1>{{ $session->exam?->title ?? __('Exam') }}</h1>
+    <h1>{{ $documentTitle ?? ($session->exam?->title ?? __('Assessment result')) }}</h1>
     <div class="block">
         <div><strong>{{ __('Student') }}:</strong> {{ $session->student?->name }}</div>
         <div class="muted"><strong>{{ __('Index') }}:</strong> {{ $session->student?->index_number ?? '—' }}</div>

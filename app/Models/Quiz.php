@@ -35,6 +35,8 @@ class Quiz extends Model
         'grades_released_at',
         'assignment_allows_text',
         'assignment_allows_files',
+        'assignment_attachment_required',
+        'assignment_disable_paste',
         'assignment_allowed_extensions',
         'assignment_max_file_kb',
     ];
@@ -51,6 +53,8 @@ class Quiz extends Model
         'randomize_options' => 'boolean',
         'assignment_allows_text' => 'boolean',
         'assignment_allows_files' => 'boolean',
+        'assignment_attachment_required' => 'boolean',
+        'assignment_disable_paste' => 'boolean',
         'assignment_allowed_extensions' => 'array',
         'assignment_max_file_kb' => 'integer',
     ];

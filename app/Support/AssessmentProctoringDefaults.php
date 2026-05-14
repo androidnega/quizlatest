@@ -154,9 +154,6 @@ final class AssessmentProctoringDefaults
         if ($s['auto_submit_enabled']) {
             $errors[] = 'Coursework assignments must not enable auto-submit on violations for publishing.';
         }
-        if (! self::assignmentClipboardBlockEnabled($exam->proctoring_settings)) {
-            $errors[] = 'Copy and paste blocking must stay enabled for typed assignment responses before publishing.';
-        }
         $live = filter_var(data_get($exam->proctoring_settings, 'allow_live_proctoring_for_assignment', false), FILTER_VALIDATE_BOOLEAN);
         if ($live) {
             $errors[] = 'Live proctoring is not allowed for coursework assignments with current policy.';

@@ -654,7 +654,22 @@ class ExamSessionController extends Controller
 
         abort_unless(in_array($fresh->status, ['active', 'paused'], true), 422, 'Session is not active.');
 
-        $this->submitSession($examSession, 'submitted', 'manual_submit');
+        $fresh->loadMissing('exam');
+        $quiz = $fresh->exam;
+        if ($quiz !== null && $quiz->isAssignment()) {
+            if ($quiz->assignment_allows_files && ($quiz->assignment_attachment_required ?? false)) {
+                $hasFile = AssignmentSubmissionFile::query()
+                    ->where('exam_session_id', $fresh->id)
+                    ->exists();
+                if (! $hasFile) {
+                    throw ValidationException::withMessages([
+                        'submit' => [__('Please upload the required file before submitting this assignment.')],
+                    ]);
+                }
+            }
+        }
+
+        $this->submitSession($fresh, 'submitted', 'manual_submit');
 
         return response()->json(['status' => 'submitted']);
     }
@@ -956,6 +971,10 @@ class ExamSessionController extends Controller
             'score_percentage' => $percentage,
             'examiner_feedback' => $feedbackPlain,
             'graded_at' => ($gradesVisible && $result?->graded_at) ? $result->graded_at->toAtomString() : null,
+            'assignment_attachment_required' => (bool) ($exam->assignment_attachment_required ?? false),
+            'assignment_submitted_file_count' => AssignmentSubmissionFile::query()
+                ->where('exam_session_id', $examSession->id)
+                ->count(),
             'status_heading' => $examSession->status === 'submitted'
                 ? ($examSession->submitted_late ? __('Submitted late') : __('Submitted'))
                 : __('In progress'),

@@ -103,6 +103,15 @@ class StudentResultController extends Controller
             && $status === 'graded'
             && ! $examSession->exam->assignmentGradesVisibleToStudents();
 
+        $assessmentType = (string) ($examSession->exam?->assessment_type ?? 'exam');
+        $resultKindLabel = match ($assessmentType) {
+            'assignment' => __('Assignment result'),
+            'quiz' => __('Quiz result'),
+            'mid' => __('Mid-semester result'),
+            'exam' => __('Exam result'),
+            default => __('Assessment result'),
+        };
+
         $breakdown = [];
         $percentage = null;
         $examinerFeedback = null;
@@ -123,6 +132,7 @@ class StudentResultController extends Controller
             'result' => $result,
             'resultStatus' => $status,
             'assignmentGradesPending' => $assignmentGradesPending,
+            'resultKindLabel' => $resultKindLabel,
             'breakdown' => $breakdown,
             'percentage' => $percentage,
             'examinerFeedback' => $examinerFeedback,
@@ -165,11 +175,25 @@ class StudentResultController extends Controller
             'percentage' => $percentage,
             'examinerFeedback' => self::formatExaminerFeedback($result->feedback),
             'showCorrectSummaries' => $showCorrect,
+            'documentTitle' => match ((string) ($examSession->exam?->assessment_type ?? 'exam')) {
+                'assignment' => __('Assignment result'),
+                'quiz' => __('Quiz result'),
+                'mid' => __('Mid-semester result'),
+                'exam' => __('Exam result'),
+                default => __('Assessment result'),
+            },
         ]);
 
         $safeId = preg_replace('/[^A-Za-z0-9_-]/', '-', $examSession->session_id) ?: 'exam';
+        $filePrefix = match ((string) ($examSession->exam?->assessment_type ?? 'exam')) {
+            'assignment' => 'assignment-result',
+            'quiz' => 'quiz-result',
+            'mid' => 'mid-semester-result',
+            'exam' => 'exam-result',
+            default => 'assessment-result',
+        };
 
-        return $pdf->download('exam-result-'.$safeId.'.pdf');
+        return $pdf->download($filePrefix.'-'.$safeId.'.pdf');
     }
 
     /**

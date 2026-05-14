@@ -1,5 +1,5 @@
 <x-layouts.examiner>
-    <x-slot name="title">Session review</x-slot>
+    <x-slot name="title">{{ ($isAssignmentSession ?? false) ? __('Submission review') : __('Session review') }}</x-slot>
     <x-slot name="subtitle">{{ $session->exam?->title }}</x-slot>
 
     @if (session('status'))
@@ -7,7 +7,7 @@
     @endif
 
     <div class="mb-5 flex flex-wrap items-center gap-3">
-        <a href="{{ route('examiner.quizzes.workspace', ['exam' => $session->exam, 'tab' => 'sessions']) }}" class="text-sm font-medium text-qs-text underline-offset-2 hover:underline">← {{ __('Sessions for this exam') }}</a>
+        <a href="{{ route('examiner.quizzes.workspace', ['exam' => $session->exam, 'tab' => 'sessions']) }}" class="text-sm font-medium text-qs-text underline-offset-2 hover:underline">← {{ __('Sessions for this assessment') }}</a>
         @if (! empty($classResultsUrl))
             <span class="text-qs-muted">·</span>
             <a href="{{ $classResultsUrl }}" class="text-sm font-medium text-qs-muted underline-offset-2 hover:text-qs-text hover:underline">{{ __('Back to class results') }}</a>
@@ -17,7 +17,7 @@
     @if (! empty($assignmentSessionContext) && $session->exam)
         @php $ac = $assignmentSessionContext; $tz = config('app.timezone'); @endphp
         <div class="qs-card rounded-xl border border-sky-200/80 bg-sky-50/50 p-5 shadow-sm">
-            <h3 class="text-sm font-semibold text-slate-900">{{ __('Coursework assignment') }}</h3>
+            <h3 class="text-sm font-semibold text-slate-900">{{ __('Assignment submission') }}</h3>
             <p class="mt-1 text-xs text-slate-700">{{ __('This attempt is coursework. Use the grading queue for marks and feedback; release grades from the assignment workspace when ready.') }}</p>
             @if (filled($ac['instructions']))
                 <div class="mt-3 max-h-36 overflow-y-auto rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 whitespace-pre-wrap">{{ $ac['instructions'] }}</div>
@@ -32,7 +32,23 @@
                     <dd class="font-semibold">{{ $ac['grades_released'] ? __('Released to students') : __('Not released yet') }}</dd>
                 </div>
                 <div>
-                    <dt class="text-xs font-medium text-slate-500">{{ __('Submission') }}</dt>
+                    <dt class="text-xs font-medium text-slate-500">{{ __('Submitted at') }}</dt>
+                    <dd class="font-semibold">{{ $session->end_time?->timezone($tz)->format('M j, Y · H:i') ?? '—' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium text-slate-500">{{ __('Attachment rule') }}</dt>
+                    <dd class="font-semibold">
+                        @if (! ($ac['allows_files'] ?? false))
+                            {{ __('No file upload') }}
+                        @elseif ($ac['attachment_required'] ?? false)
+                            {{ __('File required') }}
+                        @else
+                            {{ __('Optional file') }}
+                        @endif
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-xs font-medium text-slate-500">{{ __('Submission status') }}</dt>
                     <dd class="font-semibold">
                         {{ $session->status === 'submitted' ? ($ac['submitted_late'] ? __('Submitted late') : __('Submitted on time')) : __('In progress') }}
                     </dd>
@@ -71,7 +87,7 @@
         @endif
 
         <div class="qs-card rounded-xl p-5 shadow-sm">
-            <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-muted">Exam</h3>
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-muted">{{ __('Assessment') }}</h3>
             <p class="mt-2 text-sm font-medium text-qs-text">{{ $session->exam?->title }}</p>
             <p class="mt-1 text-sm text-qs-muted">{{ $session->exam?->course?->code }} — {{ $session->exam?->course?->title }}</p>
         </div>
@@ -93,7 +109,7 @@
         <div class="qs-card rounded-xl p-5 shadow-sm">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-muted">{{ __('Risk & violations') }}</h3>
             <p class="mt-2 text-xs leading-relaxed text-qs-muted">
-                {{ __('Proctoring signals do not automatically deduct marks. They support warnings, flags, auto-submit where enabled, and examiner review.') }}
+                {{ __('Proctoring signals do not automatically deduct marks. They support warnings, flags, auto-submit where enabled, holds, and examiner review.') }}
             </p>
             @if ($isAssignmentSession ?? false)
                 <p class="mt-2 text-xs text-qs-muted">{{ __('Coursework typically has little or no live proctoring; counts below are mostly informational.') }}</p>
@@ -160,7 +176,7 @@
 
         @if (! empty($assignmentSubmissionFiles) && count($assignmentSubmissionFiles))
             <div class="qs-card rounded-xl p-5 shadow-sm">
-                <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-muted">{{ __('Assignment submission files') }}</h3>
+                <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-muted">{{ __('Submitted files') }}</h3>
                 <ul class="mt-3 divide-y divide-qs-soft text-sm">
                     @foreach ($assignmentSubmissionFiles as $f)
                         <li class="flex flex-wrap items-center justify-between gap-2 py-2">
@@ -169,6 +185,18 @@
                         </li>
                     @endforeach
                 </ul>
+            </div>
+        @endif
+
+        @if (($isAssignmentSession ?? false) && (($assignmentSessionContext['allows_text'] ?? true)))
+            <div class="qs-card rounded-xl p-5 shadow-sm">
+                <h3 class="text-sm font-semibold uppercase tracking-wide text-qs-muted">{{ __('Student response') }}</h3>
+                <div class="mt-3 max-h-64 overflow-y-auto rounded-lg border border-qs-soft bg-white px-3 py-2 text-sm text-qs-text whitespace-pre-wrap">{{ filled($assignmentStudentResponse ?? null) ? $assignmentStudentResponse : '—' }}</div>
+                @if (($assignmentSessionContext['disable_paste'] ?? false) && (int) ($assignmentPasteAttemptCount ?? 0) > 0)
+                    <p class="mt-2 text-xs text-amber-800">
+                        {{ __('Blocked paste attempts logged: :n', ['n' => number_format((int) $assignmentPasteAttemptCount)]) }}
+                    </p>
+                @endif
             </div>
         @endif
 

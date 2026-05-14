@@ -9,7 +9,7 @@
     <section class="rounded-xl border border-sky-200 bg-sky-50/60 p-4 shadow-sm sm:p-5" aria-labelledby="assignment-coursework-heading">
         <h2 id="assignment-coursework-heading" class="text-sm font-semibold text-slate-900">{{ __('Coursework (assignment)') }}</h2>
         <p class="mt-1 text-xs leading-relaxed text-slate-700">
-            {{ __('This assessment is coursework, not a live invigilated exam. Students type answers in the app; copy and paste is blocked in text fields by default. Live camera and violation auto-submit stay off unless your institution adds an explicit exception later.') }}
+            {{ __('Students can type in the app and optionally upload files based on the submission format below. Copy/paste blocking is configurable when typed responses are enabled.') }}
         </p>
 
         <div class="mt-4 rounded-lg border border-slate-200/80 bg-white/90 px-3 py-3 text-sm text-slate-800">
@@ -126,6 +126,16 @@
                     <input type="checkbox" name="assignment_allows_files" value="1" class="size-4 rounded border-slate-300 text-sky-600" @checked(old('assignment_allows_files', $exam->assignment_allows_files)) />
                     <span>{{ __('Allow file uploads') }}</span>
                 </label>
+                <input type="hidden" name="assignment_attachment_required" value="0" />
+                <label class="flex items-center gap-2 text-sm text-slate-800">
+                    <input type="checkbox" name="assignment_attachment_required" value="1" class="size-4 rounded border-slate-300 text-sky-600" @checked(old('assignment_attachment_required', $exam->assignment_attachment_required)) @disabled(! (bool) old('assignment_allows_files', $exam->assignment_allows_files)) />
+                    <span>{{ __('Require uploaded file before submit') }}</span>
+                </label>
+                <input type="hidden" name="assignment_disable_paste" value="0" />
+                <label class="flex items-center gap-2 text-sm text-slate-800">
+                    <input type="checkbox" name="assignment_disable_paste" value="1" class="size-4 rounded border-slate-300 text-sky-600" @checked(old('assignment_disable_paste', $exam->assignment_disable_paste ?? true)) @disabled(! (bool) old('assignment_allows_text', $exam->assignment_allows_text)) />
+                    <span>{{ __('Disable copy/paste in typed response') }}</span>
+                </label>
                 <div>
                     <label class="block text-xs font-medium text-slate-600" for="assignment-ext">{{ __('Allowed extensions (comma-separated, e.g. pdf, docx)') }}</label>
                     <input id="assignment-ext" type="text" name="assignment_allowed_extensions" value="{{ old('assignment_allowed_extensions', is_array($exam->assignment_allowed_extensions) ? implode(', ', $exam->assignment_allowed_extensions) : '') }}" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
@@ -139,7 +149,7 @@
         @endif
 
         <p class="mt-3 text-[11px] leading-relaxed text-slate-600">
-            {{ __('Typed responses: copy and paste stays blocked by default for integrity. Use the grading queue to enter marks and feedback, then release grades when you are ready.') }}
+            {{ __('Use the grading queue for marks and feedback, then release grades when you are ready. Paste blocking, if enabled, logs attempts for review and does not deduct marks.') }}
         </p>
     </section>
 @endif

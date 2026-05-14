@@ -51,6 +51,8 @@ class Phase5aAssignmentUxAndRoutesTest extends AssignmentCourseworkFlowTest
             'start_time' => now()->subDay(),
             'end_time' => now()->addWeek(),
             'due_at' => now()->addDays(3),
+            'assignment_allows_files' => true,
+            'assignment_attachment_required' => false,
         ]);
 
         DB::table('quiz_class')->insert([
@@ -384,7 +386,8 @@ class Phase5aAssignmentUxAndRoutesTest extends AssignmentCourseworkFlowTest
 
         $this->actingAs($examiner);
         $html = $this->get(route('examiner.exam-sessions.show', $session))->assertOk()->getContent();
-        $this->assertStringContainsString('Coursework assignment', (string) $html);
+        $this->assertStringContainsString('Assignment submission', (string) $html);
+        $this->assertStringContainsString('Submission review', (string) $html);
         $this->assertStringContainsString('Grading queue', (string) $html);
     }
 }

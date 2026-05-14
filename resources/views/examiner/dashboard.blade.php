@@ -38,10 +38,53 @@
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <article class="{{ $cardBase }} {{ $cardTint }}">
                     <span class="{{ $iconWrap }} {{ $iconTint }}" aria-hidden="true"><i class="fa-solid fa-file-lines"></i></span>
-                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Assessments') }}</p>
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Total assessments') }}</p>
                     <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $quizTotalCount }}</p>
-                    <a href="{{ route('examiner.exams.index') }}" class="mt-2 inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:underline">
-                        {{ __('View assessments') }}
+                    <a href="{{ route('examiner.exams.index', $dashboardProctoringQueryBase) }}" class="mt-2 inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:underline">
+                        {{ __('View list') }}
+                    </a>
+                </article>
+
+                <article class="{{ $cardBase }} {{ $cardPlain }}">
+                    <span class="{{ $iconWrap }} {{ $iconMuted }}" aria-hidden="true"><i class="fa-solid fa-pen-ruler"></i></span>
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Draft assessments') }}</p>
+                    <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $draftAssessmentsCount }}</p>
+                    <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['tab' => 'active'])) }}" class="mt-2 inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:underline">
+                        {{ __('Open active list') }}
+                    </a>
+                </article>
+
+                <article class="{{ $cardBase }} {{ $cardPlain }}">
+                    <span class="{{ $iconWrap }} {{ $iconMuted }}" aria-hidden="true"><i class="fa-solid fa-bullhorn"></i></span>
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Published assessments') }}</p>
+                    <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $publishedAssessmentsCount }}</p>
+                    <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['tab' => 'active'])) }}" class="mt-2 inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:underline">
+                        {{ __('Open active list') }}
+                    </a>
+                </article>
+
+                <article class="{{ $cardBase }} {{ $cardTint }}">
+                    <span class="{{ $iconWrap }} {{ $iconTint }}" aria-hidden="true"><i class="fa-solid fa-door-open"></i></span>
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Open scheduling window') }}</p>
+                    <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $activeAssessmentsCount }}</p>
+                    <p class="mt-1.5 text-xs text-slate-500">{{ __('Published assessments students can open now, based on start and end times.') }}</p>
+                </article>
+
+                <article class="{{ $cardBase }} {{ $cardPlain }}">
+                    <span class="{{ $iconWrap }} {{ $iconMuted }}" aria-hidden="true"><i class="fa-solid fa-paper-plane"></i></span>
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Submissions received') }}</p>
+                    <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $submittedSessionsCount }}</p>
+                    <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['tab' => 'active'])) }}" class="mt-2 inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:underline">
+                        {{ __('Browse assessments') }}
+                    </a>
+                </article>
+
+                <article class="{{ $cardBase }} {{ $cardPlain }}">
+                    <span class="{{ $iconWrap }} {{ $iconMuted }}" aria-hidden="true"><i class="fa-solid fa-list-check"></i></span>
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Pending grading') }}</p>
+                    <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $pendingManualGradingCount }}</p>
+                    <a href="{{ route('examiner.grading.pending') }}" class="mt-2 inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:underline">
+                        {{ __('Open grading queue') }}
                     </a>
                 </article>
 
@@ -53,19 +96,10 @@
                 </article>
 
                 <article class="{{ $cardBase }} {{ $cardTint }}">
-                    <span class="{{ $iconWrap }} {{ $iconTint }}" aria-hidden="true"><i class="fa-solid fa-users-line"></i></span>
-                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Sessions') }}</p>
-                    <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $sessionsCount }}</p>
-                    <a href="{{ route('examiner.exams.index') }}" class="mt-2 inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:underline">
-                        {{ __('View from assessment list') }}
-                    </a>
-                </article>
-
-                <article class="{{ $cardBase }} {{ $cardPlain }}">
-                    <span class="{{ $iconWrap }} {{ $iconMuted }}" aria-hidden="true"><i class="fa-solid fa-chart-simple"></i></span>
-                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Results') }}</p>
+                    <span class="{{ $iconWrap }} {{ $iconTint }}" aria-hidden="true"><i class="fa-solid fa-chart-simple"></i></span>
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Result records') }}</p>
                     <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $resultsCount }}</p>
-                    <p class="mt-1.5 text-xs text-slate-500">{{ __('Open from an assessment list, then sessions or results.') }}</p>
+                    <p class="mt-1.5 text-xs text-slate-500">{{ __('Open from an assessment, then sessions or results.') }}</p>
                 </article>
             </div>
         </section>
@@ -73,7 +107,7 @@
         <section aria-labelledby="examiner-proctoring-shortcuts">
             <h2 id="examiner-proctoring-shortcuts" class="sr-only">{{ __('Proctoring and integrity shortcuts') }}</h2>
             <p class="mb-3 text-xs leading-relaxed text-slate-600">
-                {{ __('Proctoring violations do not automatically deduct marks. They are used for warnings, flags, auto-submit, and examiner review.') }}
+                {{ __('Proctoring violations do not automatically deduct marks. They support warnings, flags, auto-submit, holds, and examiner review.') }}
             </p>
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <article class="{{ $cardBase }} {{ $cardPlain }}">
@@ -91,7 +125,7 @@
                     </a>
                 </article>
                 <article class="{{ $cardBase }} {{ $cardPlain }}">
-                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Phone detected events') }}</p>
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Camera-based phone detection') }}</p>
                     <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $phoneDetectedEventsCount }}</p>
                     <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['proctoring_focus' => 'phone_detected'])) }}" class="mt-2 inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:underline">
                         {{ __('Open matching assessments') }}

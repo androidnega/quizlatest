@@ -24,7 +24,7 @@
         <div class="max-w-7xl mx-auto px-4 py-4 space-y-3">
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="min-w-0">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-sky-900/80">{{ __('Coursework assignment') }}</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-sky-900/80">{{ __('Assignment instructions') }}</p>
                     <h2 class="mt-1 text-lg font-semibold text-qs-text">{{ $quiz?->title }}</h2>
                     @if ($quiz?->course)
                         <p class="mt-0.5 text-sm text-qs-muted">{{ $quiz->course->code }} — {{ $quiz->course->title }}</p>
@@ -75,13 +75,23 @@
                     {{ __('Copy and paste is disabled in typed answer fields for this assignment to support academic integrity.') }}
                 </p>
             @endif
-            <p class="text-xs text-qs-muted">{{ __('This coursework does not use live camera or microphone invigilation unless your school explicitly enabled an exception.') }}</p>
-            <div id="assignment-file-upload-slot" class="mt-3 rounded-lg border border-sky-100 bg-white/90 px-3 py-2 text-xs text-slate-700">
-                <p class="font-semibold text-slate-900">{{ __('File upload (if enabled)') }}</p>
-                <p class="mt-1 text-qs-muted">{{ __('When your instructor allows files, use the picker below. Only allowed types and sizes are accepted.') }}</p>
-                <input type="file" id="assignment-file-input" class="mt-2 block w-full text-xs" disabled />
-                <p id="assignment-file-status" class="mt-1 text-xs text-slate-600"></p>
-            </div>
+            <p class="text-xs text-qs-muted">{{ __('Unless your institution enabled an exception, this assignment does not use live camera or microphone invigilation.') }}</p>
+            @if ($assignmentAllowsFiles ?? false)
+                <div id="assignment-file-upload-slot" class="mt-3 rounded-lg border border-sky-100 bg-white/90 px-3 py-2 text-xs text-slate-700">
+                    <p class="font-semibold text-slate-900">
+                        @if ($assignmentAttachmentRequired ?? false)
+                            {{ __('Required file upload') }}
+                        @else
+                            {{ __('Optional attachment') }}
+                        @endif
+                    </p>
+                    <p class="mt-1 text-qs-muted">
+                        {{ __('Allowed types and maximum size are set by your examiner. You can submit with or without a file when the attachment is optional.') }}
+                    </p>
+                    <input type="file" id="assignment-file-input" class="mt-2 block w-full text-xs" disabled />
+                    <p id="assignment-file-status" class="mt-1 text-xs text-slate-600"></p>
+                </div>
+            @endif
         </div>
     </div>
 @endif

@@ -1,5 +1,5 @@
 <x-layouts.student>
-    <x-slot name="title">{{ $session->exam?->title ?? __('Result') }}</x-slot>
+    <x-slot name="title">{{ ($resultKindLabel ?? __('Result')) }} — {{ $session->exam?->title ?? '' }}</x-slot>
     <x-slot name="subtitle">
         <span class="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-qs-muted">
             @if ($session->exam?->course?->code)

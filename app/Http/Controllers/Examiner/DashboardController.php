@@ -46,8 +46,35 @@ class DashboardController extends Controller
         }
 
         $quizTotalCount = (clone $examQuery)->count();
+        $draftAssessmentsCount = (clone $examQuery)->where('status', 'draft')->count();
+        $publishedAssessmentsCount = (clone $examQuery)->where('status', 'published')->count();
+
+        $now = now();
+        $activeAssessmentsCount = (clone $examQuery)->where('status', 'published')
+            ->where(function ($q) use ($now): void {
+                $q->where(function ($q2) use ($now): void {
+                    $q2->whereNull('start_time')->orWhere('start_time', '<=', $now);
+                })->where(function ($q2) use ($now): void {
+                    $q2->whereNull('end_time')->orWhere('end_time', '>=', $now);
+                });
+            })
+            ->count();
 
         $sessionsCount = ExamSession::query()
+            ->whereHas('exam', function ($q) use ($manageableCourseIds, $yearFilter, $user) {
+                $q->where('created_by', $user->id);
+                $q->whereIn('course_id', $manageableCourseIds);
+                if ($yearFilter > 0) {
+                    $q->where(function ($q2) use ($yearFilter) {
+                        $q2->whereNull('academic_year_id')
+                            ->orWhere('academic_year_id', $yearFilter);
+                    });
+                }
+            })
+            ->count();
+
+        $submittedSessionsCount = ExamSession::query()
+            ->where('status', 'submitted')
             ->whereHas('exam', function ($q) use ($manageableCourseIds, $yearFilter, $user) {
                 $q->where('created_by', $user->id);
                 $q->whereIn('course_id', $manageableCourseIds);
@@ -161,7 +188,11 @@ class DashboardController extends Controller
                 ->get(['id', 'name', 'is_active']),
             'selectedAcademicYearId' => $yearFilter > 0 ? $yearFilter : null,
             'quizTotalCount' => $quizTotalCount,
+            'draftAssessmentsCount' => $draftAssessmentsCount,
+            'publishedAssessmentsCount' => $publishedAssessmentsCount,
+            'activeAssessmentsCount' => $activeAssessmentsCount,
             'sessionsCount' => $sessionsCount,
+            'submittedSessionsCount' => $submittedSessionsCount,
             'resultsCount' => $resultsCount,
             'heldResultsCount' => $heldResultsCount,
             'pendingManualGradingCount' => $pendingManualGradingCount,

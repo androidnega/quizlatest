@@ -353,7 +353,10 @@ async function main() {
         if (!toast) {
             return;
         }
-        toast.textContent = ESSAY_CLIPBOARD_WARNING_MESSAGE;
+        toast.textContent =
+            assignmentMode && assignmentClipboardBlock
+                ? 'Copy and paste is disabled for this assignment. Please type your answer directly.'
+                : ESSAY_CLIPBOARD_WARNING_MESSAGE;
         toast.classList.remove('hidden');
         if (essayClipboardToastTimer) {
             window.clearTimeout(essayClipboardToastTimer);
@@ -777,10 +780,22 @@ async function main() {
         const ex = data?.exam;
         const fi = document.getElementById('assignment-file-input');
         const fst = document.getElementById('assignment-file-status');
+        const slot = document.getElementById('assignment-file-upload-slot');
+        if (slot && ex && typeof ex === 'object' && !ex.assignment_allows_files) {
+            slot.classList.add('hidden');
+        } else if (slot) {
+            slot.classList.remove('hidden');
+        }
         if (fi && fst && ex && typeof ex === 'object') {
             const allow = Boolean(ex.assignment_allows_files);
             const submitted = String(data?.session_status ?? '') === 'submitted';
+            const attachmentRequired = Boolean(ex.assignment_attachment_required);
             fi.disabled = !allow || submitted || serverDone;
+            if (allow && fst.textContent === '' && !submitted && !serverDone) {
+                fst.textContent = attachmentRequired
+                    ? 'A file upload is required before you can submit.'
+                    : 'Optional: attach a supporting file if you want one on record.';
+            }
             if (Array.isArray(ex.assignment_allowed_extensions) && ex.assignment_allowed_extensions.length) {
                 fi.accept = ex.assignment_allowed_extensions
                     .map((x) => `.${String(x).replace(/^\./, '')}`)
@@ -803,6 +818,11 @@ async function main() {
                             fst.textContent = 'Uploading…';
                             await axios.post(`/exam-sessions/${encodeURIComponent(sessionId)}/assignment-files`, fd);
                             fst.textContent = `Uploaded: ${file.name}`;
+                            try {
+                                await fetchState();
+                            } catch {
+                                //
+                            }
                         } catch {
                             fst.textContent = 'Upload failed — check type/size, then try again.';
                         }
@@ -1616,6 +1636,18 @@ async function main() {
             return;
         }
 
+        const exPre = latestPayload?.exam;
+        const svPre = latestPayload?.assignment_student_view;
+        if (
+            assignmentMode &&
+            exPre?.assignment_allows_files &&
+            exPre?.assignment_attachment_required &&
+            (svPre?.assignment_submitted_file_count ?? 0) < 1
+        ) {
+            updateBanner('Please upload the required file before submitting this assignment.', true);
+            return;
+        }
+
         submitInputLock = true;
         syncControlDisabled();
         setSaveIndicator(reason === 'timeout' ? 'Time expired — submitting…' : 'Submitting…', true);
@@ -1629,7 +1661,21 @@ async function main() {
                     onSubmitSucceeded();
                     return;
                 }
-            } catch {
+            } catch (e) {
+                if (
+                    assignmentMode &&
+                    e?.response?.status === 422 &&
+                    e?.response?.data?.errors?.submit
+                ) {
+                    const err = e.response.data.errors.submit;
+                    const msg = Array.isArray(err) ? err[0] : String(err);
+                    updateBanner(msg || 'Cannot submit this assignment yet.', true);
+                    submitInputLock = false;
+                    syncControlDisabled();
+                    setSaveIndicator('', true);
+                    setSubmitButtonSubmitting(false);
+                    return;
+                }
                 await sleep(500 * attempt);
             }
         }

@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\ExamSession;
 use App\Services\ExamRuntimeInfraGate;
 use App\Services\SystemExamPolicyService;
-use App\Support\AssessmentProctoringDefaults;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -40,7 +39,7 @@ class StudentExamController extends Controller
         $isAssignmentMode = $exam?->isAssignment() ?? false;
         $requireCameraMonitoring = $examPolicy->isCameraMonitoringRequiredForQuiz($exam);
         $assignmentClipboardBlock = $isAssignmentMode
-            && AssessmentProctoringDefaults::assignmentClipboardBlockEnabled($exam?->proctoring_settings);
+            && (bool) ($exam?->assignment_disable_paste ?? true);
 
         $examClipboardLock = ! $isAssignmentMode && $examPolicy->isExamClipboardLockEnabled();
         $examScreenshotMitigation = ! $isAssignmentMode && $examPolicy->isExamScreenshotMitigationEnabled();
@@ -53,6 +52,8 @@ class StudentExamController extends Controller
             'requireCameraMonitoring' => $requireCameraMonitoring,
             'isAssignmentMode' => $isAssignmentMode,
             'assignmentClipboardBlock' => $assignmentClipboardBlock,
+            'assignmentAllowsFiles' => $isAssignmentMode && (bool) ($exam?->assignment_allows_files ?? false),
+            'assignmentAttachmentRequired' => $isAssignmentMode && (bool) ($exam?->assignment_attachment_required ?? false),
             'examClipboardLock' => $examClipboardLock,
             'examScreenshotMitigation' => $examScreenshotMitigation,
             'examScreenRecordMitigation' => $examScreenRecordMitigation,

@@ -43,6 +43,16 @@
         $dashboardPracticeWeekNudge = (bool) ($dashboard_practice_week_nudge ?? false);
         $dashboardTip = (string) ($dashboard_tip ?? '');
         $dashboardPolicyNotice = $dashboard_policy_notice ?? null;
+        $heroStartLabel = __('Start assessment');
+        if ($highlightExam) {
+            $heroStartLabel = match ((string) ($highlightExam->assessment_type ?? 'exam')) {
+                'assignment' => __('View assignment'),
+                'quiz' => __('Start quiz'),
+                'exam' => __('Start exam'),
+                'mid' => __('Start mid-semester'),
+                default => __('Start assessment'),
+            };
+        }
     @endphp
 
     <div class="w-full min-w-0 space-y-5 pb-2 text-slate-950">
@@ -57,12 +67,12 @@
             <div class="flex items-start gap-2.5 rounded-2xl border border-amber-300/90 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
                 <i class="fa-solid fa-pause mt-0.5 shrink-0 text-amber-700" aria-hidden="true"></i>
                 <div class="min-w-0">
-                    <p class="font-semibold">{{ __('Your exam timer is paused') }}</p>
+                    <p class="font-semibold">{{ __('Your assessment timer is paused') }}</p>
                     <p class="mt-1 text-xs leading-relaxed text-amber-900/90">
-                        {{ __('We detected that you went offline or closed the exam tab. Time is frozen until you return and tap Resume inside the exam.') }}
+                        {{ __('We detected that you went offline or closed the assessment tab. Time is frozen until you return and tap Resume inside the assessment.') }}
                     </p>
                     <a href="{{ route('student.exam.take', $activeSession) }}" class="mt-3 inline-flex items-center rounded-xl bg-amber-800 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-900">
-                        {{ __('Open exam to resume') }}
+                        {{ __('Open assessment to resume') }}
                     </a>
                 </div>
             </div>
@@ -199,11 +209,11 @@
                             </h2>
                             @if ($examSessionPaused)
                                 <p class="mt-3 max-w-md text-sm leading-relaxed text-amber-200">
-                                    {{ __('Timer paused — your attempt is safe. Open the exam and press Resume to continue.') }}
+                                    {{ __('Timer paused — your attempt is safe. Open the assessment and press Resume to continue.') }}
                                 </p>
                             @else
                                 <p class="mt-3 max-w-md text-sm leading-relaxed text-slate-300">
-                                    {{ __('You have an exam in progress. Continue when you are ready.') }}
+                                    {{ __('You have an assessment in progress. Continue when you are ready.') }}
                                 </p>
                             @endif
                         @elseif ($highlightExam)
@@ -222,7 +232,7 @@
                                 @endif
                             </p>
                             <p class="mt-3 max-w-md text-sm leading-relaxed text-slate-400">
-                                {{ __('This is the next quiz you can start from your class schedule.') }}
+                                {{ __('This is the next scheduled assessment you can open from your class list.') }}
                             </p>
                         @elseif ($nextUpcomingExam)
                             <h2 class="mt-3 max-w-xl text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
@@ -234,7 +244,7 @@
                                 </p>
                             @endif
                             <p class="mt-3 max-w-md text-sm leading-relaxed text-slate-400">
-                                {{ __('No quiz is open yet. A start button will appear when the window opens.') }}
+                                {{ __('Nothing is open yet. A start button will appear when the window opens.') }}
                             </p>
                         @elseif ($heroAwaitingResult)
                             <h2 class="mt-3 max-w-xl text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
@@ -284,14 +294,18 @@
                             href="{{ route('student.exam.take', $activeSession) }}"
                             class="inline-flex items-center justify-center rounded-2xl bg-[var(--qs-primary)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[var(--qs-primary)] focus:ring-offset-2 focus:ring-offset-slate-950"
                         >
-                            {{ $examSessionPaused ? __('Resume exam') : __('Continue exam') }}
+                            @if ($examSessionPaused)
+                                {{ __('Resume assessment') }}
+                            @else
+                                {{ ($sessionExam?->isAssignment() ?? false) ? __('Continue assignment') : (($sessionExam?->assessment_type ?? '') === 'quiz' ? __('Continue quiz') : __('Continue assessment')) }}
+                            @endif
                         </a>
                     @elseif ($highlightExam)
                         <a
                             href="{{ route('student.exam.prepare', $highlightExam) }}"
                             class="inline-flex items-center justify-center rounded-2xl bg-[var(--qs-primary)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-[var(--qs-primary)] focus:ring-offset-2 focus:ring-offset-slate-950"
                         >
-                            {{ __('Start quiz') }}
+                            {{ $heroStartLabel }}
                         </a>
                     @elseif ($nextUpcomingExam)
                         <a
@@ -356,6 +370,8 @@
                 </div>
             </div>
         </section>
+
+        @include('student.partials.assessment-worklist')
 
         {{-- Summary stats: always 3 columns; compact stack on small screens --}}
         <div class="grid grid-cols-3 gap-2 sm:gap-4">
