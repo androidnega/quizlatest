@@ -246,6 +246,8 @@
                                         <span class="text-xs font-bold uppercase tracking-wide text-slate-900">{{ $statusLabel }}</span>
                                     </td>
                                     <td class="whitespace-nowrap px-4 py-4 text-right align-middle text-xs font-semibold sm:px-5">
+                                        <a href="{{ route('examiner.exams.analytics.show', $exam) }}" class="text-sky-600 hover:text-sky-800 hover:underline">{{ __('Analytics') }}</a>
+                                        <span class="text-slate-200" aria-hidden="true"> | </span>
                                         <a href="{{ route('examiner.quizzes.workspace', $exam) }}" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:text-sky-800 hover:underline">{{ __('View') }}</a>
                                         <span class="text-slate-200" aria-hidden="true"> | </span>
                                         <a href="{{ route('examiner.quizzes.workspace', $exam) }}" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:text-sky-800 hover:underline">{{ __('Edit') }}</a>

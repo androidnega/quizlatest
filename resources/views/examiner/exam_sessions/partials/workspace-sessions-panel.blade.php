@@ -13,7 +13,12 @@
     $clearAttemptConfirmJs = json_encode(__('Clear this attempt? The student can start again.'));
     $invalidateRangeConfirmJs = json_encode(__('This removes attempts for every student who completed in this period. Continue?'));
     $workspaceUrl = route('examiner.quizzes.workspace', $exam);
+    $analyticsUrl = route('examiner.exams.analytics.show', $exam);
 @endphp
+
+<div class="mb-3 flex flex-wrap gap-2 text-xs font-semibold">
+    <a href="{{ $analyticsUrl }}" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-slate-800 hover:bg-slate-50">{{ __('Open full analytics') }}</a>
+</div>
 
 <div class="w-full min-w-0 space-y-5 pb-1 text-qs-text">
     {{-- Retake window --}}

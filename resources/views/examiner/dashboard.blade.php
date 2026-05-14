@@ -99,7 +99,9 @@
                     <span class="{{ $iconWrap }} {{ $iconTint }}" aria-hidden="true"><i class="fa-solid fa-chart-simple"></i></span>
                     <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Result records') }}</p>
                     <p class="mt-0.5 text-2xl font-semibold tabular-nums text-slate-900">{{ $resultsCount }}</p>
-                    <p class="mt-1.5 text-xs text-slate-500">{{ __('Open from an assessment, then sessions or results.') }}</p>
+                    <a href="{{ route('examiner.exams.index', $dashboardProctoringQueryBase) }}" class="mt-2 inline-flex text-sm font-medium text-sky-700 underline-offset-2 hover:underline">
+                        {{ __('Open analytics from an exam row') }}
+                    </a>
                 </article>
             </div>
         </section>
@@ -160,6 +162,10 @@
             <div class="mt-3 flex min-w-0 flex-wrap gap-2">
                 <a href="{{ route('examiner.exams.create') }}" class="qs-btn-primary inline-flex min-h-[40px] items-center justify-center rounded-lg px-4 text-sm font-semibold">
                     {{ __('Create assessment') }}
+                </a>
+                <a href="{{ route('examiner.exams.index') }}" class="inline-flex min-h-[40px] max-w-full min-w-0 items-center gap-0.5 rounded-lg border border-slate-200 bg-white px-3.5 pe-3 text-sm font-semibold text-slate-800 hover:bg-slate-50">
+                    <span class="min-w-0 truncate">{{ __('Assessment analytics') }}</span>
+                    <span class="{{ $qaCount }} bg-sky-100 text-sky-900 ring-sky-300/60">{{ __('Pick exam') }}</span>
                 </a>
                 <a href="{{ route('examiner.exams.index') }}" class="inline-flex min-h-[40px] max-w-full min-w-0 items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 px-3.5 pe-3 text-sm font-semibold text-slate-800 hover:bg-slate-100">
                     <span class="min-w-0 truncate">{{ __('All assessments') }}</span>

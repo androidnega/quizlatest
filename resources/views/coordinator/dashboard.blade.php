@@ -17,6 +17,10 @@
     </x-slot>
 
     <div class="space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
+            <p class="text-slate-700">{{ __('Need completion and course-level signals? Open reporting.') }}</p>
+            <a href="{{ route('coordinator.reporting.index') }}" class="inline-flex min-h-[40px] items-center rounded-lg border border-slate-200 bg-slate-50 px-4 font-semibold text-slate-900 hover:bg-slate-100">{{ __('Open reporting') }}</a>
+        </div>
         <section aria-labelledby="coordinator-metrics-heading" class="qs-coordinator-overview-metrics rounded-2xl border border-slate-200/80 bg-slate-100/70 p-4 shadow-sm sm:p-5" data-metric-source="live">
             <div class="mb-4 flex flex-wrap items-end justify-between gap-2">
                 <div>

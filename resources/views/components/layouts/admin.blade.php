@@ -19,6 +19,7 @@
         @php
             $navItems = [
                 ['label' => __('Dashboard'), 'href' => route('dashboard'), 'active' => request()->routeIs('dashboard') && auth()->user()?->role === 'admin', 'icon' => 'gauge-high'],
+                ['label' => __('System reporting'), 'href' => route('admin.system-reporting.index'), 'active' => request()->routeIs('admin.system-reporting.*'), 'icon' => 'chart-line'],
                 ['label' => __('Universities'), 'href' => route('admin.universities.index'), 'active' => request()->routeIs('admin.universities.*'), 'icon' => 'building-columns'],
                 ['label' => __('Academic years'), 'href' => route('admin.academic-years.index'), 'active' => request()->routeIs('admin.academic-years.*'), 'icon' => 'calendar-days'],
                 ['label' => __('Coordinators'), 'href' => route('admin.coordinators.index'), 'active' => request()->routeIs('admin.coordinators.*'), 'icon' => 'user-group'],

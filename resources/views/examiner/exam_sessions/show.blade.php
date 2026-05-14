@@ -8,6 +8,10 @@
 
     <div class="mb-5 flex flex-wrap items-center gap-3">
         <a href="{{ route('examiner.quizzes.workspace', ['exam' => $session->exam, 'tab' => 'sessions']) }}" class="text-sm font-medium text-qs-text underline-offset-2 hover:underline">← {{ __('Sessions for this assessment') }}</a>
+        @if ($session->exam)
+            <span class="text-qs-muted">·</span>
+            <a href="{{ route('examiner.exams.analytics.show', $session->exam) }}" class="text-sm font-medium text-sky-700 underline-offset-2 hover:underline">{{ __('Assessment analytics') }}</a>
+        @endif
         @if (! empty($classResultsUrl))
             <span class="text-qs-muted">·</span>
             <a href="{{ $classResultsUrl }}" class="text-sm font-medium text-qs-muted underline-offset-2 hover:text-qs-text hover:underline">{{ __('Back to class results') }}</a>

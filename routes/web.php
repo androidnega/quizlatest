@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AcademicYearController;
 use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\CoordinatorController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\ReportingController as AdminReportingController;
 use App\Http\Controllers\Admin\ProctoringGovernanceController;
 use App\Http\Controllers\Admin\UniversityController;
 use App\Http\Controllers\Admin\UserAccountController;
@@ -14,12 +15,14 @@ use App\Http\Controllers\Coordinator\ClassroomController;
 use App\Http\Controllers\Coordinator\CourseController;
 use App\Http\Controllers\Coordinator\LevelController;
 use App\Http\Controllers\Coordinator\ProgramController;
+use App\Http\Controllers\Coordinator\ReportingController as CoordinatorReportingController;
 use App\Http\Controllers\Coordinator\StudentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Examiner\ClassExplorerController;
 use App\Http\Controllers\Examiner\CourseMaterialController as ExaminerCourseMaterialController;
 use App\Http\Controllers\Examiner\CoursesController as ExaminerCoursesController;
 use App\Http\Controllers\Examiner\DashboardController as ExaminerDashboardController;
+use App\Http\Controllers\Examiner\AssessmentAnalyticsController as ExaminerAssessmentAnalyticsController;
 use App\Http\Controllers\Examiner\ExamBuilderController;
 use App\Http\Controllers\Examiner\ExamSessionReviewController as ExaminerExamSessionReviewController;
 use App\Http\Controllers\Examiner\ManualGradingController as ExaminerManualGradingController;
@@ -237,6 +240,9 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
             Route::put('/users/{user}', [UserAccountController::class, 'update'])->name('users.update');
             Route::get('/health-snapshot', [AdminDashboardController::class, 'healthSnapshot'])->name('health-snapshot');
 
+            Route::get('/system-reporting', [AdminReportingController::class, 'index'])->name('system-reporting.index');
+            Route::get('/system-reporting/export/system-summary.csv', [AdminReportingController::class, 'exportSystemSummaryCsv'])->name('system-reporting.export.system-summary');
+
             Route::post('/proctoring/toggle', [ProctoringGovernanceController::class, 'toggle'])->name('proctoring.toggle');
             Route::post('/proctoring/emergency-shutdown', [ProctoringGovernanceController::class, 'emergencyShutdown'])->name('proctoring.emergency-shutdown');
             Route::post('/proctoring/override-config', [ProctoringGovernanceController::class, 'overrideConfig'])->name('proctoring.override-config');
@@ -313,6 +319,10 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
             Route::get('/courses/assign/classes', [ClassCourseAssignmentController::class, 'edit'])->name('courses.assign.edit');
             Route::post('/courses/assign/classes', [ClassCourseAssignmentController::class, 'update'])->name('courses.assign.update');
 
+            Route::get('/reporting', [CoordinatorReportingController::class, 'index'])->name('reporting.index');
+            Route::get('/reporting/export/class-completion.csv', [CoordinatorReportingController::class, 'exportClassCompletionCsv'])->name('reporting.export.class-completion');
+            Route::get('/reporting/export/course-performance.csv', [CoordinatorReportingController::class, 'exportCoursePerformanceCsv'])->name('reporting.export.course-performance');
+
         });
 
     Route::name('examiner.')
@@ -363,6 +373,12 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
                 Route::post('/{exam}/questions/import/commit', [ExamBuilderController::class, 'commitQuestionImport'])->name('exams.questions.import.commit');
                 Route::post('/{exam}/questions/ai/prompt', [ExamBuilderController::class, 'buildAiPrompt'])->name('exams.questions.ai.prompt');
                 Route::post('/{exam}/questions/ai/generate', [ExamBuilderController::class, 'generateWithAi'])->name('exams.questions.ai.generate');
+                Route::get('/{exam}/analytics', [ExaminerAssessmentAnalyticsController::class, 'show'])->name('exams.analytics.show');
+                Route::get('/{exam}/analytics/export/students.csv', [ExaminerAssessmentAnalyticsController::class, 'exportStudentsCsv'])->name('exams.analytics.export.students');
+                Route::get('/{exam}/analytics/export/questions.csv', [ExaminerAssessmentAnalyticsController::class, 'exportQuestionsCsv'])->name('exams.analytics.export.questions');
+                Route::get('/{exam}/analytics/export/proctoring.csv', [ExaminerAssessmentAnalyticsController::class, 'exportProctoringCsv'])->name('exams.analytics.export.proctoring');
+                Route::get('/{exam}/analytics/export/assignment-submissions.csv', [ExaminerAssessmentAnalyticsController::class, 'exportAssignmentSubmissionsCsv'])->name('exams.analytics.export.assignment-submissions');
+
                 Route::get('/{exam}/sessions', [ExaminerExamSessionReviewController::class, 'index'])->name('exams.sessions.index');
                 Route::get('/{exam}/sessions/export.csv', [ExaminerExamSessionReviewController::class, 'exportCsv'])->name('exams.sessions.export-csv');
                 Route::post('/{exam}/sessions/invalidate-range', [ExaminerExamSessionReviewController::class, 'invalidateSessionsInRange'])->name('exams.sessions.invalidate-range');

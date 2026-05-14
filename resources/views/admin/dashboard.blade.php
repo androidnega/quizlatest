@@ -14,7 +14,8 @@
 
     <div class="qs-refdash">
         <div class="qs-refdash-shell">
-            <div class="mb-4 flex justify-end">
+            <div class="mb-4 flex flex-wrap items-center justify-end gap-3">
+                <a href="{{ route('admin.system-reporting.index') }}" class="text-sm font-semibold text-slate-700 underline-offset-2 hover:underline">{{ __('System reporting') }}</a>
                 <a href="{{ request()->fullUrl() }}" class="qs-refdash-refresh" title="{{ __('Reload this page') }}">
                     <i class="fa-solid fa-rotate-right text-[#6b7280]" aria-hidden="true"></i>
                     {{ __('Refresh') }}

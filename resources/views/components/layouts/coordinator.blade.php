@@ -19,6 +19,7 @@
             $coursesOnlyActive = request()->routeIs('coordinator.courses.*') && ! request()->routeIs('coordinator.courses.assign.*');
             $navItems = [
                 ['label' => __('Dashboard'), 'href' => route('dashboard'), 'active' => request()->routeIs('dashboard'), 'icon' => 'house'],
+                ['label' => __('Reporting'), 'href' => route('coordinator.reporting.index'), 'active' => request()->routeIs('coordinator.reporting.*'), 'icon' => 'chart-line'],
                 ['label' => __('Students'), 'href' => route('coordinator.students.index'), 'active' => request()->routeIs('coordinator.students.*'), 'icon' => 'users'],
                 ['label' => __('Programs'), 'href' => route('coordinator.programs.index'), 'active' => request()->routeIs('coordinator.programs.*'), 'icon' => 'diagram-project'],
                 ['label' => __('Levels'), 'href' => route('coordinator.levels.index'), 'active' => request()->routeIs('coordinator.levels.*'), 'icon' => 'layer-group'],
