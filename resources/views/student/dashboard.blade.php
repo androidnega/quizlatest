@@ -12,25 +12,39 @@
         $dashboardPolicyNotice = $dashboard_policy_notice ?? null;
         $dashboardNotices = $dashboard_notices ?? [];
         $materialsNav = ! empty($studentCourseMaterialsNavEnabled);
-        $navCard = 'flex min-h-[72px] flex-col justify-center rounded-lg border border-slate-200/90 bg-white p-3.5 text-left transition-colors hover:border-slate-300 hover:bg-slate-50/80 sm:min-h-0 sm:p-4';
+        $navCard = 'flex min-h-[72px] flex-col justify-center rounded-lg border p-3.5 text-left transition-colors hover:border-slate-200/90 hover:bg-white/80 sm:min-h-0 sm:p-4';
         $studentNavCards = [
             [
                 'href' => route('student.work.index'),
                 'icon' => 'fa-clipboard-list',
                 'title' => __('Your work'),
                 'sub' => __('Assessments & deadlines'),
+                'tone' => 'border-emerald-100/90 bg-emerald-50/70',
+                'iconWrap' => 'bg-emerald-100/80 text-emerald-700',
             ],
             [
                 'href' => route('student.assignments.index'),
                 'icon' => 'fa-file-pen',
                 'title' => __('Assignments'),
                 'sub' => __('Coursework to hand in'),
+                'tone' => 'border-violet-100/90 bg-violet-50/70',
+                'iconWrap' => 'bg-violet-100/80 text-violet-700',
             ],
             [
                 'href' => route('student.results.index'),
                 'icon' => 'fa-square-poll-vertical',
                 'title' => __('Results'),
                 'sub' => __('Scores when released'),
+                'tone' => 'border-rose-100/90 bg-rose-50/70',
+                'iconWrap' => 'bg-rose-100/80 text-rose-700',
+            ],
+            [
+                'href' => route('student.notifications.index'),
+                'icon' => 'fa-bell',
+                'title' => __('Notifications'),
+                'sub' => __('Due dates & reminders'),
+                'tone' => 'border-amber-100/90 bg-amber-50/70',
+                'iconWrap' => 'bg-amber-100/80 text-amber-800',
             ],
         ];
         if ($practiceEnabled) {
@@ -39,12 +53,16 @@
                 'icon' => 'fa-book-open-reader',
                 'title' => __('Revision'),
                 'sub' => __('Practice & check understanding'),
+                'tone' => 'border-teal-100/90 bg-teal-50/70',
+                'iconWrap' => 'bg-teal-100/80 text-teal-700',
             ];
             $studentNavCards[] = [
                 'href' => route('student.practice.materials.index'),
                 'icon' => 'fa-folder-open',
                 'title' => __('Materials'),
                 'sub' => __('Files from your courses'),
+                'tone' => 'border-sky-100/90 bg-sky-50/70',
+                'iconWrap' => 'bg-sky-100/80 text-sky-700',
             ];
         } elseif ($materialsNav) {
             $studentNavCards[] = [
@@ -52,6 +70,8 @@
                 'icon' => 'fa-folder-open',
                 'title' => __('Materials'),
                 'sub' => __('Files from your courses'),
+                'tone' => 'border-sky-100/90 bg-sky-50/70',
+                'iconWrap' => 'bg-sky-100/80 text-sky-700',
             ];
         }
     @endphp
@@ -117,21 +137,21 @@
             </div>
         @endif
 
-        <section class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="dash-nav-heading">
+        <section class="rounded-xl border border-slate-200/90 bg-slate-50/40 p-4 sm:p-5" aria-labelledby="dash-nav-heading">
             <div class="flex flex-wrap items-end justify-between gap-2">
                 <div>
                     <h2 id="dash-nav-heading" class="text-sm font-semibold text-slate-900">{{ __('Essentials') }}</h2>
-                    <p class="mt-0.5 text-xs text-slate-500">{{ __('Assessments, hand-ins, results — and study tools when your school turns them on.') }}</p>
+                    <p class="mt-0.5 text-xs text-slate-500">{{ __('Work, assignments, results, and alerts — plus study tools when your school enables them.') }}</p>
                 </div>
             </div>
             <div class="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
                 @foreach ($studentNavCards as $card)
-                    <a href="{{ $card['href'] }}" class="{{ $navCard }}">
-                        <span class="flex h-8 w-8 items-center justify-center rounded-md bg-slate-100 text-slate-600" aria-hidden="true">
+                    <a href="{{ $card['href'] }}" class="{{ $navCard }} {{ $card['tone'] }}">
+                        <span class="flex h-8 w-8 items-center justify-center rounded-md {{ $card['iconWrap'] }}" aria-hidden="true">
                             <i class="fa-solid {{ $card['icon'] }} text-[13px]"></i>
                         </span>
                         <span class="mt-2 text-sm font-medium text-slate-900">{{ $card['title'] }}</span>
-                        <span class="mt-0.5 text-xs text-slate-500">{{ $card['sub'] }}</span>
+                        <span class="mt-0.5 text-xs text-slate-600">{{ $card['sub'] }}</span>
                     </a>
                 @endforeach
             </div>
@@ -139,16 +159,16 @@
 
         <a
             href="{{ route('student.work.index') }}"
-            class="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-slate-300 hover:bg-slate-50/80 sm:p-5"
+            class="flex items-center gap-4 rounded-xl border border-slate-200/90 bg-slate-50/50 p-4 transition-colors hover:border-slate-300 hover:bg-slate-50 sm:p-5"
         >
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-600" aria-hidden="true">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-emerald-100/80 text-emerald-700" aria-hidden="true">
                 <i class="fa-solid fa-clipboard-list text-base"></i>
             </span>
             <div class="min-w-0 flex-1">
                 <p class="text-sm font-medium text-slate-900">{{ __('Full assessment list') }}</p>
-                <p class="mt-0.5 text-xs leading-relaxed text-slate-500">{{ __('Same “Your work” page as the card — every open, due, or finished item in one place.') }}</p>
+                <p class="mt-0.5 text-xs leading-relaxed text-slate-600">{{ __('Same “Your work” page as the card — every open, due, or finished item in one place.') }}</p>
             </div>
-            <span class="shrink-0 text-xs font-medium text-slate-500">{{ __('Open') }} →</span>
+            <span class="shrink-0 text-xs font-medium text-slate-600">{{ __('Open') }} →</span>
         </a>
 
         @if (! empty($dashboardCourseNewMaterials))
