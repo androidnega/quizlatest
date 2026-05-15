@@ -22,7 +22,7 @@ class ProfileController extends Controller
                 'university',
                 'program.department.faculty',
                 'level',
-                'classroom',
+                'classroom.academicYearStruct',
             ]);
         }
 
@@ -39,7 +39,7 @@ class ProfileController extends Controller
         $user = $request->user();
 
         if ($user->role === 'student') {
-            $user->fill($request->only(['name', 'phone']));
+            $user->fill($request->only(['phone']));
         } else {
             $user->fill($request->validated());
         }

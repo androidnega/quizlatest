@@ -19,7 +19,6 @@ class ProfileUpdateRequest extends FormRequest
 
         if ($user->role === 'student') {
             return [
-                'name' => ['required', 'string', 'max:255'],
                 'phone' => ['nullable', 'string', 'max:40'],
             ];
         }

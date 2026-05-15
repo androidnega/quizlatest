@@ -20,7 +20,7 @@ class StudentProfileUpdateTest extends TestCase
 
         $this->actingAs($student)
             ->patch(route('profile.update'), [
-                'name' => 'Updated Student Name',
+                'name' => 'Should Not Change Name',
                 'email' => null,
                 'phone' => '+233248887766',
                 'index_number' => 'SHOULD-NOT-CHANGE',
@@ -32,7 +32,7 @@ class StudentProfileUpdateTest extends TestCase
             ->assertRedirect(route('profile.edit'));
 
         $student->refresh();
-        $this->assertSame('Updated Student Name', $student->name);
+        $this->assertSame('Akua Serwaa', $student->name);
         $this->assertSame('+233248887766', $student->phone);
         $this->assertSame($originalIndex, $student->index_number);
         $this->assertSame('student', $student->role);

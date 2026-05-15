@@ -2,6 +2,8 @@
     <x-slot name="title">{{ ($resultKindLabel ?? __('Result')) }} — {{ $session->exam?->title ?? '' }}</x-slot>
     <x-slot name="subtitle">
         <span class="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-qs-muted">
+            <span class="font-medium text-qs-text">{{ $resultKindLabel ?? __('Result') }}</span>
+            <span aria-hidden="true">·</span>
             @if ($session->exam?->course?->code)
                 <span class="font-medium text-qs-text">{{ $session->exam->course->code }}</span>
                 <span aria-hidden="true">·</span>
@@ -10,6 +12,16 @@
                 <span>{{ __('Submitted') }} {{ $session->end_time->timezone(config('app.timezone'))->format('M j, Y · H:i') }}</span>
             @endif
         </span>
+        @php
+            $releaseLine = match ($resultStatus ?? '') {
+                'held' => __('Status: Under review'),
+                'pending_manual' => __('Status: Awaiting grading'),
+                'graded' => ($assignmentGradesPending ?? false) ? __('Status: Graded — awaiting release to class') : __('Status: Released'),
+                'published' => __('Status: Released'),
+                default => __('Status: Submitted'),
+            };
+        @endphp
+        <p class="mt-1 text-xs text-slate-500">{{ $releaseLine }}</p>
     </x-slot>
 
     <div class="w-full min-w-0 space-y-5 pb-4 text-slate-950 md:space-y-6">

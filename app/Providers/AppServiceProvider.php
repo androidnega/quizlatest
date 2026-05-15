@@ -21,6 +21,7 @@ use App\Policies\ProgramPolicy;
 use App\Policies\UniversityPolicy;
 use App\Policies\UserPolicy;
 use App\Services\PracticeModuleSettings;
+use App\Services\StudentNoticeDigestService;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\View;
@@ -86,6 +87,12 @@ class AppServiceProvider extends ServiceProvider
                     && $user->role === 'student'
                     && $practice->courseMaterialUploadsEnabled()
                     && ! $practice->studentPracticeEnabled(),
+            );
+            $view->with(
+                'studentNoticeCount',
+                $user !== null && $user->role === 'student'
+                    ? (int) app(StudentNoticeDigestService::class)->noticeCount($user)
+                    : 0,
             );
         };
 

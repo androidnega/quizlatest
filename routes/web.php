@@ -5,8 +5,8 @@ use App\Http\Controllers\Admin\AcademicYearController;
 use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\CoordinatorController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
-use App\Http\Controllers\Admin\ReportingController as AdminReportingController;
 use App\Http\Controllers\Admin\ProctoringGovernanceController;
+use App\Http\Controllers\Admin\ReportingController as AdminReportingController;
 use App\Http\Controllers\Admin\UniversityController;
 use App\Http\Controllers\Admin\UserAccountController;
 use App\Http\Controllers\Coordinator\AcademicResetController;
@@ -18,11 +18,11 @@ use App\Http\Controllers\Coordinator\ProgramController;
 use App\Http\Controllers\Coordinator\ReportingController as CoordinatorReportingController;
 use App\Http\Controllers\Coordinator\StudentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Examiner\AssessmentAnalyticsController as ExaminerAssessmentAnalyticsController;
 use App\Http\Controllers\Examiner\ClassExplorerController;
 use App\Http\Controllers\Examiner\CourseMaterialController as ExaminerCourseMaterialController;
 use App\Http\Controllers\Examiner\CoursesController as ExaminerCoursesController;
 use App\Http\Controllers\Examiner\DashboardController as ExaminerDashboardController;
-use App\Http\Controllers\Examiner\AssessmentAnalyticsController as ExaminerAssessmentAnalyticsController;
 use App\Http\Controllers\Examiner\ExamBuilderController;
 use App\Http\Controllers\Examiner\ExamSessionReviewController as ExaminerExamSessionReviewController;
 use App\Http\Controllers\Examiner\ManualGradingController as ExaminerManualGradingController;
@@ -37,6 +37,8 @@ use App\Http\Controllers\Student\StudentAssignmentsController;
 use App\Http\Controllers\Student\StudentCourseMaterialController;
 use App\Http\Controllers\Student\StudentExamController;
 use App\Http\Controllers\Student\StudentExamEntryController;
+use App\Http\Controllers\Student\StudentHelpController;
+use App\Http\Controllers\Student\StudentNotificationsController;
 use App\Http\Controllers\Student\StudentPracticeHubController;
 use App\Http\Controllers\Student\StudentPracticeQuizController;
 use App\Http\Controllers\Student\StudentPracticeSummaryController;
@@ -186,6 +188,9 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
             ->name('student.dashboard.policy-notice.dismiss');
 
         Route::get('/assignments', [StudentAssignmentsController::class, 'index'])->name('student.assignments.index');
+
+        Route::get('/notifications', [StudentNotificationsController::class, 'index'])->name('student.notifications.index');
+        Route::get('/help', [StudentHelpController::class, 'show'])->name('student.help');
 
         Route::prefix('results')
             ->name('student.results.')

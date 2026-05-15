@@ -12,6 +12,7 @@
         $dashboardTip = (string) ($dashboard_tip ?? '');
         $dashboardPolicyNotice = $dashboard_policy_notice ?? null;
         $shortcutCard = 'flex min-h-[72px] flex-col justify-center rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300 hover:bg-slate-50/80 active:bg-slate-50 sm:min-h-0 sm:p-4';
+        $dashboardNotices = $dashboard_notices ?? [];
     @endphp
 
     <div class="w-full min-w-0 space-y-4 pb-8 text-slate-950">
@@ -128,11 +129,52 @@
             </div>
         @endif
 
+        @if ($dashboardNotices !== [])
+            <section class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="dash-notices-heading">
+                <div class="flex flex-wrap items-end justify-between gap-2">
+                    <h2 id="dash-notices-heading" class="text-sm font-semibold text-slate-900">{{ __('Updates for you') }}</h2>
+                    <a href="{{ route('student.notifications.index') }}" class="text-xs font-semibold text-sky-800 underline-offset-2 hover:underline">{{ __('View all') }}</a>
+                </div>
+                <ul class="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-100 bg-slate-50/40">
+                    @foreach (array_slice($dashboardNotices, 0, 4) as $n)
+                        <li>
+                            <a
+                                href="{{ $n['href'] ?? route('student.notifications.index') }}"
+                                class="flex min-h-[52px] flex-col gap-0.5 px-3 py-3 text-left transition hover:bg-white sm:flex-row sm:items-center sm:justify-between sm:px-4"
+                            >
+                                <span>
+                                    <span class="text-sm font-semibold text-slate-900">{{ $n['title'] }}</span>
+                                    <span class="mt-0.5 block text-xs text-slate-600">{{ $n['body'] }}</span>
+                                </span>
+                                <span class="mt-1 shrink-0 text-[11px] font-medium text-slate-400 sm:mt-0">
+                                    {{ \Illuminate\Support\Carbon::parse($n['at'])->timezone(config('app.timezone'))->format('M j, H:i') }}
+                                </span>
+                            </a>
+                        </li>
+                    @endforeach
+                </ul>
+            </section>
+        @endif
+
         {{-- Shortcuts: same destinations, clearer as cards --}}
         <section class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="dash-shortcuts-heading">
             <h2 id="dash-shortcuts-heading" class="text-sm font-semibold text-slate-900">{{ __('Go to') }}</h2>
             <p class="mt-0.5 text-xs text-slate-500">{{ __('Everything you had before — just grouped here.') }}</p>
-            <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                <a href="{{ route('student.notifications.index') }}" class="{{ $shortcutCard }}">
+                    <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
+                        <i class="fa-solid fa-bell text-sm"></i>
+                    </span>
+                    <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Notifications') }}</span>
+                    <span class="mt-0.5 text-xs text-slate-500">{{ __('Due dates & status') }}</span>
+                </a>
+                <a href="{{ route('student.help') }}" class="{{ $shortcutCard }}">
+                    <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
+                        <i class="fa-solid fa-circle-question text-sm"></i>
+                    </span>
+                    <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Help') }}</span>
+                    <span class="mt-0.5 text-xs text-slate-500">{{ __('How things work') }}</span>
+                </a>
                 <a href="{{ route('dashboard') }}#student-work" class="{{ $shortcutCard }}">
                     <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
                         <i class="fa-solid fa-clipboard-list text-sm"></i>

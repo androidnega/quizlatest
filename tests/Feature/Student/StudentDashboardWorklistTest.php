@@ -368,8 +368,11 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
             ->assertSee(__('View result'), false)
             ->getContent();
 
-        $releasedHeadingPos = strpos((string) $html, (string) __('Results released'));
-        $titlePos = strpos((string) $html, 'Released Marks Quiz');
+        $workPos = strpos((string) $html, 'id="student-work"');
+        $this->assertNotFalse($workPos);
+        $workHtml = substr((string) $html, $workPos);
+        $releasedHeadingPos = strpos($workHtml, (string) __('Results released'));
+        $titlePos = strpos($workHtml, 'Released Marks Quiz');
         $this->assertNotFalse($releasedHeadingPos);
         $this->assertNotFalse($titlePos);
         $this->assertGreaterThan($releasedHeadingPos, $titlePos);

@@ -22,6 +22,8 @@
             $revisionActive = request()->routeIs('student.practice.revision');
             $practiceHubActive = $revisionActive || request()->routeIs('student.practice.index');
             $assignmentsActive = request()->routeIs('student.assignments.*');
+            $notificationsActive = request()->routeIs('student.notifications.*');
+            $helpActive = request()->routeIs('student.help');
             $studentWorkHref = route('dashboard') . '#student-work';
         @endphp
         <div
@@ -84,6 +86,14 @@
                     <x-ui.sidebar-link :href="$studentWorkHref" :active="false" icon="clipboard-list" always-show-label>{{ __('Assessments') }}</x-ui.sidebar-link>
                     <x-ui.sidebar-link :href="route('student.assignments.index')" :active="$assignmentsActive" icon="clipboard-check" always-show-label>{{ __('Assignments') }}</x-ui.sidebar-link>
                     <x-ui.sidebar-link :href="route('student.results.index')" :active="$resultsActive" icon="square-poll-vertical" always-show-label>{{ __('Results') }}</x-ui.sidebar-link>
+                    <x-ui.sidebar-link :href="route('student.notifications.index')" :active="$notificationsActive" icon="bell" always-show-label>
+                        @if (($studentNoticeCount ?? 0) > 0)
+                            {{ __('Notifications (:count)', ['count' => min(20, (int) $studentNoticeCount)]) }}
+                        @else
+                            {{ __('Notifications') }}
+                        @endif
+                    </x-ui.sidebar-link>
+                    <x-ui.sidebar-link :href="route('student.help')" :active="$helpActive" icon="circle-question" always-show-label>{{ __('Help') }}</x-ui.sidebar-link>
                     @if (! empty($studentPracticeNavEnabled))
                         <x-ui.sidebar-link :href="route('student.practice.revision')" :active="$practiceHubActive" icon="book-open-reader" always-show-label>{{ __('Revision & self-check') }}</x-ui.sidebar-link>
                         <x-ui.sidebar-link :href="route('student.practice.quizzes.index')" :active="$quizzesActive" icon="clipboard-question" always-show-label>{{ __('Quizzes') }}</x-ui.sidebar-link>
@@ -121,6 +131,14 @@
                     <x-ui.sidebar-link :href="$studentWorkHref" :active="false" icon="clipboard-list">{{ __('Assessments') }}</x-ui.sidebar-link>
                     <x-ui.sidebar-link :href="route('student.assignments.index')" :active="$assignmentsActive" icon="clipboard-check">{{ __('Assignments') }}</x-ui.sidebar-link>
                     <x-ui.sidebar-link :href="route('student.results.index')" :active="$resultsActive" icon="square-poll-vertical">{{ __('Results') }}</x-ui.sidebar-link>
+                    <x-ui.sidebar-link :href="route('student.notifications.index')" :active="$notificationsActive" icon="bell">
+                        @if (($studentNoticeCount ?? 0) > 0)
+                            {{ __('Notifications (:count)', ['count' => min(20, (int) $studentNoticeCount)]) }}
+                        @else
+                            {{ __('Notifications') }}
+                        @endif
+                    </x-ui.sidebar-link>
+                    <x-ui.sidebar-link :href="route('student.help')" :active="$helpActive" icon="circle-question">{{ __('Help') }}</x-ui.sidebar-link>
                     @if (! empty($studentPracticeNavEnabled))
                         <x-ui.sidebar-link :href="route('student.practice.revision')" :active="$practiceHubActive" icon="book-open-reader">{{ __('Revision') }}</x-ui.sidebar-link>
                         <x-ui.sidebar-link :href="route('student.practice.quizzes.index')" :active="$quizzesActive" icon="clipboard-question">{{ __('Quizzes') }}</x-ui.sidebar-link>
