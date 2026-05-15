@@ -195,6 +195,78 @@ final class StudentNoticeDigestService
         return $dedup;
     }
 
+    /**
+     * Published assessments in the student’s class courses from the last N days (for dashboard spotlight).
+     *
+     * @return list<array{quiz_id: int, title: string, course_line: string, type_label: string, href: string, published_at: string}>
+     */
+    public function recentlyPublishedAssessments(User $user, int $withinDays = 7, int $limit = 8): array
+    {
+        if ($user->role !== 'student' || $user->class_id === null) {
+            return [];
+        }
+
+        $now = Carbon::now();
+        $since = $now->copy()->subDays(max(1, $withinDays));
+
+        $courseIds = DB::table('class_course')
+            ->where('class_id', $user->class_id)
+            ->pluck('course_id');
+
+        if ($courseIds->isEmpty()) {
+            return [];
+        }
+
+        $quizzes = Quiz::query()
+            ->whereIn('course_id', $courseIds)
+            ->where('status', 'published')
+            ->where('university_id', $user->university_id)
+            ->where(function ($q) use ($user) {
+                $q->whereDoesntHave('targetClassrooms')
+                    ->orWhereHas('targetClassrooms', function ($q2) use ($user) {
+                        $q2->where('classes.id', (int) $user->class_id);
+                    });
+            })
+            ->whereNotNull('published_at')
+            ->where('published_at', '>=', $since)
+            ->with(['course:id,code,title'])
+            ->orderByDesc('published_at')
+            ->limit(max(1, $limit))
+            ->get();
+
+        $tz = (string) config('app.timezone');
+        $out = [];
+
+        foreach ($quizzes as $exam) {
+            $typeLabel = match ($exam->assessment_type) {
+                'assignment' => __('Assignment'),
+                'quiz' => __('Quiz'),
+                'mid' => __('Mid-semester'),
+                'exam' => __('Exam'),
+                default => __('Assessment'),
+            };
+
+            $courseLine = trim(implode(' — ', array_filter([
+                $exam->course?->code,
+                $exam->course?->title,
+            ])));
+
+            $pub = $exam->published_at;
+            $out[] = [
+                'quiz_id' => (int) $exam->id,
+                'title' => (string) $exam->title,
+                'course_line' => $courseLine,
+                'type_label' => $typeLabel,
+                'href' => route('student.exam.instructions', $exam),
+                'published_at' => $pub !== null
+                    ? $pub->timezone($tz)->format('M j, Y')
+                    : '',
+            ];
+        }
+
+        return $out;
+    }
+
     public function noticeCount(User $user): int
     {
         return count($this->noticesFor($user, 50));

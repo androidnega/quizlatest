@@ -23,6 +23,7 @@ final class StudentDashboardDigestService
 
         return [
             'dashboard_notices' => app(StudentNoticeDigestService::class)->noticesFor($user, 8),
+            'dashboard_new_assessments' => app(StudentNoticeDigestService::class)->recentlyPublishedAssessments($user, 7, 8),
             'dashboard_course_new_materials' => $this->newMaterialHints($user, $since),
             'dashboard_practice_streak_days' => $practiceSettings->studentPracticeEnabled()
                 ? $this->practiceStreakDays($user, $tz, $now)

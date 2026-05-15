@@ -11,6 +11,7 @@
         $dashboardTip = (string) ($dashboard_tip ?? '');
         $dashboardPolicyNotice = $dashboard_policy_notice ?? null;
         $dashboardNotices = $dashboard_notices ?? [];
+        $dashboardNewAssessments = $dashboard_new_assessments ?? [];
         $materialsNav = ! empty($studentCourseMaterialsNavEnabled);
         $navCard = 'flex min-h-[72px] flex-col justify-center rounded-lg border p-3.5 text-left transition-colors hover:border-slate-200/90 hover:bg-white/80 sm:min-h-0 sm:p-4';
         $studentNavCards = [
@@ -156,6 +157,40 @@
                 @endforeach
             </div>
         </section>
+
+        @if ($dashboardNewAssessments !== [])
+            <section class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="dash-new-assess-heading">
+                <div class="flex flex-wrap items-end justify-between gap-2">
+                    <div>
+                        <h2 id="dash-new-assess-heading" class="text-sm font-semibold text-slate-900">{{ __('New for you') }}</h2>
+                        <p class="mt-0.5 text-xs text-slate-500">{{ __('Published in the last week — open instructions when you are ready to start.') }}</p>
+                    </div>
+                </div>
+                <ul class="mt-3 grid gap-2.5 sm:grid-cols-2">
+                    @foreach ($dashboardNewAssessments as $qa)
+                        <li>
+                            <a
+                                href="{{ $qa['href'] }}"
+                                class="flex h-full flex-col rounded-lg border border-slate-200 bg-slate-50/80 p-3.5 text-left transition-colors hover:border-slate-300 hover:bg-white sm:p-4"
+                            >
+                                <div class="flex items-start justify-between gap-2">
+                                    <span class="inline-flex shrink-0 rounded-md bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-800">{{ __('New') }}</span>
+                                    <span class="text-[11px] text-slate-500">{{ $qa['published_at'] }}</span>
+                                </div>
+                                <p class="mt-2 text-sm font-medium leading-snug text-slate-900">{{ $qa['title'] }}</p>
+                                @if (($qa['course_line'] ?? '') !== '')
+                                    <p class="mt-1 truncate text-xs text-slate-600">{{ $qa['course_line'] }}</p>
+                                @endif
+                                <div class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                                    <span class="rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700 ring-1 ring-slate-200/80">{{ $qa['type_label'] }}</span>
+                                    <span class="text-xs font-medium text-indigo-700">{{ __('Instructions') }} →</span>
+                                </div>
+                            </a>
+                        </li>
+                    @endforeach
+                </ul>
+            </section>
+        @endif
 
         <a
             href="{{ route('student.work.index') }}"
