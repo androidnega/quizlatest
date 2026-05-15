@@ -23,6 +23,17 @@ class StudentAreaPolishTest extends TestCase
             ->assertSee('id="student-work"', false);
     }
 
+    public function test_student_header_includes_notifications_link(): void
+    {
+        $this->seed(InitialSetupSeeder::class);
+        $student = User::query()->where('role', 'student')->firstOrFail();
+
+        $this->actingAs($student)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee(route('student.notifications.index'), false);
+    }
+
     public function test_student_help_page_loads(): void
     {
         $this->seed(InitialSetupSeeder::class);

@@ -155,7 +155,7 @@
             </aside>
 
             <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
-                <header class="flex shrink-0 items-center justify-between gap-3 border-b border-qs-soft/90 bg-white px-3 py-2.5 shadow-[0_1px_0_0_rgba(21,52,58,0.04)] md:border-qs-soft md:px-4 md:py-2 md:shadow-none">
+                <header class="flex shrink-0 items-center justify-between gap-3 border-b border-qs-soft bg-white px-3 py-2.5 md:px-4 md:py-2">
                     <div class="flex min-w-0 flex-1 items-center gap-2">
                         <button
                             type="button"
@@ -169,12 +169,29 @@
                         </button>
                         <span class="truncate text-xs font-semibold text-qs-muted md:hidden">{{ config('app.name') }}</span>
                     </div>
-                    <x-ui.shell-profile-menu icon-only />
+                    <div class="flex shrink-0 items-center gap-0.5">
+                        @php
+                            $headerNoticeCount = (int) ($studentNoticeCount ?? 0);
+                        @endphp
+                        <a
+                            href="{{ route('student.notifications.index') }}"
+                            class="relative inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-transparent text-qs-text hover:bg-qs-card focus:outline-none focus:ring-2 focus:ring-qs-primary/25 {{ $notificationsActive ? 'bg-qs-primary/10 text-qs-primary' : '' }}"
+                            aria-label="{{ $headerNoticeCount > 0 ? __('Notifications (:count)', ['count' => min(20, $headerNoticeCount)]) : __('Notifications') }}"
+                        >
+                            <i class="fa-solid fa-bell text-lg" aria-hidden="true"></i>
+                            @if ($headerNoticeCount > 0)
+                                <span class="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold leading-none text-white">
+                                    {{ $headerNoticeCount > 9 ? '9+' : $headerNoticeCount }}
+                                </span>
+                            @endif
+                        </a>
+                        <x-ui.shell-profile-menu icon-only />
+                    </div>
                 </header>
 
                 <main class="qs-app-main-scroll qs-student-main w-full min-w-0 bg-white px-3 pt-3 pb-[max(6.75rem,env(safe-area-inset-bottom,0px)+5.25rem)] antialiased md:px-7 md:pb-10 md:pt-6 lg:px-9 xl:px-10">
                     @if (session('status'))
-                        <div class="mb-5 flex items-start gap-3 rounded-xl border border-qs-soft bg-qs-card px-4 py-3 text-sm text-qs-text shadow-sm">
+                        <div class="mb-5 flex items-start gap-3 rounded-xl border border-qs-soft bg-qs-card px-4 py-3 text-sm text-qs-text">
                             <i class="fa-solid fa-circle-check mt-0.5 text-qs-primary" aria-hidden="true"></i>
                             <span>{{ session('status') }}</span>
                         </div>
