@@ -11,54 +11,76 @@
         $dashboardCourseNewMaterials = $dashboard_course_new_materials ?? [];
         $dashboardTip = (string) ($dashboard_tip ?? '');
         $dashboardPolicyNotice = $dashboard_policy_notice ?? null;
+        $shortcutCard = 'flex min-h-[72px] flex-col justify-center rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300 hover:bg-slate-50/80 active:bg-slate-50 sm:min-h-0 sm:p-4';
     @endphp
 
-    <div class="w-full min-w-0 space-y-5 pb-6 text-slate-950">
+    <div class="w-full min-w-0 space-y-4 pb-8 text-slate-950">
+        {{-- Greeting: one simple card --}}
+        <div class="rounded-xl border border-slate-200 bg-white px-4 py-4 sm:px-5">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <h1 class="text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">{{ __('Hi, :name', ['name' => $firstName]) }}</h1>
+                    <p class="mt-1 text-sm text-slate-600">{{ __('Use the cards below, then check your work list for what to do next.') }}</p>
+                </div>
+                <a
+                    href="{{ route('profile.edit') }}"
+                    class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 transition hover:bg-slate-100 md:hidden"
+                    aria-label="{{ __('Profile') }}"
+                >
+                    <i class="fa-solid fa-user text-lg" aria-hidden="true"></i>
+                </a>
+            </div>
+        </div>
+
         @if ($errors->has('exam'))
-            <div class="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
-                <i class="fa-solid fa-circle-exclamation mt-0.5 shrink-0" aria-hidden="true"></i>
-                <span>{{ $errors->first('exam') }}</span>
+            <div class="flex items-start gap-3 rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm text-rose-900">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-600" aria-hidden="true">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                </span>
+                <span class="min-w-0 pt-0.5">{{ $errors->first('exam') }}</span>
             </div>
         @endif
 
         @if ($examSessionPaused && $sessionExam)
-            <div class="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-                <i class="fa-solid fa-pause mt-0.5 shrink-0 text-amber-700" aria-hidden="true"></i>
-                <div class="min-w-0">
-                    <p class="font-semibold">{{ __('Your assessment timer is paused') }}</p>
-                    <p class="mt-1 text-xs leading-relaxed text-amber-900/90">
-                        {{ __('Time is frozen until you return and tap Resume inside the assessment.') }}
-                    </p>
-                    <a href="{{ route('student.exam.take', $activeSession) }}" class="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-lg bg-amber-800 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-900">
-                        {{ __('Open assessment to resume') }}
-                    </a>
+            <div class="rounded-xl border border-amber-200 bg-white px-4 py-3 text-sm text-amber-950">
+                <div class="flex gap-3">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700" aria-hidden="true">
+                        <i class="fa-solid fa-pause"></i>
+                    </span>
+                    <div class="min-w-0 flex-1">
+                        <p class="font-semibold">{{ __('Timer paused') }}</p>
+                        <p class="mt-1 text-xs text-amber-900/90">{{ __('Open the assessment and tap Resume to continue.') }}</p>
+                        <a href="{{ route('student.exam.take', $activeSession) }}" class="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-amber-800 px-4 text-xs font-semibold text-white hover:bg-amber-900 sm:w-auto">
+                            {{ __('Resume') }}
+                        </a>
+                    </div>
                 </div>
             </div>
         @endif
 
         @if (! $classYearOk)
-            <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                <p class="font-semibold">{{ __('Class year notice') }}</p>
-                <p class="mt-1 text-xs leading-relaxed">{{ __('Your class may not match the active academic year. Some items could look empty until your coordinator updates your enrollment.') }}</p>
+            <div class="rounded-xl border border-amber-200 bg-white px-4 py-3 text-sm text-amber-900">
+                <p class="font-semibold">{{ __('Class year') }}</p>
+                <p class="mt-1 text-xs leading-relaxed text-amber-900/90">{{ __('Your class may not match the active year. Ask your coordinator if lists look empty.') }}</p>
             </div>
         @endif
 
         @if ($user->class_id === null)
-            <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800">
                 <p class="leading-relaxed text-slate-700">
-                    <i class="fa-solid fa-circle-info me-1 text-slate-500" aria-hidden="true"></i>
+                    <i class="fa-solid fa-circle-info me-1.5 text-slate-400" aria-hidden="true"></i>
                     {{ __('student_ui.class_group_not_assigned') }}
                 </p>
             </div>
         @endif
 
         @if (! empty($dashboardCourseNewMaterials))
-            <div class="rounded-xl border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-sky-950">
-                <p class="text-xs font-semibold uppercase tracking-wide text-sky-900/80">{{ __('Since your last visit') }}</p>
-                <ul class="mt-2 space-y-1">
+            <div class="rounded-xl border border-sky-200 bg-white px-4 py-3 text-sm text-sky-950">
+                <p class="text-xs font-semibold uppercase tracking-wide text-sky-800/80">{{ __('New since last visit') }}</p>
+                <ul class="mt-2 space-y-1.5 text-sm">
                     @foreach ($dashboardCourseNewMaterials as $row)
                         @php $n = (int) $row['count']; @endphp
-                        <li class="leading-snug">
+                        <li>
                             @if ($n === 1)
                                 {{ __('1 new file in :course', ['course' => $row['name']]) }}
                             @else
@@ -68,8 +90,8 @@
                     @endforeach
                 </ul>
                 @if ($practiceEnabled)
-                    <a href="{{ route('student.practice.materials.index') }}" class="mt-2 inline-flex text-xs font-semibold text-sky-800 underline-offset-2 hover:underline">
-                        {{ __('Open course materials') }}
+                    <a href="{{ route('student.practice.materials.index') }}" class="mt-3 inline-flex min-h-[44px] items-center text-xs font-semibold text-sky-800 underline-offset-2 hover:underline">
+                        {{ __('Materials') }} →
                     </a>
                 @endif
             </div>
@@ -91,13 +113,13 @@
                 role="region"
                 aria-label="{{ __('Tip') }}"
             >
-                <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700" aria-hidden="true">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700" aria-hidden="true">
                     <i class="fa-solid fa-lightbulb text-sm"></i>
                 </span>
                 <p class="min-w-0 flex-1 leading-relaxed">{{ $dashboardTip }}</p>
                 <button
                     type="button"
-                    class="-m-1 inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400/40"
+                    class="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                     @click="dismissed = true; try { localStorage.setItem(key, '1'); } catch (e) {}"
                     aria-label="{{ __('Dismiss tip') }}"
                 >
@@ -106,38 +128,76 @@
             </div>
         @endif
 
-        <header class="flex flex-wrap items-start justify-between gap-4">
-            <div class="min-w-0">
-                <p class="text-sm text-slate-500">{{ __('Welcome back') }}</p>
-                <h1 class="mt-0.5 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{{ __('Hi, :name', ['name' => $firstName]) }}</h1>
-                <p class="mt-1 max-w-xl text-sm text-slate-600">{{ __('Here is what needs your attention across assessments and assignments.') }}</p>
+        {{-- Shortcuts: same destinations, clearer as cards --}}
+        <section class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="dash-shortcuts-heading">
+            <h2 id="dash-shortcuts-heading" class="text-sm font-semibold text-slate-900">{{ __('Go to') }}</h2>
+            <p class="mt-0.5 text-xs text-slate-500">{{ __('Everything you had before — just grouped here.') }}</p>
+            <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <a href="{{ route('dashboard') }}#student-work" class="{{ $shortcutCard }}">
+                    <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
+                        <i class="fa-solid fa-clipboard-list text-sm"></i>
+                    </span>
+                    <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Your work') }}</span>
+                    <span class="mt-0.5 text-xs text-slate-500">{{ __('Due & open items') }}</span>
+                </a>
+                <a href="{{ route('student.assignments.index') }}" class="{{ $shortcutCard }}">
+                    <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
+                        <i class="fa-solid fa-file-pen text-sm"></i>
+                    </span>
+                    <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Assignments') }}</span>
+                    <span class="mt-0.5 text-xs text-slate-500">{{ __('All coursework') }}</span>
+                </a>
+                <a href="{{ route('student.results.index') }}" class="{{ $shortcutCard }}">
+                    <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
+                        <i class="fa-solid fa-square-poll-vertical text-sm"></i>
+                    </span>
+                    <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Results') }}</span>
+                    <span class="mt-0.5 text-xs text-slate-500">{{ __('Scores & feedback') }}</span>
+                </a>
+                @if ($practiceEnabled)
+                    <a href="{{ route('student.practice.revision') }}" class="{{ $shortcutCard }}">
+                        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
+                            <i class="fa-solid fa-book-open-reader text-sm"></i>
+                        </span>
+                        <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Revision') }}</span>
+                        <span class="mt-0.5 text-xs text-slate-500">{{ __('Practice & summaries') }}</span>
+                    </a>
+                    <a href="{{ route('student.practice.materials.index') }}" class="{{ $shortcutCard }}">
+                        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
+                            <i class="fa-solid fa-folder-open text-sm"></i>
+                        </span>
+                        <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Materials') }}</span>
+                        <span class="mt-0.5 text-xs text-slate-500">{{ __('Files & outlines') }}</span>
+                    </a>
+                @endif
+                <a href="{{ route('profile.edit') }}" class="{{ $shortcutCard }}">
+                    <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
+                        <i class="fa-solid fa-user text-sm"></i>
+                    </span>
+                    <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Profile') }}</span>
+                    <span class="mt-0.5 text-xs text-slate-500">{{ __('Your account') }}</span>
+                </a>
             </div>
-            <a
-                href="{{ route('profile.edit') }}"
-                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 md:hidden"
-                aria-label="{{ __('Profile') }}"
-            >
-                <i class="fa-solid fa-user text-lg" aria-hidden="true"></i>
-            </a>
-        </header>
+        </section>
 
+        {{-- Profile: one compact card --}}
         <section class="rounded-xl border border-slate-200 bg-white px-4 py-4 sm:px-5" aria-labelledby="student-summary-heading">
-            <h2 id="student-summary-heading" class="text-sm font-semibold text-slate-900">{{ __('Your details') }}</h2>
-            <dl class="mt-3 grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            <h2 id="student-summary-heading" class="text-sm font-semibold text-slate-900">{{ __('You') }}</h2>
+            <dl class="mt-3 grid gap-x-4 gap-y-2.5 text-sm sm:grid-cols-2">
                 @foreach ([
                     __('Name') => $sum['name'] ?? null,
-                    __('Index number') => $sum['index_number'] ?? null,
+                    __('Index') => $sum['index_number'] ?? null,
                     __('Class') => $sum['class'] ?? null,
                     __('Program') => $sum['program'] ?? null,
                     __('Level') => $sum['level'] ?? null,
                     __('Department') => $sum['department'] ?? null,
-                    __('Academic year') => $sum['academic_year'] ?? null,
+                    __('Year') => $sum['academic_year'] ?? null,
                     __('Semester') => $sum['semester'] ?? null,
                 ] as $label => $value)
                     @if (filled($value))
                         <div class="min-w-0">
-                            <dt class="text-xs font-medium text-slate-500">{{ $label }}</dt>
-                            <dd class="truncate font-medium text-slate-900">{{ $value }}</dd>
+                            <dt class="text-[11px] font-medium uppercase tracking-wide text-slate-500">{{ $label }}</dt>
+                            <dd class="truncate text-sm font-medium text-slate-900">{{ $value }}</dd>
                         </div>
                     @endif
                 @endforeach
@@ -146,32 +206,9 @@
                 $anyDetail = collect($sum)->filter(fn ($v) => filled($v))->isNotEmpty();
             @endphp
             @if (! $anyDetail)
-                <p class="mt-2 text-sm text-slate-500">{{ __('Your coordinator can help if class or program details look incomplete.') }}</p>
+                <p class="mt-2 text-xs text-slate-500">{{ __('Your coordinator can update missing class or program details.') }}</p>
             @endif
         </section>
-
-        <nav class="flex flex-wrap gap-2" aria-label="{{ __('Quick links') }}">
-            <a href="{{ route('dashboard') }}#student-work" class="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50">
-                {{ __('Assessments') }}
-            </a>
-            <a href="{{ route('student.assignments.index') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50">
-                {{ __('Assignments') }}
-            </a>
-            <a href="{{ route('student.results.index') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50">
-                {{ __('Results') }}
-            </a>
-            @if ($practiceEnabled)
-                <a href="{{ route('student.practice.revision') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50">
-                    {{ __('Revision') }}
-                </a>
-                <a href="{{ route('student.practice.materials.index') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50">
-                    {{ __('Materials') }}
-                </a>
-            @endif
-            <a href="{{ route('profile.edit') }}" class="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50">
-                {{ __('Profile') }}
-            </a>
-        </nav>
 
         @include('student.partials.assessment-worklist')
     </div>
