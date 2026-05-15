@@ -82,8 +82,6 @@ class DashboardController extends Controller
             $classYearOk = $cid === null || (int) $cid === (int) $activeYearId;
         }
 
-        $studentProfileSummary = $this->buildStudentProfileSummary($user);
-
         $activeSession = ExamSession::query()
             ->where('student_id', $user->id)
             ->whereIn('status', ['active', 'paused'])
@@ -186,7 +184,6 @@ class DashboardController extends Controller
 
         return [
             'user' => $user,
-            'studentProfileSummary' => $studentProfileSummary,
             'activeSession' => $activeSession,
             'heldResults' => $heldResults,
             'pendingManualResults' => $pendingManual,
@@ -195,28 +192,6 @@ class DashboardController extends Controller
             'practiceQuizCount' => $practiceQuizCount,
             'recentPracticeScores' => $recentPracticeScores,
             'studentAssessmentDeck' => $studentAssessmentDeck,
-        ];
-    }
-
-    /**
-     * @return array<string, string|null>
-     */
-    private function buildStudentProfileSummary(User $user): array
-    {
-        $user->loadMissing(['program.department', 'level', 'classroom.academicYearStruct']);
-
-        $c = $user->classroom;
-        $yearLabel = $c?->academicYearStruct?->name ?? ($c?->academic_year !== null && $c->academic_year !== '' ? (string) $c->academic_year : null);
-
-        return [
-            'name' => (string) $user->name,
-            'index_number' => filled($user->index_number) ? (string) $user->index_number : null,
-            'class' => $c ? trim($c->name.' '.(string) ($c->section ?? '')) : null,
-            'program' => $user->program?->name,
-            'level' => $user->level?->name ?? $user->level?->code,
-            'department' => $user->program?->department?->name,
-            'academic_year' => $yearLabel,
-            'semester' => null,
         ];
     }
 

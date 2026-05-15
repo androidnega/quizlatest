@@ -1,31 +1,99 @@
 <x-layouts.student>
     <x-slot name="title">{{ __('Dashboard') }}</x-slot>
-    <x-slot name="subtitle">{{ __('Your classes, assessments, and results.') }}</x-slot>
+    <x-slot name="subtitle">{{ __('Jump in with the cards below — details live on each page.') }}</x-slot>
 
     @php
         $parts = \Illuminate\Support\Str::of((string) ($user->name ?? ''))->trim()->explode(' ')->filter();
         $firstName = $parts->first() ?: $user->name;
         $sessionExam = $activeSession?->exam;
         $examSessionPaused = $activeSession !== null && $activeSession->status === 'paused';
-        $sum = $studentProfileSummary ?? [];
         $dashboardCourseNewMaterials = $dashboard_course_new_materials ?? [];
         $dashboardTip = (string) ($dashboard_tip ?? '');
         $dashboardPolicyNotice = $dashboard_policy_notice ?? null;
-        $shortcutCard = 'flex min-h-[72px] flex-col justify-center rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300 hover:bg-slate-50/80 active:bg-slate-50 sm:min-h-0 sm:p-4';
         $dashboardNotices = $dashboard_notices ?? [];
+        $navCard = 'group flex min-h-[76px] flex-col justify-center rounded-2xl border p-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 sm:min-h-0 sm:p-4';
+        $studentNavCards = [
+            [
+                'href' => route('student.notifications.index'),
+                'icon' => 'fa-bell',
+                'title' => __('Notifications'),
+                'sub' => __('Due dates & status'),
+                'card' => 'border-amber-200/90 bg-gradient-to-br from-amber-50 via-white to-amber-50/30 hover:border-amber-300',
+                'iconWrap' => 'bg-amber-100 text-amber-800 ring-1 ring-amber-200/80',
+            ],
+            [
+                'href' => route('student.help'),
+                'icon' => 'fa-circle-question',
+                'title' => __('Help'),
+                'sub' => __('How things work'),
+                'card' => 'border-sky-200/90 bg-gradient-to-br from-sky-50 via-white to-sky-50/30 hover:border-sky-300',
+                'iconWrap' => 'bg-sky-100 text-sky-800 ring-1 ring-sky-200/80',
+            ],
+            [
+                'href' => route('dashboard') . '#student-work',
+                'icon' => 'fa-clipboard-list',
+                'title' => __('Your work'),
+                'sub' => __('Open & due items'),
+                'card' => 'border-emerald-200/90 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/30 hover:border-emerald-300',
+                'iconWrap' => 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200/80',
+            ],
+            [
+                'href' => route('student.assignments.index'),
+                'icon' => 'fa-file-pen',
+                'title' => __('Assignments'),
+                'sub' => __('All coursework'),
+                'card' => 'border-violet-200/90 bg-gradient-to-br from-violet-50 via-white to-violet-50/30 hover:border-violet-300',
+                'iconWrap' => 'bg-violet-100 text-violet-800 ring-1 ring-violet-200/80',
+            ],
+            [
+                'href' => route('student.results.index'),
+                'icon' => 'fa-square-poll-vertical',
+                'title' => __('Results'),
+                'sub' => __('Scores & feedback'),
+                'card' => 'border-rose-200/90 bg-gradient-to-br from-rose-50 via-white to-rose-50/30 hover:border-rose-300',
+                'iconWrap' => 'bg-rose-100 text-rose-800 ring-1 ring-rose-200/80',
+            ],
+        ];
+        if ($practiceEnabled) {
+            $studentNavCards[] = [
+                'href' => route('student.practice.revision'),
+                'icon' => 'fa-book-open-reader',
+                'title' => __('Revision'),
+                'sub' => __('Practice & summaries'),
+                'card' => 'border-teal-200/90 bg-gradient-to-br from-teal-50 via-white to-teal-50/30 hover:border-teal-300',
+                'iconWrap' => 'bg-teal-100 text-teal-800 ring-1 ring-teal-200/80',
+            ];
+            $studentNavCards[] = [
+                'href' => route('student.practice.materials.index'),
+                'icon' => 'fa-folder-open',
+                'title' => __('Materials'),
+                'sub' => __('Files & outlines'),
+                'card' => 'border-cyan-200/90 bg-gradient-to-br from-cyan-50 via-white to-cyan-50/30 hover:border-cyan-300',
+                'iconWrap' => 'bg-cyan-100 text-cyan-800 ring-1 ring-cyan-200/80',
+            ];
+        }
+        $studentNavCards[] = [
+            'href' => route('profile.edit'),
+            'icon' => 'fa-user',
+            'title' => __('Profile'),
+            'sub' => __('Account & placement'),
+            'card' => 'border-indigo-200/90 bg-gradient-to-br from-indigo-50 via-white to-indigo-50/30 hover:border-indigo-300',
+            'iconWrap' => 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-200/80',
+        ];
     @endphp
 
     <div class="w-full min-w-0 space-y-4 pb-8 text-slate-950">
-        {{-- Greeting: one simple card --}}
-        <div class="rounded-xl border border-slate-200 bg-white px-4 py-4 sm:px-5">
+        {{-- Greeting --}}
+        <div class="overflow-hidden rounded-2xl border border-indigo-200/60 bg-gradient-to-br from-indigo-50 via-white to-sky-50 px-4 py-4 shadow-sm sm:px-6 sm:py-5">
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="min-w-0">
-                    <h1 class="text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">{{ __('Hi, :name', ['name' => $firstName]) }}</h1>
-                    <p class="mt-1 text-sm text-slate-600">{{ __('Use the cards below, then check your work list for what to do next.') }}</p>
+                    <p class="text-[11px] font-semibold uppercase tracking-wide text-indigo-600/90">{{ __('Dashboard') }}</p>
+                    <h1 class="mt-0.5 text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">{{ __('Hi, :name', ['name' => $firstName]) }}</h1>
+                    <p class="mt-1.5 text-sm text-slate-600">{{ __('Pick a card to open a page — class and account details are on Profile.') }}</p>
                 </div>
                 <a
                     href="{{ route('profile.edit') }}"
-                    class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 transition hover:bg-slate-100 md:hidden"
+                    class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-indigo-200/80 bg-white/80 text-indigo-700 shadow-sm transition hover:bg-white md:hidden"
                     aria-label="{{ __('Profile') }}"
                 >
                     <i class="fa-solid fa-user text-lg" aria-hidden="true"></i>
@@ -74,6 +142,26 @@
                 </p>
             </div>
         @endif
+
+        <section class="rounded-2xl border border-slate-200/90 bg-white/90 p-4 shadow-sm backdrop-blur-sm sm:p-5" aria-labelledby="dash-nav-heading">
+            <div class="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                    <h2 id="dash-nav-heading" class="text-sm font-semibold text-slate-900">{{ __('Quick links') }}</h2>
+                    <p class="mt-0.5 text-xs text-slate-500">{{ __('Each area has its own screen — nothing duplicated here.') }}</p>
+                </div>
+            </div>
+            <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                @foreach ($studentNavCards as $card)
+                    <a href="{{ $card['href'] }}" class="{{ $navCard }} {{ $card['card'] }}">
+                        <span class="flex h-9 w-9 items-center justify-center rounded-xl {{ $card['iconWrap'] }}" aria-hidden="true">
+                            <i class="fa-solid {{ $card['icon'] }} text-sm"></i>
+                        </span>
+                        <span class="mt-2.5 text-sm font-semibold text-slate-900 group-hover:text-slate-950">{{ $card['title'] }}</span>
+                        <span class="mt-0.5 text-xs text-slate-600">{{ $card['sub'] }}</span>
+                    </a>
+                @endforeach
+            </div>
+        </section>
 
         @if (! empty($dashboardCourseNewMaterials))
             <div class="rounded-xl border border-sky-200 bg-white px-4 py-3 text-sm text-sky-950">
@@ -130,17 +218,20 @@
         @endif
 
         @if ($dashboardNotices !== [])
-            <section class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="dash-notices-heading">
+            <section
+                class="rounded-2xl border border-fuchsia-200/70 bg-gradient-to-br from-fuchsia-50/50 via-white to-white p-4 shadow-sm sm:p-5"
+                aria-labelledby="dash-notices-heading"
+            >
                 <div class="flex flex-wrap items-end justify-between gap-2">
                     <h2 id="dash-notices-heading" class="text-sm font-semibold text-slate-900">{{ __('Updates for you') }}</h2>
-                    <a href="{{ route('student.notifications.index') }}" class="text-xs font-semibold text-sky-800 underline-offset-2 hover:underline">{{ __('View all') }}</a>
+                    <a href="{{ route('student.notifications.index') }}" class="text-xs font-semibold text-fuchsia-800 underline-offset-2 hover:underline">{{ __('View all') }}</a>
                 </div>
-                <ul class="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-100 bg-slate-50/40">
+                <ul class="mt-3 divide-y divide-fuchsia-100/80 rounded-xl border border-fuchsia-100/90 bg-white/80">
                     @foreach (array_slice($dashboardNotices, 0, 4) as $n)
                         <li>
                             <a
                                 href="{{ $n['href'] ?? route('student.notifications.index') }}"
-                                class="flex min-h-[52px] flex-col gap-0.5 px-3 py-3 text-left transition hover:bg-white sm:flex-row sm:items-center sm:justify-between sm:px-4"
+                                class="flex min-h-[52px] flex-col gap-0.5 px-3 py-3 text-left transition hover:bg-fuchsia-50/40 sm:flex-row sm:items-center sm:justify-between sm:px-4"
                             >
                                 <span>
                                     <span class="text-sm font-semibold text-slate-900">{{ $n['title'] }}</span>
@@ -155,102 +246,6 @@
                 </ul>
             </section>
         @endif
-
-        {{-- Shortcuts: same destinations, clearer as cards --}}
-        <section class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="dash-shortcuts-heading">
-            <h2 id="dash-shortcuts-heading" class="text-sm font-semibold text-slate-900">{{ __('Go to') }}</h2>
-            <p class="mt-0.5 text-xs text-slate-500">{{ __('Everything you had before — just grouped here.') }}</p>
-            <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                <a href="{{ route('student.notifications.index') }}" class="{{ $shortcutCard }}">
-                    <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
-                        <i class="fa-solid fa-bell text-sm"></i>
-                    </span>
-                    <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Notifications') }}</span>
-                    <span class="mt-0.5 text-xs text-slate-500">{{ __('Due dates & status') }}</span>
-                </a>
-                <a href="{{ route('student.help') }}" class="{{ $shortcutCard }}">
-                    <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
-                        <i class="fa-solid fa-circle-question text-sm"></i>
-                    </span>
-                    <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Help') }}</span>
-                    <span class="mt-0.5 text-xs text-slate-500">{{ __('How things work') }}</span>
-                </a>
-                <a href="{{ route('dashboard') }}#student-work" class="{{ $shortcutCard }}">
-                    <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
-                        <i class="fa-solid fa-clipboard-list text-sm"></i>
-                    </span>
-                    <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Your work') }}</span>
-                    <span class="mt-0.5 text-xs text-slate-500">{{ __('Due & open items') }}</span>
-                </a>
-                <a href="{{ route('student.assignments.index') }}" class="{{ $shortcutCard }}">
-                    <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
-                        <i class="fa-solid fa-file-pen text-sm"></i>
-                    </span>
-                    <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Assignments') }}</span>
-                    <span class="mt-0.5 text-xs text-slate-500">{{ __('All coursework') }}</span>
-                </a>
-                <a href="{{ route('student.results.index') }}" class="{{ $shortcutCard }}">
-                    <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
-                        <i class="fa-solid fa-square-poll-vertical text-sm"></i>
-                    </span>
-                    <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Results') }}</span>
-                    <span class="mt-0.5 text-xs text-slate-500">{{ __('Scores & feedback') }}</span>
-                </a>
-                @if ($practiceEnabled)
-                    <a href="{{ route('student.practice.revision') }}" class="{{ $shortcutCard }}">
-                        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
-                            <i class="fa-solid fa-book-open-reader text-sm"></i>
-                        </span>
-                        <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Revision') }}</span>
-                        <span class="mt-0.5 text-xs text-slate-500">{{ __('Practice & summaries') }}</span>
-                    </a>
-                    <a href="{{ route('student.practice.materials.index') }}" class="{{ $shortcutCard }}">
-                        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
-                            <i class="fa-solid fa-folder-open text-sm"></i>
-                        </span>
-                        <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Materials') }}</span>
-                        <span class="mt-0.5 text-xs text-slate-500">{{ __('Files & outlines') }}</span>
-                    </a>
-                @endif
-                <a href="{{ route('profile.edit') }}" class="{{ $shortcutCard }}">
-                    <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700" aria-hidden="true">
-                        <i class="fa-solid fa-user text-sm"></i>
-                    </span>
-                    <span class="mt-2 text-sm font-semibold text-slate-900">{{ __('Profile') }}</span>
-                    <span class="mt-0.5 text-xs text-slate-500">{{ __('Your account') }}</span>
-                </a>
-            </div>
-        </section>
-
-        {{-- Profile: one compact card --}}
-        <section class="rounded-xl border border-slate-200 bg-white px-4 py-4 sm:px-5" aria-labelledby="student-summary-heading">
-            <h2 id="student-summary-heading" class="text-sm font-semibold text-slate-900">{{ __('You') }}</h2>
-            <dl class="mt-3 grid gap-x-4 gap-y-2.5 text-sm sm:grid-cols-2">
-                @foreach ([
-                    __('Name') => $sum['name'] ?? null,
-                    __('Index') => $sum['index_number'] ?? null,
-                    __('Class') => $sum['class'] ?? null,
-                    __('Program') => $sum['program'] ?? null,
-                    __('Level') => $sum['level'] ?? null,
-                    __('Department') => $sum['department'] ?? null,
-                    __('Year') => $sum['academic_year'] ?? null,
-                    __('Semester') => $sum['semester'] ?? null,
-                ] as $label => $value)
-                    @if (filled($value))
-                        <div class="min-w-0">
-                            <dt class="text-[11px] font-medium uppercase tracking-wide text-slate-500">{{ $label }}</dt>
-                            <dd class="truncate text-sm font-medium text-slate-900">{{ $value }}</dd>
-                        </div>
-                    @endif
-                @endforeach
-            </dl>
-            @php
-                $anyDetail = collect($sum)->filter(fn ($v) => filled($v))->isNotEmpty();
-            @endphp
-            @if (! $anyDetail)
-                <p class="mt-2 text-xs text-slate-500">{{ __('Your coordinator can update missing class or program details.') }}</p>
-            @endif
-        </section>
 
         @include('student.partials.assessment-worklist')
     </div>
