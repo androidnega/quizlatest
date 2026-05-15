@@ -14,6 +14,7 @@
     <body class="h-full overflow-hidden font-sans antialiased bg-qs-bg text-qs-text">
         @php
             $dashActive = request()->routeIs('dashboard');
+            $workActive = request()->routeIs('student.work.index');
             $resultsActive = request()->routeIs('student.results.*');
             $practiceActive = request()->routeIs('student.practice.*');
             $profileActive = request()->routeIs('profile.*');
@@ -24,7 +25,7 @@
             $assignmentsActive = request()->routeIs('student.assignments.*');
             $notificationsActive = request()->routeIs('student.notifications.*');
             $helpActive = request()->routeIs('student.help');
-            $studentWorkHref = route('dashboard') . '#student-work';
+            $studentWorkHref = route('student.work.index');
         @endphp
         <div
             x-data="{
@@ -83,7 +84,7 @@
                 </div>
                 <nav class="flex-1 space-y-0.5 overflow-y-auto overscroll-y-contain px-2 py-3 [-webkit-overflow-scrolling:touch]">
                     <x-ui.sidebar-link :href="route('dashboard')" :active="$dashActive" icon="house" always-show-label>{{ __('Dashboard') }}</x-ui.sidebar-link>
-                    <x-ui.sidebar-link :href="$studentWorkHref" :active="false" icon="clipboard-list" always-show-label>{{ __('Assessments') }}</x-ui.sidebar-link>
+                    <x-ui.sidebar-link :href="$studentWorkHref" :active="$workActive" icon="clipboard-list" always-show-label>{{ __('Assessments') }}</x-ui.sidebar-link>
                     <x-ui.sidebar-link :href="route('student.assignments.index')" :active="$assignmentsActive" icon="clipboard-check" always-show-label>{{ __('Assignments') }}</x-ui.sidebar-link>
                     <x-ui.sidebar-link :href="route('student.results.index')" :active="$resultsActive" icon="square-poll-vertical" always-show-label>{{ __('Results') }}</x-ui.sidebar-link>
                     <x-ui.sidebar-link :href="route('student.notifications.index')" :active="$notificationsActive" icon="bell" always-show-label>
@@ -128,7 +129,7 @@
                 </div>
                 <nav class="flex flex-1 flex-col space-y-0.5 overflow-y-auto p-2">
                     <x-ui.sidebar-link :href="route('dashboard')" :active="$dashActive" icon="house">{{ __('Dashboard') }}</x-ui.sidebar-link>
-                    <x-ui.sidebar-link :href="$studentWorkHref" :active="false" icon="clipboard-list">{{ __('Assessments') }}</x-ui.sidebar-link>
+                    <x-ui.sidebar-link :href="$studentWorkHref" :active="$workActive" icon="clipboard-list">{{ __('Assessments') }}</x-ui.sidebar-link>
                     <x-ui.sidebar-link :href="route('student.assignments.index')" :active="$assignmentsActive" icon="clipboard-check">{{ __('Assignments') }}</x-ui.sidebar-link>
                     <x-ui.sidebar-link :href="route('student.results.index')" :active="$resultsActive" icon="square-poll-vertical">{{ __('Results') }}</x-ui.sidebar-link>
                     <x-ui.sidebar-link :href="route('student.notifications.index')" :active="$notificationsActive" icon="bell">
@@ -195,7 +196,7 @@
                             <i class="fa-solid fa-house qs-student-nav-dock__icon" aria-hidden="true"></i>
                             <span>{{ __('Dashboard') }}</span>
                         </a>
-                        <a href="{{ $studentWorkHref }}" class="qs-student-nav-dock__a">
+                        <a href="{{ $studentWorkHref }}" class="qs-student-nav-dock__a {{ $workActive ? 'qs-student-nav-dock__a--active' : '' }}">
                             <i class="fa-solid fa-clipboard-list qs-student-nav-dock__icon" aria-hidden="true"></i>
                             <span>{{ __('Assessments') }}</span>
                         </a>

@@ -59,7 +59,7 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
         $this->makePublishedQuiz($ctx['examiner'], $ctx['courseId'], $ctx['classId'], ['title' => 'Dash Smoke Quiz']);
 
         $this->actingAs($ctx['student'])
-            ->get(route('dashboard'))
+            ->get(route('student.work.index'))
             ->assertOk()
             ->assertSee(__('Your work'), false)
             ->assertSee(__('Active now'), false)
@@ -76,7 +76,7 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
         ]);
 
         $this->actingAs($ctx['student'])
-            ->get(route('dashboard'))
+            ->get(route('student.work.index'))
             ->assertOk()
             ->assertSee(__('Upcoming'), false)
             ->assertSee('Future Window Quiz', false)
@@ -125,7 +125,7 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
         ]);
 
         $this->actingAs($ctx['student'])
-            ->get(route('dashboard'))
+            ->get(route('student.work.index'))
             ->assertOk()
             ->assertSee(__('Continue'), false)
             ->assertSee('Continue Me Quiz', false)
@@ -204,7 +204,7 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
         $this->linkQuizToClass((int) $typedOnly->id, $ctx['classId']);
 
         $html = $this->actingAs($ctx['student'])
-            ->get(route('dashboard'))
+            ->get(route('student.work.index'))
             ->assertOk()
             ->getContent();
 
@@ -283,7 +283,7 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
         ]);
 
         $this->actingAs($student)
-            ->get(route('dashboard'))
+            ->get(route('student.work.index'))
             ->assertOk()
             ->assertSee(__('Submitted work'), false)
             ->assertSee('Submitted Pending Assignment', false)
@@ -361,7 +361,7 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
         ]);
 
         $html = $this->actingAs($student)
-            ->get(route('dashboard'))
+            ->get(route('student.work.index'))
             ->assertOk()
             ->assertSee(__('Results released'), false)
             ->assertSee('Released Marks Quiz', false)
@@ -449,19 +449,16 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
         ]);
 
         $html = $this->actingAs($student)
-            ->get(route('dashboard'))
+            ->get(route('student.work.index'))
             ->assertOk()
             ->assertSee('UNRELEASED ASSIGN MARKER', false)
             ->assertSee(__('Awaiting release'), false)
             ->getContent();
 
-        $releasedSection = strpos((string) $html, (string) __('Results released'));
-        $needle = 'UNRELEASED ASSIGN MARKER';
-        $after = substr((string) $html, $releasedSection !== false ? $releasedSection : 0);
         $this->assertStringNotContainsString(
-            $needle,
-            (string) $after,
-            'Unreleased assignment title should not appear in or after the Results released section snapshot.'
+            (string) __('Results released'),
+            (string) $html,
+            'Graded-but-unreleased assignments must not render a Results released section.',
         );
     }
 
@@ -475,7 +472,7 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
         ]);
 
         $this->actingAs($ctx['student'])
-            ->get(route('dashboard'))
+            ->get(route('student.work.index'))
             ->assertOk()
             ->assertSee(__('Closed or missed'), false)
             ->assertSee('Past Closed Quiz X', false);
@@ -537,7 +534,7 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
         $this->linkQuizToClass((int) $secret->id, $otherClassId);
 
         $this->actingAs($ctx['student'])
-            ->get(route('dashboard'))
+            ->get(route('student.work.index'))
             ->assertOk()
             ->assertDontSee('SECRET OTHER CLASS QUIZ', false);
     }

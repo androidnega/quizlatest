@@ -44,6 +44,7 @@ use App\Http\Controllers\Student\StudentPracticeQuizController;
 use App\Http\Controllers\Student\StudentPracticeSummaryController;
 use App\Http\Controllers\Student\StudentResultController;
 use App\Http\Controllers\Student\StudentRevisionSelfCheckController;
+use App\Http\Controllers\Student\StudentWorkController;
 use App\Models\Quiz;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -188,6 +189,7 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
             ->name('student.dashboard.policy-notice.dismiss');
 
         Route::get('/assignments', [StudentAssignmentsController::class, 'index'])->name('student.assignments.index');
+        Route::get('/work', [StudentWorkController::class, 'index'])->name('student.work.index');
 
         Route::get('/notifications', [StudentNotificationsController::class, 'index'])->name('student.notifications.index');
         Route::get('/help', [StudentHelpController::class, 'show'])->name('student.help');

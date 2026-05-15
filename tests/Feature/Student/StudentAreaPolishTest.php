@@ -12,6 +12,17 @@ class StudentAreaPolishTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_student_work_page_loads(): void
+    {
+        $this->seed(InitialSetupSeeder::class);
+        $student = User::query()->where('role', 'student')->firstOrFail();
+
+        $this->actingAs($student)
+            ->get(route('student.work.index'))
+            ->assertOk()
+            ->assertSee('id="student-work"', false);
+    }
+
     public function test_student_help_page_loads(): void
     {
         $this->seed(InitialSetupSeeder::class);

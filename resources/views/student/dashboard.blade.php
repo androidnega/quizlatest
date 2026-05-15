@@ -30,7 +30,7 @@
                 'iconWrap' => 'bg-sky-100 text-sky-800 ring-1 ring-sky-200/80',
             ],
             [
-                'href' => route('dashboard') . '#student-work',
+                'href' => route('student.work.index'),
                 'icon' => 'fa-clipboard-list',
                 'title' => __('Your work'),
                 'sub' => __('Open & due items'),
@@ -163,6 +163,20 @@
             </div>
         </section>
 
+        <a
+            href="{{ route('student.work.index') }}"
+            class="group flex items-center gap-4 rounded-2xl border border-emerald-200/90 bg-gradient-to-r from-emerald-50/80 via-white to-white p-4 shadow-sm ring-1 ring-emerald-900/[0.04] transition hover:border-emerald-300 hover:shadow-md sm:p-5"
+        >
+            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200/80" aria-hidden="true">
+                <i class="fa-solid fa-clipboard-list text-lg"></i>
+            </span>
+            <div class="min-w-0 flex-1">
+                <p class="text-sm font-semibold text-slate-900">{{ __('Your assessments') }}</p>
+                <p class="mt-0.5 text-xs leading-relaxed text-slate-600">{{ __('Open windows, due dates, submitted work, and released results — full list on one page.') }}</p>
+            </div>
+            <span class="shrink-0 text-sm font-semibold text-emerald-800 group-hover:text-emerald-900">{{ __('Open') }} →</span>
+        </a>
+
         @if (! empty($dashboardCourseNewMaterials))
             <div class="rounded-xl border border-sky-200 bg-white px-4 py-3 text-sm text-sky-950">
                 <p class="text-xs font-semibold uppercase tracking-wide text-sky-800/80">{{ __('New since last visit') }}</p>
@@ -247,7 +261,6 @@
             </section>
         @endif
 
-        @include('student.partials.assessment-worklist')
     </div>
 
     @if (is_array($dashboardPolicyNotice) && ($dashboardPolicyNotice['message'] ?? '') !== '')

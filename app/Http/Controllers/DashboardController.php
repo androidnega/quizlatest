@@ -45,7 +45,7 @@ class DashboardController extends Controller
         }
 
         $practice = app(PracticeModuleSettings::class);
-        $data = $this->buildStudentDashboardData($user, $practice);
+        $data = $this->buildStudentDashboardData($user, $practice, buildAssessmentWorklist: false);
         $digest = app(StudentDashboardDigestService::class)->forStudent($user, $practice);
         User::query()->whereKey($user->id)->update(['student_last_dashboard_at' => now()]);
 
@@ -66,9 +66,26 @@ class DashboardController extends Controller
     }
 
     /**
+     * Payload for the dedicated student “Your work” page (full assessment deck).
+     *
+     * @return array{user: User, activeSession: ExamSession|null, studentAssessmentDeck: array<string, list<array<string, mixed>>>}
+     */
+    public function studentWorkData(User $user): array
+    {
+        $practice = app(PracticeModuleSettings::class);
+        $data = $this->buildStudentDashboardData($user, $practice, buildAssessmentWorklist: true);
+
+        return [
+            'user' => $data['user'],
+            'activeSession' => $data['activeSession'],
+            'studentAssessmentDeck' => $data['studentAssessmentDeck'],
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
-    private function buildStudentDashboardData(User $user, PracticeModuleSettings $practiceSettings): array
+    private function buildStudentDashboardData(User $user, PracticeModuleSettings $practiceSettings, bool $buildAssessmentWorklist = true): array
     {
         $now = Carbon::now();
 
@@ -87,6 +104,22 @@ class DashboardController extends Controller
             ->whereIn('status', ['active', 'paused'])
             ->with(['exam.course:id,code,title'])
             ->first();
+
+        if (! $buildAssessmentWorklist) {
+            $practiceEnabled = $practiceSettings->studentPracticeEnabled();
+
+            return [
+                'user' => $user,
+                'activeSession' => $activeSession,
+                'heldResults' => collect(),
+                'pendingManualResults' => collect(),
+                'classYearOk' => $classYearOk,
+                'practiceEnabled' => $practiceEnabled,
+                'practiceQuizCount' => 0,
+                'recentPracticeScores' => collect(),
+                'studentAssessmentDeck' => $this->buildStudentAssessmentDeck(collect(), collect(), collect(), $now),
+            ];
+        }
 
         $courseIds = collect();
         if ($user->class_id !== null) {
