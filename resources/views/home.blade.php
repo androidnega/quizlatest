@@ -34,7 +34,15 @@
         <main class="flex-1">
             {{-- Hero --}}
             <section class="border-b border-qs-soft bg-qs-bg">
-                <div class="mx-auto grid max-w-6xl min-w-0 gap-10 px-5 py-14 sm:gap-12 sm:py-16 md:grid-cols-2 md:items-center md:gap-14 md:py-20 lg:gap-16 lg:px-8 lg:py-24">
+                {{-- Mobile: promotional banner (copy is in the artwork) --}}
+                <div class="md:hidden">
+                    <div class="mx-auto w-full max-w-6xl px-4 py-8 sm:px-5 sm:py-10">
+                        <x-home-hero-mobile />
+                    </div>
+                </div>
+
+                {{-- Tablet and up: headline + desktop artwork --}}
+                <div class="mx-auto hidden max-w-6xl min-w-0 gap-10 px-5 py-14 sm:gap-12 sm:py-16 md:grid md:grid-cols-2 md:items-center md:gap-14 md:py-20 lg:gap-16 lg:px-8 lg:py-24">
                     <div class="min-w-0 max-w-2xl">
                         <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--qs-primary)]">{{ __('Built for schools') }}</p>
                         <h1 class="mt-4 text-3xl font-semibold leading-[1.12] tracking-tight text-[var(--qs-text)] sm:text-4xl lg:text-[2.65rem] lg:leading-tight">
