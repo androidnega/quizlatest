@@ -9,17 +9,16 @@
     @php
         $integrityTotal = $proctoringFlaggedSessionsCount + $autoSubmittedSessionsCount + $heldResultsCount;
 
-        // Bento-grid design: ONE dark hero card holds the headline metric
-        // (total assessments + draft/published breakdown bar), and three
-        // lighter satellite cards orbit it. Each satellite has a colored
-        // left-edge stripe instead of the top-stripe used previously, plus
-        // a small live-status indicator under the metric.
-        $satelliteBase = 'group relative isolate flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-4 pl-5 pr-14 shadow-sm transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-5 sm:pl-6 sm:pr-16';
-        $satelliteStripeBase = 'absolute inset-y-0 left-0 w-1.5';
-        $satelliteIconBadge = 'absolute right-3 top-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl ring-1 ring-inset sm:right-4 sm:top-4';
-        $metricLabel = 'text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500';
-        $metricValue = 'mt-1 text-3xl font-bold leading-none tracking-tight tabular-nums text-slate-900 sm:text-[2rem]';
-        $metricFootLink = 'mt-auto pt-3 inline-flex items-center gap-1.5 text-sm font-semibold underline-offset-2 hover:underline';
+        // Bento-grid design: every card sits on a single solid deep tone
+        // (white text on a coloured surface) — no gradients, no left-edge
+        // stripes, no white surfaces. Internal density is trimmed so each
+        // card stays short, and the icon badge sits in a translucent white
+        // chip in the top-right.
+        $satelliteBase = 'group relative isolate flex h-full flex-col overflow-hidden rounded-2xl p-3.5 pr-12 text-white shadow-md transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg sm:p-4 sm:pr-14';
+        $satelliteIconBadge = 'absolute right-2.5 top-2.5 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white/12 text-white ring-1 ring-inset ring-white/20 sm:right-3 sm:top-3';
+        $metricLabel = 'text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75';
+        $metricValue = 'mt-0.5 text-[1.75rem] font-bold leading-none tracking-tight tabular-nums text-white sm:text-[1.9rem]';
+        $metricFootLink = 'mt-auto pt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-white/90 underline-offset-2 hover:text-white hover:underline';
 
         // Hero math: percent breakdown for the inline draft/published bar.
         $heroTotal = max(0, (int) $quizTotalCount);
@@ -136,76 +135,74 @@
                 </article>
 
                 {{-- SATELLITE 1 — Open now.
-                     Label + value sit adjacent in DOM; icon badge floats to
-                     the top-right via absolute positioning so accessibility
+                     Solid deep-emerald tone. Label + value sit adjacent in
+                     DOM; icon badge floats top-right so accessibility
                      readers (and the inflated-grading regression tests) see
                      the label paired directly with its number. --}}
-                <article class="{{ $satelliteBase }}">
-                    <span aria-hidden="true" class="{{ $satelliteStripeBase }} bg-gradient-to-b from-emerald-400 to-teal-500"></span>
+                <article class="{{ $satelliteBase }} bg-[#0c6b3b] shadow-emerald-950/25 hover:shadow-emerald-950/35">
                     <p class="{{ $metricLabel }}">{{ __('Open now') }}</p>
                     <p class="{{ $metricValue }}">{{ $activeAssessmentsCount }}</p>
-                    <span aria-hidden="true" class="{{ $satelliteIconBadge }} bg-emerald-50 text-emerald-700 ring-emerald-200/80">
-                        <i class="fa-solid fa-door-open"></i>
+                    <span aria-hidden="true" class="{{ $satelliteIconBadge }}">
+                        <i class="fa-solid fa-door-open text-[12px]"></i>
                     </span>
                     @if ($activeAssessmentsCount > 0)
-                        <p class="mt-2.5">
-                            <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100/80 px-2 py-0.5 text-[11px] font-semibold text-emerald-900 ring-1 ring-inset ring-emerald-300/60">
-                                <span class="relative flex h-2 w-2" aria-hidden="true">
-                                    <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                                    <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                        <p class="mt-2">
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white ring-1 ring-inset ring-white/20">
+                                <span class="relative flex h-1.5 w-1.5" aria-hidden="true">
+                                    <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75"></span>
+                                    <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-white"></span>
                                 </span>
                                 {{ __('Live now') }}
                             </span>
                         </p>
                     @else
-                        <p class="mt-2.5 text-xs leading-relaxed text-slate-500">{{ __('Nothing inside its window right now.') }}</p>
+                        <p class="mt-2 text-[11px] leading-snug text-white/75">{{ __('Nothing inside its window right now.') }}</p>
                     @endif
-                    <p class="mt-3 text-xs leading-relaxed text-slate-600">{{ __('Students can start or submit during the schedule window.') }}</p>
+                    <p class="mt-2 text-[11px] leading-snug text-white/75">{{ __('Students can start or submit during the schedule window.') }}</p>
                 </article>
 
-                {{-- SATELLITE 2 — Submissions --}}
-                <article class="{{ $satelliteBase }}">
-                    <span aria-hidden="true" class="{{ $satelliteStripeBase }} bg-gradient-to-b from-indigo-400 to-violet-500"></span>
+                {{-- SATELLITE 2 — Submissions. Solid deep-indigo tone. --}}
+                <article class="{{ $satelliteBase }} bg-[#3730a3] shadow-indigo-950/25 hover:shadow-indigo-950/35">
                     <p class="{{ $metricLabel }}">{{ __('Submissions') }}</p>
                     <p class="{{ $metricValue }}">{{ $submittedSessionsCount }}</p>
-                    <span aria-hidden="true" class="{{ $satelliteIconBadge }} bg-indigo-50 text-indigo-700 ring-indigo-200/80">
-                        <i class="fa-solid fa-paper-plane"></i>
+                    <span aria-hidden="true" class="{{ $satelliteIconBadge }}">
+                        <i class="fa-solid fa-paper-plane text-[12px]"></i>
                     </span>
-                    <p class="mt-2.5 text-xs leading-relaxed text-slate-600">{{ __('Total student attempts that finished.') }}</p>
+                    <p class="mt-2 text-[11px] leading-snug text-white/75">{{ __('Total student attempts that finished.') }}</p>
                     <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['tab' => 'active'])) }}"
-                       class="{{ $metricFootLink }} text-indigo-700">
+                       class="{{ $metricFootLink }}">
                         {{ __('Browse active') }}
-                        <i class="fa-solid fa-arrow-right text-[11px] transition group-hover:translate-x-0.5"></i>
+                        <i class="fa-solid fa-arrow-right text-[10px] transition group-hover:translate-x-0.5"></i>
                     </a>
                 </article>
 
-                {{-- SATELLITE 3 — Needs grading (with held-for-review chip on the front).
-                     Spans the full row on xl now that the hero only takes a single row. --}}
-                <article class="{{ $satelliteBase }} md:col-span-2 xl:col-span-4">
-                    <span aria-hidden="true" class="{{ $satelliteStripeBase }} bg-gradient-to-b from-amber-400 to-rose-400"></span>
+                {{-- SATELLITE 3 — Needs grading. Solid deep-amber tone, with
+                     a held-for-review chip on the front. Spans the full row
+                     on xl now that the hero only takes a single row. --}}
+                <article class="{{ $satelliteBase }} bg-[#92400e] shadow-amber-950/25 hover:shadow-amber-950/35 md:col-span-2 xl:col-span-4">
                     <p class="{{ $metricLabel }}">{{ __('Needs grading') }}</p>
-                    <div class="mt-1 flex flex-wrap items-baseline gap-3">
-                        <p class="text-3xl font-bold leading-none tracking-tight tabular-nums text-slate-900 sm:text-[2rem]">{{ $pendingManualGradingCount }}</p>
+                    <div class="mt-0.5 flex flex-wrap items-baseline gap-3">
+                        <p class="text-[1.75rem] font-bold leading-none tracking-tight tabular-nums text-white sm:text-[1.9rem]">{{ $pendingManualGradingCount }}</p>
                         @if ($heldResultsCount > 0)
-                            <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-900 ring-1 ring-inset ring-amber-300/60">
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white ring-1 ring-inset ring-white/20">
                                 <i class="fa-solid fa-triangle-exclamation text-[10px]" aria-hidden="true"></i>
                                 {{ __(':count held for review', ['count' => $heldResultsCount]) }}
                             </span>
                         @endif
                     </div>
-                    <span aria-hidden="true" class="{{ $satelliteIconBadge }} bg-amber-50 text-amber-800 ring-amber-200/80">
-                        <i class="fa-solid fa-list-check"></i>
+                    <span aria-hidden="true" class="{{ $satelliteIconBadge }}">
+                        <i class="fa-solid fa-list-check text-[12px]"></i>
                     </span>
-                    <p class="mt-2 text-xs leading-relaxed text-slate-600">
+                    <p class="mt-2 text-[11px] leading-snug text-white/75">
                         @if ($pendingManualGradingCount > 0)
                             {{ __('Distinct submissions waiting on essay grading. Tap to open the queue and apply AI suggestions or grade manually.') }}
                         @else
                             {{ __('You are caught up — no submissions are waiting on manual grading.') }}
                         @endif
                     </p>
-                    <a href="{{ route('examiner.grading.pending') }}" class="{{ $metricFootLink }} text-amber-800">
+                    <a href="{{ route('examiner.grading.pending') }}" class="{{ $metricFootLink }}">
                         {{ __('Open grading queue') }}
-                        <i class="fa-solid fa-arrow-right text-[11px] transition group-hover:translate-x-0.5"></i>
+                        <i class="fa-solid fa-arrow-right text-[10px] transition group-hover:translate-x-0.5"></i>
                     </a>
                 </article>
             </div>
