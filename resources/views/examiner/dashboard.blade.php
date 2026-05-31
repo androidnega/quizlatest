@@ -14,11 +14,24 @@
         // stripes, no white surfaces. Internal density is trimmed so each
         // card stays short, and the icon badge sits in a translucent white
         // chip in the top-right.
-        $satelliteBase = 'group relative isolate flex h-full flex-col overflow-hidden rounded-2xl p-3.5 pr-12 text-white shadow-md transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg sm:p-4 sm:pr-14';
-        $satelliteIconBadge = 'absolute right-2.5 top-2.5 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white/12 text-white ring-1 ring-inset ring-white/20 sm:right-3 sm:top-3';
-        $metricLabel = 'text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75';
-        $metricValue = 'mt-0.5 text-[1.75rem] font-bold leading-none tracking-tight tabular-nums text-white sm:text-[1.9rem]';
-        $metricFootLink = 'mt-auto pt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-white/90 underline-offset-2 hover:text-white hover:underline';
+        // Hover treatment is composed of two pointer-events-none overlay
+        // spans (a soft radial highlight in the top-right + a diagonal
+        // shine sweep), the card lifts and casts a deeper coloured shadow,
+        // and the icon chip scales + brightens. All four bento tiles share
+        // the same recipe so they read as one family on hover.
+        $satelliteBase = 'group relative isolate flex h-full flex-col overflow-hidden rounded-2xl p-3.5 pr-12 text-white shadow-md transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-1 hover:shadow-xl sm:p-4 sm:pr-14';
+        $satelliteIconBadge = 'absolute right-2.5 top-2.5 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white/12 text-white ring-1 ring-inset ring-white/20 transition duration-300 ease-out group-hover:scale-110 group-hover:bg-white/20 group-hover:ring-white/30 sm:right-3 sm:top-3';
+        $metricLabel = 'relative text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75';
+        $metricValue = 'relative mt-0.5 text-[1.75rem] font-bold leading-none tracking-tight tabular-nums text-white sm:text-[1.9rem]';
+        $metricFootLink = 'relative mt-auto pt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-white/90 underline-offset-2 transition hover:text-white hover:underline';
+
+        // Two overlay spans shared by every card. Raw strings so each card
+        // can include them at the top without repeating markup. Both are
+        // pointer-events-none and sit below content via the article's
+        // `isolate` stacking context (content has `relative` on its key
+        // elements where needed).
+        $hoverHighlight = '<span aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.18),_transparent_65%)] opacity-0 transition-opacity duration-500 ease-out group-hover:opacity-100"></span>';
+        $hoverShine = '<span aria-hidden="true" class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-1/3 -translate-x-full skew-x-12 bg-gradient-to-r from-transparent via-white/[0.14] to-transparent transition-transform duration-[900ms] ease-out group-hover:translate-x-[400%]"></span>';
 
         // Hero math: percent breakdown for the inline draft/published bar.
         $heroTotal = max(0, (int) $quizTotalCount);
@@ -46,14 +59,16 @@
                      watermark numeral — one flat color so the card reads
                      as a single tone with maximum calm. Internal density
                      trimmed so the card sits short. --}}
-                <article class="group relative isolate flex flex-col overflow-hidden rounded-3xl bg-[#1f6a78] p-5 text-white shadow-md shadow-[#0d3f49]/30 transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#0d3f49]/40 sm:p-5 md:col-span-2 xl:col-span-2">
+                <article class="group relative isolate flex flex-col overflow-hidden rounded-3xl bg-[#1f6a78] p-5 text-white shadow-md shadow-[#0d3f49]/30 transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-1 hover:shadow-xl hover:shadow-[#0d3f49]/50 sm:p-5 md:col-span-2 xl:col-span-2">
+                    {!! $hoverHighlight !!}
+                    {!! $hoverShine !!}
                     {{-- TOP: eyebrow + small icon chip --}}
                     <div class="relative flex items-center justify-between gap-4">
                         <p class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/85">
                             <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-white/90"></span>
                             {{ __('Assessments') }}
                         </p>
-                        <span aria-hidden="true" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/12 text-white ring-1 ring-inset ring-white/20">
+                        <span aria-hidden="true" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/12 text-white ring-1 ring-inset ring-white/20 transition duration-300 ease-out group-hover:scale-110 group-hover:bg-white/20 group-hover:ring-white/30">
                             <i class="fa-solid fa-file-lines text-[12px]"></i>
                         </span>
                     </div>
@@ -139,7 +154,9 @@
                      DOM; icon badge floats top-right so accessibility
                      readers (and the inflated-grading regression tests) see
                      the label paired directly with its number. --}}
-                <article class="{{ $satelliteBase }} bg-[#0c6b3b] shadow-emerald-950/25 hover:shadow-emerald-950/35">
+                <article class="{{ $satelliteBase }} bg-[#0c6b3b] shadow-emerald-950/25 hover:shadow-emerald-950/40">
+                    {!! $hoverHighlight !!}
+                    {!! $hoverShine !!}
                     <p class="{{ $metricLabel }}">{{ __('Open now') }}</p>
                     <p class="{{ $metricValue }}">{{ $activeAssessmentsCount }}</p>
                     <span aria-hidden="true" class="{{ $satelliteIconBadge }}">
@@ -162,7 +179,9 @@
                 </article>
 
                 {{-- SATELLITE 2 — Submissions. Solid deep-indigo tone. --}}
-                <article class="{{ $satelliteBase }} bg-[#3730a3] shadow-indigo-950/25 hover:shadow-indigo-950/35">
+                <article class="{{ $satelliteBase }} bg-[#3730a3] shadow-indigo-950/25 hover:shadow-indigo-950/40">
+                    {!! $hoverHighlight !!}
+                    {!! $hoverShine !!}
                     <p class="{{ $metricLabel }}">{{ __('Submissions') }}</p>
                     <p class="{{ $metricValue }}">{{ $submittedSessionsCount }}</p>
                     <span aria-hidden="true" class="{{ $satelliteIconBadge }}">
@@ -179,7 +198,9 @@
                 {{-- SATELLITE 3 — Needs grading. Solid deep-amber tone, with
                      a held-for-review chip on the front. Spans the full row
                      on xl now that the hero only takes a single row. --}}
-                <article class="{{ $satelliteBase }} bg-[#92400e] shadow-amber-950/25 hover:shadow-amber-950/35 md:col-span-2 xl:col-span-4">
+                <article class="{{ $satelliteBase }} bg-[#92400e] shadow-amber-950/25 hover:shadow-amber-950/40 md:col-span-2 xl:col-span-4">
+                    {!! $hoverHighlight !!}
+                    {!! $hoverShine !!}
                     <p class="{{ $metricLabel }}">{{ __('Needs grading') }}</p>
                     <div class="mt-0.5 flex flex-wrap items-baseline gap-3">
                         <p class="text-[1.75rem] font-bold leading-none tracking-tight tabular-nums text-white sm:text-[1.9rem]">{{ $pendingManualGradingCount }}</p>
