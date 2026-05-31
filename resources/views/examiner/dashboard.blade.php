@@ -9,29 +9,18 @@
     @php
         $integrityTotal = $proctoringFlaggedSessionsCount + $autoSubmittedSessionsCount + $heldResultsCount;
 
-        // Bento-grid design: every card sits on a single solid deep tone
-        // (white text on a coloured surface) — no gradients, no left-edge
-        // stripes, no white surfaces. Internal density is trimmed so each
-        // card stays short, and the icon badge sits in a translucent white
-        // chip in the top-right.
-        // Hover treatment is composed of two pointer-events-none overlay
-        // spans (a soft radial highlight in the top-right + a diagonal
-        // shine sweep), the card lifts and casts a deeper coloured shadow,
-        // and the icon chip scales + brightens. All four bento tiles share
-        // the same recipe so they read as one family on hover.
-        $satelliteBase = 'group relative isolate flex h-full flex-col overflow-hidden rounded-2xl p-3 pr-11 text-white shadow-md transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-1 hover:shadow-xl sm:p-3.5 sm:pr-12';
-        $satelliteIconBadge = 'absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/12 text-white ring-1 ring-inset ring-white/20 transition duration-300 ease-out group-hover:scale-110 group-hover:bg-white/20 group-hover:ring-white/30 sm:right-2.5 sm:top-2.5';
-        $metricLabel = 'relative text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75';
-        $metricValue = 'relative mt-0.5 text-[1.5rem] font-bold leading-none tracking-tight tabular-nums text-white sm:text-[1.65rem]';
-        $metricFootLink = 'relative mt-auto pt-1.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-white/90 underline-offset-2 transition hover:text-white hover:underline';
-
-        // Two overlay spans shared by every card. Raw strings so each card
-        // can include them at the top without repeating markup. Both are
-        // pointer-events-none and sit below content via the article's
-        // `isolate` stacking context (content has `relative` on its key
-        // elements where needed).
-        $hoverHighlight = '<span aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.18),_transparent_65%)] opacity-0 transition-opacity duration-500 ease-out group-hover:opacity-100"></span>';
-        $hoverShine = '<span aria-hidden="true" class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-1/3 -translate-x-full skew-x-12 bg-gradient-to-r from-transparent via-white/[0.14] to-transparent transition-transform duration-[900ms] ease-out group-hover:translate-x-[400%]"></span>';
+        // Bento-grid design: soft pastel tiles. Each card sits on its own
+        // light tinted background (-50) with a matching hairline border,
+        // darker matching text for the label/value, and a slightly more
+        // saturated chip in the top-right for the icon. No overlays, no
+        // gradients — the only motion on hover is a small lift, a tinted
+        // shadow, a touch more saturation on the surface, and the icon
+        // chip scales gently.
+        $satelliteBase = 'group relative isolate flex h-full flex-col overflow-hidden rounded-2xl border p-3 pr-11 shadow-sm transition-[transform,box-shadow,background-color] duration-300 ease-out will-change-transform hover:-translate-y-1 hover:shadow-md sm:p-3.5 sm:pr-12';
+        $satelliteIconBadge = 'absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-lg ring-1 ring-inset transition duration-300 ease-out group-hover:scale-110 sm:right-2.5 sm:top-2.5';
+        $metricLabel = 'relative text-[10px] font-semibold uppercase tracking-[0.12em]';
+        $metricValue = 'relative mt-0.5 text-[1.5rem] font-bold leading-none tracking-tight tabular-nums sm:text-[1.65rem]';
+        $metricFootLink = 'relative mt-auto pt-1.5 inline-flex items-center gap-1.5 text-[11px] font-semibold underline-offset-2 transition hover:underline';
 
         // Hero math: percent breakdown for the inline draft/published bar.
         $heroTotal = max(0, (int) $quizTotalCount);
@@ -59,92 +48,89 @@
                      watermark numeral — one flat color so the card reads
                      as a single tone with maximum calm. Internal density
                      trimmed so the card sits short. --}}
-                <article class="group relative isolate flex flex-col overflow-hidden rounded-3xl bg-[#1f6a78] p-4 text-white shadow-md shadow-[#0d3f49]/30 transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-1 hover:shadow-xl hover:shadow-[#0d3f49]/50 sm:p-4 md:col-span-2 xl:col-span-2">
-                    {!! $hoverHighlight !!}
-                    {!! $hoverShine !!}
+                <article class="{{ $satelliteBase }} bg-cyan-50 border-cyan-100 hover:bg-cyan-100/70 hover:shadow-cyan-200/40 md:col-span-2 xl:col-span-2">
                     {{-- TOP: eyebrow + small icon chip --}}
                     <div class="relative flex items-center justify-between gap-4">
-                        <p class="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/85">
-                            <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-white/90"></span>
+                        <p class="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-700">
+                            <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-cyan-500"></span>
                             {{ __('Assessments') }}
                         </p>
-                        <span aria-hidden="true" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/12 text-white ring-1 ring-inset ring-white/20 transition duration-300 ease-out group-hover:scale-110 group-hover:bg-white/20 group-hover:ring-white/30">
+                        <span aria-hidden="true" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-cyan-100 text-cyan-700 ring-1 ring-inset ring-cyan-200/80 transition duration-300 ease-out group-hover:scale-110 group-hover:bg-cyan-200/70">
                             <i class="fa-solid fa-file-lines text-[11px]"></i>
                         </span>
                     </div>
 
-                    {{-- HEADLINE: number + live chip + descriptor on a single
-                         row so the card stays compact vertically. --}}
+                    {{-- HEADLINE: number + live chip + descriptor --}}
                     <div class="relative mt-2.5">
                         <p class="flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5">
-                            <span class="text-[2.25rem] font-bold leading-none tabular-nums text-white sm:text-[2.5rem]">{{ $quizTotalCount }}</span>
+                            <span class="text-[2.25rem] font-bold leading-none tabular-nums text-cyan-900 sm:text-[2.5rem]">{{ $quizTotalCount }}</span>
                             @if ($publishedAssessmentsCount > 0)
-                                <span class="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white ring-1 ring-inset ring-white/20">
+                                <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-800 ring-1 ring-inset ring-emerald-200/80">
                                     <span class="relative flex h-1.5 w-1.5">
-                                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75"></span>
-                                        <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-white"></span>
+                                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75"></span>
+                                        <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                                     </span>
                                     {{ $publishedAssessmentsCount }} {{ __('live') }}
                                 </span>
                             @endif
                         </p>
-                        <p class="mt-1 max-w-md text-[12px] leading-snug text-white/75">{{ __('Everything you own across your courses.') }}</p>
+                        <p class="mt-1 max-w-md text-[12px] leading-snug text-cyan-800/80">{{ __('Everything you own across your courses.') }}</p>
                     </div>
 
                     {{-- BOTTOM: divider + mix row + footer link. --}}
                     <div class="relative mt-3 pt-3">
-                        <div class="border-t border-white/15"></div>
+                        <div class="border-t border-cyan-200/60"></div>
                         @if ($heroTotal > 0)
                             <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
                                 {{-- Mix bar with inline label --}}
                                 <div class="flex min-w-0 flex-1 items-center gap-3">
-                                    <span class="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/60">{{ __('Mix') }}</span>
-                                    <div class="flex h-1.5 min-w-[6rem] flex-1 overflow-hidden rounded-full bg-white/12" role="img" aria-label="{{ __('Draft and published mix') }}">
+                                    <span class="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-700/70">{{ __('Mix') }}</span>
+                                    <div class="flex h-1.5 min-w-[6rem] flex-1 overflow-hidden rounded-full bg-cyan-200/60" role="img" aria-label="{{ __('Draft and published mix') }}">
                                         @if ($heroPublishedPct > 0)
-                                            <span class="block h-full bg-white" style="width: {{ $heroPublishedPct }}%"></span>
+                                            <span class="block h-full bg-cyan-600" style="width: {{ $heroPublishedPct }}%"></span>
                                         @endif
                                         @if ($heroDraftPct > 0)
-                                            <span class="block h-full bg-white/55" style="width: {{ $heroDraftPct }}%"></span>
+                                            <span class="block h-full bg-cyan-400" style="width: {{ $heroDraftPct }}%"></span>
                                         @endif
                                         @if ($heroOtherPct > 0)
-                                            <span class="block h-full bg-white/25" style="width: {{ $heroOtherPct }}%"></span>
+                                            <span class="block h-full bg-cyan-300" style="width: {{ $heroOtherPct }}%"></span>
                                         @endif
                                     </div>
                                 </div>
-                                {{-- Inline stat pills, separated by tiny dots --}}
-                                <ul class="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
-                                    <li class="inline-flex items-center gap-2 text-white">
-                                        <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-white"></span>
-                                        <span class="font-semibold uppercase tracking-wider text-white/75">{{ __('Published') }}</span>
+                                {{-- Inline stat pills --}}
+                                <ul class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+                                    <li class="inline-flex items-center gap-1.5 text-cyan-900">
+                                        <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-cyan-600"></span>
+                                        <span class="font-semibold uppercase tracking-wider text-cyan-700/80">{{ __('Published') }}</span>
                                         <span class="text-sm font-bold tabular-nums">{{ $heroPublished }}</span>
                                     </li>
-                                    <li class="inline-flex items-center gap-2 text-white">
-                                        <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-white/55"></span>
-                                        <span class="font-semibold uppercase tracking-wider text-white/75">{{ __('Draft') }}</span>
+                                    <li class="inline-flex items-center gap-1.5 text-cyan-900">
+                                        <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-cyan-400"></span>
+                                        <span class="font-semibold uppercase tracking-wider text-cyan-700/80">{{ __('Draft') }}</span>
                                         <span class="text-sm font-bold tabular-nums">{{ $heroDraft }}</span>
                                     </li>
                                     @if ($heroOther > 0)
-                                        <li class="inline-flex items-center gap-2 text-white">
-                                            <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-white/25"></span>
-                                            <span class="font-semibold uppercase tracking-wider text-white/75">{{ __('Archived') }}</span>
+                                        <li class="inline-flex items-center gap-1.5 text-cyan-900">
+                                            <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-cyan-300"></span>
+                                            <span class="font-semibold uppercase tracking-wider text-cyan-700/80">{{ __('Archived') }}</span>
                                             <span class="text-sm font-bold tabular-nums">{{ $heroOther }}</span>
                                         </li>
                                     @endif
                                 </ul>
                             </div>
                         @else
-                            <p class="mt-2 max-w-md text-[11px] leading-snug text-white/75">
+                            <p class="mt-2 max-w-md text-[11px] leading-snug text-cyan-800/80">
                                 {{ __('You have no assessments yet. Create one to start collecting submissions.') }}
                             </p>
                         @endif
 
                         <div class="mt-3 flex items-center justify-between gap-3">
                             <a href="{{ route('examiner.exams.index', $dashboardProctoringQueryBase) }}"
-                               class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-[#1f6a78] shadow-sm transition duration-150 ease-out hover:-translate-y-0.5 hover:bg-white/95 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 focus:ring-offset-[#1f6a78]">
+                               class="inline-flex items-center gap-1.5 rounded-full bg-cyan-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition duration-150 ease-out hover:-translate-y-0.5 hover:bg-cyan-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-cyan-400/40 focus:ring-offset-2 focus:ring-offset-cyan-50">
                                 {{ __('View all') }}
                                 <i class="fa-solid fa-arrow-right text-[10px] transition group-hover:translate-x-0.5"></i>
                             </a>
-                            <span class="hidden text-[10px] uppercase tracking-[0.14em] text-white/55 sm:inline">{{ __('Across all courses') }}</span>
+                            <span class="hidden text-[10px] uppercase tracking-[0.14em] text-cyan-700/60 sm:inline">{{ __('Across all courses') }}</span>
                         </div>
                     </div>
                 </article>
@@ -154,42 +140,38 @@
                      DOM; icon badge floats top-right so accessibility
                      readers (and the inflated-grading regression tests) see
                      the label paired directly with its number. --}}
-                <article class="{{ $satelliteBase }} bg-[#0c6b3b] shadow-emerald-950/25 hover:shadow-emerald-950/40">
-                    {!! $hoverHighlight !!}
-                    {!! $hoverShine !!}
-                    <p class="{{ $metricLabel }}">{{ __('Open now') }}</p>
-                    <p class="{{ $metricValue }}">{{ $activeAssessmentsCount }}</p>
-                    <span aria-hidden="true" class="{{ $satelliteIconBadge }}">
+                <article class="{{ $satelliteBase }} bg-emerald-50 border-emerald-100 hover:bg-emerald-100/70 hover:shadow-emerald-200/40">
+                    <p class="{{ $metricLabel }} text-emerald-700">{{ __('Open now') }}</p>
+                    <p class="{{ $metricValue }} text-emerald-900">{{ $activeAssessmentsCount }}</p>
+                    <span aria-hidden="true" class="{{ $satelliteIconBadge }} bg-emerald-100 text-emerald-700 ring-emerald-200/80 group-hover:bg-emerald-200/70">
                         <i class="fa-solid fa-door-open text-[11px]"></i>
                     </span>
                     @if ($activeAssessmentsCount > 0)
                         <p class="relative mt-1.5">
-                            <span class="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white ring-1 ring-inset ring-white/20">
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-800 ring-1 ring-inset ring-emerald-200/80">
                                 <span class="relative flex h-1.5 w-1.5" aria-hidden="true">
-                                    <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75"></span>
-                                    <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-white"></span>
+                                    <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75"></span>
+                                    <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                                 </span>
                                 {{ __('Live now') }}
                             </span>
                         </p>
                     @else
-                        <p class="relative mt-1.5 text-[11px] leading-snug text-white/70">{{ __('Nothing inside its window right now.') }}</p>
+                        <p class="relative mt-1.5 text-[11px] leading-snug text-emerald-800/75">{{ __('Nothing inside its window right now.') }}</p>
                     @endif
-                    <p class="relative mt-1.5 text-[11px] leading-snug text-white/70">{{ __('Students can start or submit during the schedule window.') }}</p>
+                    <p class="relative mt-1.5 text-[11px] leading-snug text-emerald-800/75">{{ __('Students can start or submit during the schedule window.') }}</p>
                 </article>
 
                 {{-- SATELLITE 2 — Submissions. Solid deep-indigo tone. --}}
-                <article class="{{ $satelliteBase }} bg-[#3730a3] shadow-indigo-950/25 hover:shadow-indigo-950/40">
-                    {!! $hoverHighlight !!}
-                    {!! $hoverShine !!}
-                    <p class="{{ $metricLabel }}">{{ __('Submissions') }}</p>
-                    <p class="{{ $metricValue }}">{{ $submittedSessionsCount }}</p>
-                    <span aria-hidden="true" class="{{ $satelliteIconBadge }}">
+                <article class="{{ $satelliteBase }} bg-indigo-50 border-indigo-100 hover:bg-indigo-100/70 hover:shadow-indigo-200/40">
+                    <p class="{{ $metricLabel }} text-indigo-700">{{ __('Submissions') }}</p>
+                    <p class="{{ $metricValue }} text-indigo-900">{{ $submittedSessionsCount }}</p>
+                    <span aria-hidden="true" class="{{ $satelliteIconBadge }} bg-indigo-100 text-indigo-700 ring-indigo-200/80 group-hover:bg-indigo-200/70">
                         <i class="fa-solid fa-paper-plane text-[11px]"></i>
                     </span>
-                    <p class="relative mt-1.5 text-[11px] leading-snug text-white/70">{{ __('Total student attempts that finished.') }}</p>
+                    <p class="relative mt-1.5 text-[11px] leading-snug text-indigo-800/75">{{ __('Total student attempts that finished.') }}</p>
                     <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['tab' => 'active'])) }}"
-                       class="{{ $metricFootLink }}">
+                       class="{{ $metricFootLink }} text-indigo-700 hover:text-indigo-900">
                         {{ __('Browse active') }}
                         <i class="fa-solid fa-arrow-right text-[10px] transition group-hover:translate-x-0.5"></i>
                     </a>
@@ -198,30 +180,28 @@
                 {{-- SATELLITE 3 — Needs grading. Solid deep-amber tone, with
                      a held-for-review chip on the front. Spans the full row
                      on xl now that the hero only takes a single row. --}}
-                <article class="{{ $satelliteBase }} bg-[#92400e] shadow-amber-950/25 hover:shadow-amber-950/40 md:col-span-2 xl:col-span-4">
-                    {!! $hoverHighlight !!}
-                    {!! $hoverShine !!}
-                    <p class="{{ $metricLabel }}">{{ __('Needs grading') }}</p>
+                <article class="{{ $satelliteBase }} bg-amber-50 border-amber-100 hover:bg-amber-100/70 hover:shadow-amber-200/40 md:col-span-2 xl:col-span-4">
+                    <p class="{{ $metricLabel }} text-amber-700">{{ __('Needs grading') }}</p>
                     <div class="relative mt-0.5 flex flex-wrap items-baseline gap-2.5">
-                        <p class="text-[1.5rem] font-bold leading-none tracking-tight tabular-nums text-white sm:text-[1.65rem]">{{ $pendingManualGradingCount }}</p>
+                        <p class="text-[1.5rem] font-bold leading-none tracking-tight tabular-nums text-amber-900 sm:text-[1.65rem]">{{ $pendingManualGradingCount }}</p>
                         @if ($heldResultsCount > 0)
-                            <span class="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white ring-1 ring-inset ring-white/20">
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-800 ring-1 ring-inset ring-amber-200/80">
                                 <i class="fa-solid fa-triangle-exclamation text-[10px]" aria-hidden="true"></i>
                                 {{ __(':count held for review', ['count' => $heldResultsCount]) }}
                             </span>
                         @endif
                     </div>
-                    <span aria-hidden="true" class="{{ $satelliteIconBadge }}">
+                    <span aria-hidden="true" class="{{ $satelliteIconBadge }} bg-amber-100 text-amber-700 ring-amber-200/80 group-hover:bg-amber-200/70">
                         <i class="fa-solid fa-list-check text-[11px]"></i>
                     </span>
-                    <p class="relative mt-1.5 text-[11px] leading-snug text-white/70">
+                    <p class="relative mt-1.5 text-[11px] leading-snug text-amber-800/75">
                         @if ($pendingManualGradingCount > 0)
                             {{ __('Distinct submissions waiting on essay grading. Tap to open the queue and apply AI suggestions or grade manually.') }}
                         @else
                             {{ __('You are caught up — no submissions are waiting on manual grading.') }}
                         @endif
                     </p>
-                    <a href="{{ route('examiner.grading.pending') }}" class="{{ $metricFootLink }}">
+                    <a href="{{ route('examiner.grading.pending') }}" class="{{ $metricFootLink }} text-amber-700 hover:text-amber-900">
                         {{ __('Open grading queue') }}
                         <i class="fa-solid fa-arrow-right text-[10px] transition group-hover:translate-x-0.5"></i>
                     </a>
