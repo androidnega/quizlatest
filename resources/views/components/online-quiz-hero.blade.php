@@ -1,5 +1,5 @@
 @php
-    $heroImage = asset('images/home/quizsnap-hero.jpg');
+    $heroImage = asset('images/home/quizsnap-homepage-hero-desktop-student-laptop.jpg');
 @endphp
 
 <div
