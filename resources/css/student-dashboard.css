@@ -1,6 +1,9 @@
 @import './vendor/cropper.css';
 
-/* QuizSnap student shell — approved dashboard palette */
+/* QuizSnap student shell — approved dashboard palette. These variables
+   shadow the brand-level :root tokens so the student surface keeps its
+   own measured neutrals. The matching prefers-color-scheme block below
+   re-tints them for OS dark mode. */
 .qs-std {
     --qs-page: #ffffff;
     --qs-ink: #101828;
@@ -6434,6 +6437,70 @@ body.qs-std--wallet:not([data-qs-wallet-theme="noir"]) .qs-stat-card--link:focus
    `qs.*` palette is already CSS-variable-driven and adapts on its own.
    ============================================================= */
 @media (prefers-color-scheme: dark) {
+    /* Student shell variables — these shadow the :root brand palette,
+       so they must be re-tinted here for the student dashboard to
+       follow OS dark mode. */
+    .qs-std {
+        --qs-page: #0d1517;
+        --qs-ink: #f3f7f8;
+        --qs-text: #d1dadc;
+        --qs-muted: #94a8ac;
+        --qs-line: #1f3035;
+    }
+
+    /* Question breakdown card (student.results.partials.question-breakdown).
+       The card header uses inline arbitrary hex tokens; force them to
+       follow the student shell palette. */
+    .qs-std .qs-result-q-list,
+    body .qs-result-q-list { background: var(--qs-card); }
+
+    /* The legend strip at the top of the breakdown table. */
+    .qs-result-q-list ~ p,
+    .bg-\[\#F7F8FB\] { background-color: var(--qs-surface) !important; }
+    .border-\[\#E8EDF3\] { border-color: var(--qs-soft) !important; }
+    .text-\[\#667085\] { color: var(--qs-muted) !important; }
+    .text-\[\#344054\] { color: var(--qs-text) !important; }
+
+    /* Per-answer tinted rows: lift from 5% to 18% so the cue is visible
+       on a dark surface. */
+    .qs-std .qs-result-q-options li.is-wrong-pick {
+        background: rgb(239 51 64 / 0.18);
+    }
+    .qs-std .qs-result-q-options li.is-right-pick {
+        background: rgb(5 150 105 / 0.18);
+    }
+    .qs-std .qs-result-q-options li {
+        border-bottom-color: rgb(31 48 53 / 0.9);
+    }
+
+    /* Pills */
+    .qs-std .qs-result-q-tag--you {
+        color: #7dd3fc;
+        background: rgb(56 189 248 / 0.18);
+        border-color: rgb(56 189 248 / 0.42);
+    }
+    .qs-std .qs-result-q-tag--you-right,
+    .qs-std .qs-result-q-tag--correct {
+        color: #6ee7b7;
+        background: rgb(16 185 129 / 0.18);
+        border-color: rgb(16 185 129 / 0.42);
+    }
+    .qs-std .qs-result-q-tag--wrong {
+        color: #fda4af;
+        background: rgb(239 68 68 / 0.18);
+        border-color: rgb(239 68 68 / 0.42);
+    }
+
+    /* Correct/wrong text accents */
+    .qs-std .qs-result-q-summary__value--correct { color: #34d399; }
+    .qs-std .qs-result-q-summary__value--wrong,
+    .qs-std .qs-result-q-item__score--wrong { color: #fca5a5; }
+    .qs-std .qs-result-q-item__score--wrong span { color: rgb(252 165 165 / 0.7); }
+
+    /* Card surfaces that pinned #ffffff via .qs-result-breakdown__body > *
+       still need to use the dark card surface. */
+    .qs-result-breakdown__body > * { background: var(--qs-card) !important; }
+
     /* Result detail page (student.results.show) */
     .qs-result-action {
         background: var(--qs-card);
