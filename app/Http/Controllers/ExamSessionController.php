@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ActivityLog;
 use App\Models\AssignmentSubmissionFile;
 use App\Models\ExamSession;
 use App\Models\ExamSessionAnswer;
@@ -17,6 +16,7 @@ use App\Services\ExamAnswerSynthesisService;
 use App\Services\ExamEntryPipelineService;
 use App\Services\ExamOtpService;
 use App\Services\ExamRedisService;
+use App\Services\ExamSessionSubmissionService;
 use App\Services\ExamSessionInvalidateForRetakeService;
 use App\Services\ProctoringGlobalControlService;
 use App\Services\ProctoringOrchestratorService;
@@ -47,6 +47,7 @@ class ExamSessionController extends Controller
         private readonly ExamOtpService $examOtp,
         private readonly ExamRedisService $examRedis,
         private readonly SystemExamPolicyService $examPolicy,
+        private readonly ExamSessionSubmissionService $sessionSubmission,
     ) {}
 
     public function start(Request $request): JsonResponse
@@ -100,17 +101,13 @@ class ExamSessionController extends Controller
     {
         $this->authorizeStudentOwnsSession($request, $examSession);
 
-        $fresh = $examSession->fresh();
-        if ($fresh && $fresh->status !== 'submitted') {
-            $this->autoExpireIfTimedOut($fresh);
-        }
-
-        $fresh = $examSession->fresh();
+        $fresh = $this->prepareTimedSessionForStudent($examSession);
         abort_if($fresh === null, 404);
 
         if ($fresh->status === 'active') {
             $fresh->forceFill(['last_seen_at' => now()])->save();
             $fresh = $examSession->fresh();
+            abort_if($fresh === null, 404);
         }
 
         return response()->json($this->mergeStudentExamStatePayload($fresh));
@@ -177,7 +174,7 @@ class ExamSessionController extends Controller
     public function saveAnswer(Request $request, ExamSession $examSession): JsonResponse
     {
         $this->authorizeStudentSession($request, $examSession);
-        if ($this->autoExpireIfTimedOut($examSession)) {
+        if ($this->sessionSubmission->autoExpireIfTimedOut($examSession)) {
             return response()->json(['status' => 'submitted', 'reason' => 'timeout']);
         }
 
@@ -263,7 +260,8 @@ class ExamSessionController extends Controller
     {
         $this->authorizeStudentSession($request, $examSession);
 
-        if ($this->autoExpireIfTimedOut($examSession)) {
+        $fresh = $this->prepareTimedSessionForStudent($examSession);
+        if ($fresh?->status === 'submitted') {
             return response()->json(['status' => 'submitted', 'reason' => 'timeout']);
         }
 
@@ -292,7 +290,7 @@ class ExamSessionController extends Controller
     public function logProctoringEvent(Request $request, ExamSession $examSession): JsonResponse
     {
         $this->authorizeStudentProctoringSession($request, $examSession);
-        if ($this->autoExpireIfTimedOut($examSession)) {
+        if ($this->sessionSubmission->autoExpireIfTimedOut($examSession)) {
             return response()->json(['status' => 'submitted', 'reason' => 'timeout']);
         }
 
@@ -343,7 +341,7 @@ class ExamSessionController extends Controller
 
         if ($decision['auto_submit'] === true) {
             $code = $this->autoSubmitReasonCodeFromEventType((string) $validated['event_type']);
-            $this->submitSession($examSession->fresh(), 'submitted_held', 'violation_threshold', $code);
+            $this->sessionSubmission->submit($examSession->fresh(), 'submitted_held', 'violation_threshold', $code);
 
             $msg = is_string($decision['client_message'] ?? null) && $decision['client_message'] !== ''
                 ? (string) $decision['client_message']
@@ -372,7 +370,7 @@ class ExamSessionController extends Controller
     public function logProctoringEventBatch(Request $request, ExamSession $examSession): JsonResponse
     {
         $this->authorizeStudentProctoringSession($request, $examSession);
-        if ($this->autoExpireIfTimedOut($examSession)) {
+        if ($this->sessionSubmission->autoExpireIfTimedOut($examSession)) {
             return response()->json(['status' => 'submitted', 'reason' => 'timeout']);
         }
 
@@ -432,7 +430,7 @@ class ExamSessionController extends Controller
 
             if ($decision['auto_submit'] === true) {
                 $code = $this->autoSubmitReasonCodeFromEventType((string) ($eventPayload['event_type'] ?? ''));
-                $this->submitSession($examSession->fresh(), 'submitted_held', 'violation_threshold', $code);
+                $this->sessionSubmission->submit($examSession->fresh(), 'submitted_held', 'violation_threshold', $code);
 
                 $msg = is_string($decision['client_message'] ?? null) && $decision['client_message'] !== ''
                     ? (string) $decision['client_message']
@@ -493,7 +491,9 @@ class ExamSessionController extends Controller
         return match ($eventType) {
             'tab_switch' => 'tab_switch_limit',
             'phone_detected' => 'phone_detected',
+            'multiple_faces' => 'multiple_faces_limit',
             'possible_screenshot_attempt' => 'screenshot_attempt',
+            'possible_screen_record_attempt' => 'screen_record_attempt',
             default => 'violation',
         };
     }
@@ -501,7 +501,7 @@ class ExamSessionController extends Controller
     public function clearProctoringOverlay(Request $request, ExamSession $examSession): JsonResponse
     {
         $this->authorizeStudentProctoringSession($request, $examSession);
-        if ($this->autoExpireIfTimedOut($examSession)) {
+        if ($this->sessionSubmission->autoExpireIfTimedOut($examSession)) {
             return response()->json(['status' => 'submitted', 'reason' => 'timeout']);
         }
 
@@ -536,7 +536,7 @@ class ExamSessionController extends Controller
     public function storeAssignmentSubmissionFile(Request $request, ExamSession $examSession): JsonResponse
     {
         $this->authorizeStudentProctoringSession($request, $examSession);
-        if ($this->autoExpireIfTimedOut($examSession)) {
+        if ($this->sessionSubmission->autoExpireIfTimedOut($examSession)) {
             return response()->json(['status' => 'submitted', 'reason' => 'timeout']);
         }
 
@@ -669,7 +669,7 @@ class ExamSessionController extends Controller
             }
         }
 
-        $this->submitSession($fresh, 'submitted', 'manual_submit');
+        $this->sessionSubmission->submit($fresh, 'submitted', 'manual_submit');
 
         return response()->json(['status' => 'submitted']);
     }
@@ -680,7 +680,7 @@ class ExamSessionController extends Controller
         abort_if($quiz === null, 403);
         $this->authorize('manageResults', $quiz);
 
-        $this->submitSession($examSession, 'submitted_held', 'force_submit');
+        $this->sessionSubmission->submit($examSession, 'submitted_held', 'force_submit');
 
         return response()->json(['status' => 'submitted_held', 'reason' => 'force_submit']);
     }
@@ -869,6 +869,27 @@ class ExamSessionController extends Controller
         abort_unless(in_array($examSession->status, ['active', 'paused'], true), 422, 'Session is not active.');
     }
 
+    private function prepareTimedSessionForStudent(ExamSession $examSession): ?ExamSession
+    {
+        $fresh = $examSession->fresh();
+        if ($fresh === null) {
+            return null;
+        }
+
+        $fresh->loadMissing('exam');
+        if ($fresh->exam !== null && ! $fresh->exam->isAssignment() && $fresh->status !== 'submitted') {
+            ExamSessionTimer::ensureWritingTimerStarted($fresh, $fresh->exam);
+            $fresh = $examSession->fresh();
+        }
+
+        if ($fresh !== null && $fresh->status !== 'submitted') {
+            $this->sessionSubmission->autoExpireIfTimedOut($fresh);
+            $fresh = $examSession->fresh();
+        }
+
+        return $fresh;
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -1014,100 +1035,6 @@ class ExamSessionController extends Controller
         $encoded = json_encode($feedback, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
         return $encoded !== '' ? $encoded : null;
-    }
-
-    private function autoExpireIfTimedOut(ExamSession $examSession): bool
-    {
-        $examSession->loadMissing('exam');
-
-        if ($examSession->exam?->isAssignment()) {
-            return false;
-        }
-
-        $durationMinutes = (int) ($examSession->exam?->duration_minutes ?? 0);
-        if ($durationMinutes <= 0) {
-            return false;
-        }
-
-        $remaining = ExamSessionTimer::timeRemainingSeconds($examSession, $examSession->exam, now());
-        if ($remaining <= 0 && $examSession->status !== 'submitted') {
-            $this->submitSession($examSession, 'submitted', 'timeout');
-
-            return true;
-        }
-
-        return false;
-    }
-
-    private function submitSession(ExamSession $examSession, string $examStatus, string $reason, ?string $autoSubmitReasonCode = null): void
-    {
-        if ($examSession->status === 'submitted') {
-            return;
-        }
-
-        $examSession->loadMissing('exam');
-        $exam = $examSession->exam;
-
-        $submittedLate = false;
-        if ($exam !== null && $exam->isAssignment() && $exam->due_at !== null) {
-            $submittedLate = now()->isAfter($exam->due_at);
-        }
-
-        $examId = (int) $examSession->exam_id;
-
-        $accum = (int) ($examSession->accumulated_pause_seconds ?? 0);
-        if ($examSession->pause_segment_started_at !== null) {
-            $accum += max(0, $examSession->pause_segment_started_at->diffInSeconds(now()));
-        }
-
-        $update = [
-            'status' => 'submitted',
-            'end_time' => now(),
-            'exam_status' => $examStatus,
-            'risk_state' => $examStatus === 'submitted_held' ? 'locked' : $examSession->risk_state,
-            'accumulated_pause_seconds' => $accum,
-            'pause_segment_started_at' => null,
-            'submitted_late' => $submittedLate,
-        ];
-
-        if ($autoSubmitReasonCode !== null && $autoSubmitReasonCode !== '') {
-            $update['auto_submit_reason_code'] = $autoSubmitReasonCode;
-        }
-
-        $examSession->update($update);
-
-        $this->examRedis->decrementActiveSessions($examId);
-
-        $submitted = $examSession->fresh(['exam']);
-        $this->answerSynthesis->ensureEveryQuestionHasAnswer($submitted);
-
-        $endAt = $submitted->end_time ?? now();
-        $timeTaken = ExamSessionTimer::activeWritingSeconds($submitted, $endAt);
-
-        $gradedSession = $submitted->fresh(['exam.questions', 'answers']);
-        $this->answerEvaluation->evaluateAndPersist($gradedSession);
-
-        $finalSession = $submitted->fresh(['answers']);
-        $this->resultFinalization->syncAfterSubmission(
-            $finalSession,
-            $timeTaken,
-            $reason,
-        );
-
-        if ($exam !== null && $exam->isAssignment()) {
-            ActivityLog::query()->create([
-                'user_id' => $examSession->student_id,
-                'quiz_id' => $exam->id,
-                'event_type' => 'assignment_submitted',
-                'event_data' => [
-                    'exam_session_id' => $examSession->id,
-                    'session_id' => $examSession->session_id,
-                    'submitted_late' => $submittedLate,
-                    'reason' => $reason,
-                ],
-                'created_at' => now(),
-            ]);
-        }
     }
 
     private function applyReviewDecision(ExamSession $examSession, string $decision, string $note): void

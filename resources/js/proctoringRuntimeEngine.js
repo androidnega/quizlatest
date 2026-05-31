@@ -1,5 +1,5 @@
-import * as cocoSsd from '@tensorflow-models/coco-ssd';
-import '@tensorflow/tfjs-backend-webgl';
+import '@tensorflow/tfjs-backend-cpu';
+import * as tf from '@tensorflow/tfjs-core';
 import { FaceLandmarker, PoseLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 
 import { ProctoringEventBatcher } from './proctoringEventBatcher';
@@ -95,6 +95,8 @@ export class ProctoringRuntimeEngine {
         this.faceLandmarker = null;
         this.poseLandmarker = null;
         this.phoneModel = null;
+        this.phoneModelPromise = null;
+        this.phoneModelLoadFailed = false;
         /** When true, only tab/fullscreen/window listeners — no camera models or intervals. */
         this.browserOnly = false;
 
@@ -124,12 +126,46 @@ export class ProctoringRuntimeEngine {
         this.lastMultipleFacesEmitMs = 0;
         this.lastPhoneEmitMs = 0;
         this.resizeEmitTimer = null;
+        /** Wall-clock ms when 2+ faces were first seen in the current streak; null when 0/1 faces. */
+        this.multipleFacesStartedAt = null;
+        /** Verification timer that emits the final "30-second" auto-submit event. */
+        this.multipleFacesAutoSubmitTimer = null;
+        /** Continuous multi-face seconds that should trigger auto-submission. */
+        this.multipleFacesAutoSubmitSeconds = 30;
         /** After emitting face_missing, suppress repeats until a face is seen again. */
         this.faceMissingOpen = false;
 
         this.localPreviewRafId = null;
         this.lastLocalPreviewMs = 0;
-        this.localPreviewMinIntervalMs = 110;
+        this.localPreviewMinIntervalMs = 250;
+    }
+
+    async ensurePhoneModel() {
+        if (this.phoneModel || this.phoneModelLoadFailed) {
+            return this.phoneModel;
+        }
+        if (!this.phoneModelPromise) {
+            this.phoneModelPromise = (async () => {
+                await tf.ready();
+                if (tf.getBackend() !== 'cpu') {
+                    await tf.setBackend('cpu');
+                }
+                await tf.ready();
+                const cocoSsd = await import('@tensorflow-models/coco-ssd');
+
+                return cocoSsd.load();
+            })();
+        }
+        try {
+            this.phoneModel = await this.phoneModelPromise;
+
+            return this.phoneModel;
+        } catch {
+            this.phoneModelLoadFailed = true;
+            this.phoneModelPromise = null;
+
+            return null;
+        }
     }
 
     /**
@@ -149,6 +185,7 @@ export class ProctoringRuntimeEngine {
             baseOptions: {
                 modelAssetPath:
                     'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+                delegate: 'CPU',
             },
             runningMode: 'VIDEO',
             numFaces: 2,
@@ -160,6 +197,7 @@ export class ProctoringRuntimeEngine {
                 baseOptions: {
                     modelAssetPath:
                         'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+                    delegate: 'CPU',
                 },
                 runningMode: 'VIDEO',
                 numPoses: 1,
@@ -168,7 +206,7 @@ export class ProctoringRuntimeEngine {
 
         const enableCoco = this.performanceProfile?.enable_coco_ssd !== false;
         if (enableCoco) {
-            this.phoneModel = await cocoSsd.load();
+            await this.ensurePhoneModel();
         }
     }
 
@@ -270,6 +308,10 @@ export class ProctoringRuntimeEngine {
             window.clearTimeout(this.resizeEmitTimer);
             this.resizeEmitTimer = null;
         }
+        if (this.multipleFacesAutoSubmitTimer) {
+            clearTimeout(this.multipleFacesAutoSubmitTimer);
+            this.multipleFacesAutoSubmitTimer = null;
+        }
         document.removeEventListener('visibilitychange', this.onVisibilityChange);
         document.removeEventListener('fullscreenchange', this.onFullscreenChange);
         document.removeEventListener('webkitfullscreenchange', this.onFullscreenChange);
@@ -284,28 +326,21 @@ export class ProctoringRuntimeEngine {
     }
 
     bindBrowserEvents() {
-        this.onVisibilityChange = () => {
-            if (document.hidden) {
-                void this.emitSensorEvent('tab_switch', {}, true);
-            }
-        };
+        // Tab switches are recorded once per leave/return cycle in studentExamRuntime.js
+        // (server-authoritative count + auto-submit on strike 3).
+        this.onVisibilityChange = () => {};
         this.onFullscreenChange = () => {
             const inFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
             if (!inFs) {
                 void this.emitSensorEvent('fullscreen_exit', {}, true);
             }
         };
-        this.onBlur = () => {
-            void this.emitSensorEvent('tab_switch', { source: 'window_blur' }, true);
-        };
+        this.onBlur = () => {};
         this.onResize = () => {
             if (this.resizeEmitTimer) {
                 window.clearTimeout(this.resizeEmitTimer);
             }
-            this.resizeEmitTimer = window.setTimeout(() => {
-                this.resizeEmitTimer = null;
-                void this.emitSensorEvent('tab_switch', { source: 'resize_change' }, true);
-            }, 2500);
+            this.resizeEmitTimer = null;
         };
 
         document.addEventListener('visibilitychange', this.onVisibilityChange);
@@ -337,13 +372,11 @@ export class ProctoringRuntimeEngine {
         this.faceMissingOpen = false;
 
         if (faces > 1) {
-            const t = Date.now();
-            if (t - this.lastMultipleFacesEmitMs > 20000) {
-                this.lastMultipleFacesEmitMs = t;
-                await this.emitSensorEvent('multiple_faces', { faces }, true);
-            }
+            await this.handleMultipleFacesDetected(faces);
             return;
         }
+
+        this.resetMultipleFacesStreak();
 
         if (faces === 1 && this.poseLandmarker) {
             const poseRes = this.poseLandmarker.detectForVideo(this.videoElement, nowMs);
@@ -370,6 +403,91 @@ export class ProctoringRuntimeEngine {
                 }
             }
         }
+    }
+
+    /**
+     * Track and emit progressive `multiple_faces` events. When 2+ faces have
+     * been continuously visible for {@link multipleFacesAutoSubmitSeconds}
+     * seconds, we surface a final event carrying duration_ms so the server
+     * will auto-submit. Until then we emit lightweight progress ticks for UI.
+     *
+     * @param {number} faces
+     */
+    async handleMultipleFacesDetected(faces) {
+        const nowMs = Date.now();
+        if (this.multipleFacesStartedAt == null) {
+            this.multipleFacesStartedAt = nowMs;
+            this.lastMultipleFacesEmitMs = nowMs;
+            await this.emitSensorEvent(
+                'multiple_faces',
+                {
+                    faces,
+                    duration_ms: 0,
+                    phase: 'started',
+                    threshold_seconds: this.multipleFacesAutoSubmitSeconds,
+                },
+                true,
+            );
+
+            // Schedule a verification pass slightly *after* the threshold so
+            // we don't rely on the polling cadence to catch the cutoff.
+            this.scheduleMultipleFacesAutoSubmitCheck();
+            return;
+        }
+
+        const durationMs = nowMs - this.multipleFacesStartedAt;
+        const thresholdMs = this.multipleFacesAutoSubmitSeconds * 1000;
+
+        if (durationMs >= thresholdMs) {
+            this.lastMultipleFacesEmitMs = nowMs;
+            await this.emitSensorEvent(
+                'multiple_faces',
+                {
+                    faces,
+                    duration_ms: durationMs,
+                    phase: 'auto_submit_threshold_reached',
+                    threshold_seconds: this.multipleFacesAutoSubmitSeconds,
+                },
+                true,
+            );
+            return;
+        }
+
+        // Throttle in-between progress events so we don't flood the batcher.
+        if (nowMs - this.lastMultipleFacesEmitMs >= 8000) {
+            this.lastMultipleFacesEmitMs = nowMs;
+            await this.emitSensorEvent(
+                'multiple_faces',
+                {
+                    faces,
+                    duration_ms: durationMs,
+                    phase: 'continuing',
+                    threshold_seconds: this.multipleFacesAutoSubmitSeconds,
+                },
+                true,
+            );
+        }
+    }
+
+    resetMultipleFacesStreak() {
+        this.multipleFacesStartedAt = null;
+        if (this.multipleFacesAutoSubmitTimer) {
+            clearTimeout(this.multipleFacesAutoSubmitTimer);
+            this.multipleFacesAutoSubmitTimer = null;
+        }
+    }
+
+    scheduleMultipleFacesAutoSubmitCheck() {
+        if (this.multipleFacesAutoSubmitTimer) {
+            clearTimeout(this.multipleFacesAutoSubmitTimer);
+            this.multipleFacesAutoSubmitTimer = null;
+        }
+        // Fire 1 s after the threshold so the polling result is fresh.
+        const ms = (this.multipleFacesAutoSubmitSeconds + 1) * 1000;
+        this.multipleFacesAutoSubmitTimer = setTimeout(() => {
+            this.multipleFacesAutoSubmitTimer = null;
+            void this.runFaceChecks();
+        }, ms);
     }
 
     async runPhoneDetection() {

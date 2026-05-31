@@ -86,28 +86,42 @@ export function attachExamIntegritySurface(opts) {
         };
 
         /**
-         * macOS system shortcuts (when the page receives the keydown): ⌘⇧3 / 4 / 5 / 6
-         * (full screen, selection, toolbar, Touch Bar snapshot). Best-effort preventDefault in fullscreen.
+         * macOS screenshot chords: ⌘⇧3 (full), ⌘⇧4 (selection), ⌘⇧6 (Touch Bar).
          */
         const isMacOsScreenshotChord = (/** @type {KeyboardEvent} */ e) => {
             if (!allowCaptureKeys || !e.metaKey || !e.shiftKey) {
                 return false;
             }
-            const macDigitCodes = new Set([
-                'Digit3',
-                'Digit4',
-                'Digit5',
-                'Digit6',
-                'Numpad3',
-                'Numpad4',
-                'Numpad5',
-                'Numpad6',
-            ]);
-            if (macDigitCodes.has(e.code)) {
+            const codes = new Set(['Digit3', 'Digit4', 'Digit6', 'Numpad3', 'Numpad4', 'Numpad6']);
+            if (codes.has(e.code)) {
                 return true;
             }
             const ch = e.key.length === 1 ? e.key : '';
-            return ch === '3' || ch === '4' || ch === '5' || ch === '6';
+            return ch === '3' || ch === '4' || ch === '6';
+        };
+
+        /**
+         * macOS screen-recording chord: ⌘⇧5 opens the screenshot/screen-recording
+         * toolbar from which the user can capture stills or start a recording.
+         */
+        const isMacOsScreenRecordChord = (/** @type {KeyboardEvent} */ e) => {
+            if (!screenRecordMitigation || !e.metaKey || !e.shiftKey) {
+                return false;
+            }
+            if (e.code === 'Digit5' || e.code === 'Numpad5') {
+                return true;
+            }
+            return e.key === '5';
+        };
+
+        /**
+         * Windows Game Bar (screen recorder): Win+G — meta key + KeyG.
+         */
+        const isWindowsScreenRecordChord = (/** @type {KeyboardEvent} */ e) => {
+            if (!screenRecordMitigation || !e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) {
+                return false;
+            }
+            return e.code === 'KeyG' || e.key === 'g' || e.key === 'G';
         };
 
         /**
@@ -129,7 +143,9 @@ export function attachExamIntegritySurface(opts) {
             }
 
             let signalType = null;
-            if (isPrintScreenKey(e)) {
+            if (isMacOsScreenRecordChord(e) || isWindowsScreenRecordChord(e)) {
+                signalType = 'screen_record_shortcut';
+            } else if (isPrintScreenKey(e)) {
                 signalType = 'printscreen_key';
             } else if (isMacOsScreenshotChord(e) || isSnippingToolChord(e)) {
                 signalType = 'capture_shortcut';
@@ -143,6 +159,30 @@ export function attachExamIntegritySurface(opts) {
             enqueueSignal(signalType);
         };
         window.addEventListener('keydown', onKeyDown, { capture: true, signal });
+    }
+
+    if (screenRecordMitigation) {
+        // Best-effort: detect any in-page call to navigator.mediaDevices.getDisplayMedia,
+        // which is how browser-driven screen capture is initiated. We cannot block
+        // OS-level screen recorders from a web page, but we can catch the Web API path
+        // and surface it to the proctor.
+        try {
+            const md = /** @type {MediaDevices | undefined} */ (navigator?.mediaDevices);
+            if (md && typeof md.getDisplayMedia === 'function' && !md.__quizsnapDisplayCaptureWrapped) {
+                const original = md.getDisplayMedia.bind(md);
+                md.getDisplayMedia = function patched(...args) {
+                    try {
+                        enqueueSignal('display_capture_request');
+                    } catch {
+                        // never let logging block the underlying call
+                    }
+                    return original(...args);
+                };
+                md.__quizsnapDisplayCaptureWrapped = true;
+            }
+        } catch {
+            // Ignore — `navigator.mediaDevices` may be undefined in some embed contexts.
+        }
     }
 
     if (screenshotMitigation) {

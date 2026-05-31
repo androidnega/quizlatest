@@ -176,7 +176,7 @@ class ProctoringAutoSubmitSignalsTest extends TestCase
         $this->assertSame('phone_detected', $fresh->auto_submit_reason_code);
     }
 
-    public function test_possible_screenshot_attempt_logs_without_auto_submit_by_default(): void
+    public function test_possible_screenshot_attempt_auto_submits_the_session(): void
     {
         $ctx = $this->seedProctoringExamSession();
         $student = $ctx['student'];
@@ -198,8 +198,80 @@ class ProctoringAutoSubmitSignalsTest extends TestCase
         ];
 
         $res = $this->postJson("/exam-sessions/{$session->session_id}/proctoring-events", $payload);
-        $res->assertOk()->assertJsonPath('status', 'logged');
+        $res->assertOk()->assertJsonPath('status', 'submitted_held');
 
+        $fresh = $session->fresh();
+        $this->assertSame('submitted', $fresh->status);
+        $this->assertSame('screenshot_attempt', $fresh->auto_submit_reason_code);
+    }
+
+    public function test_possible_screen_record_attempt_auto_submits_the_session(): void
+    {
+        $ctx = $this->seedProctoringExamSession();
+        $student = $ctx['student'];
+        $session = $ctx['session'];
+
+        $admin = User::query()->where('role', 'admin')->firstOrFail();
+        app(SystemSettingsService::class)->set('enable_proctoring', 'true', $admin);
+
+        $this->actingAs($student);
+
+        $payload = [
+            'event_type' => 'possible_screen_record_attempt',
+            'metadata' => [
+                'session_id' => $session->session_id,
+                'student_id' => $student->id,
+                'exam_id' => (int) $session->exam_id,
+                'source' => 'screen_record_shortcut',
+            ],
+        ];
+
+        $res = $this->postJson("/exam-sessions/{$session->session_id}/proctoring-events", $payload);
+        $res->assertOk()->assertJsonPath('status', 'submitted_held');
+
+        $fresh = $session->fresh();
+        $this->assertSame('submitted', $fresh->status);
+        $this->assertSame('screen_record_attempt', $fresh->auto_submit_reason_code);
+    }
+
+    public function test_multiple_faces_auto_submits_after_continuous_30_seconds(): void
+    {
+        $ctx = $this->seedProctoringExamSession();
+        $student = $ctx['student'];
+        $session = $ctx['session'];
+
+        $admin = User::query()->where('role', 'admin')->firstOrFail();
+        app(SystemSettingsService::class)->set('enable_proctoring', 'true', $admin);
+
+        $this->actingAs($student);
+
+        $emit = function (int $durationMs, string $phase) use ($session, $student): \Illuminate\Testing\TestResponse {
+            return $this->postJson("/exam-sessions/{$session->session_id}/proctoring-events", [
+                'event_type' => 'multiple_faces',
+                'metadata' => [
+                    'session_id' => $session->session_id,
+                    'student_id' => $student->id,
+                    'exam_id' => (int) $session->exam_id,
+                    'duration_ms' => $durationMs,
+                    'phase' => $phase,
+                    'threshold_seconds' => 30,
+                ],
+            ]);
+        };
+
+        // First tick — just a warning, no auto-submit.
+        $emit(0, 'started')->assertOk();
         $this->assertSame('active', $session->fresh()->status);
+
+        // Server enforces an 8s in-cooldown debounce, so jump straight past it.
+        \Illuminate\Support\Carbon::setTestNow(now()->addSeconds(31));
+
+        // Tick at ≥30s of continuous detection — must auto-submit.
+        $emit(30_500, 'auto_submit_threshold_reached')->assertOk();
+        $fresh = $session->fresh();
+        $this->assertSame('submitted', $fresh->status);
+        $this->assertSame('multiple_faces_limit', $fresh->auto_submit_reason_code);
+
+        \Illuminate\Support\Carbon::setTestNow();
     }
 }

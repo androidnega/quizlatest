@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Services\ExamSessionInvalidateForRetakeService;
 use App\Services\ResultFinalizationService;
 use App\Services\SensitiveStorageService;
+use App\Support\StudentExamResultBreakdown;
 use Carbon\Carbon;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -42,9 +43,11 @@ class ExamSessionReviewController extends Controller
         'face_obstructed',
         'face_not_clear',
         'fullscreen_exit',
+        'multiple_faces',
         'essay_clipboard_attempt',
         'exam_integrity_signal',
         'possible_screenshot_attempt',
+        'possible_screen_record_attempt',
         'external_display_risk',
         'proctoring_overlay_resolved',
     ];
@@ -365,45 +368,6 @@ class ExamSessionReviewController extends Controller
         ]);
     }
 
-    public function classResults(Request $request, Quiz $exam, Classroom $classroom): View
-    {
-        $this->authorize('manageResults', $exam);
-        $this->assertClassLinkedToExamCourse($classroom, (int) $exam->course_id);
-
-        $students = User::query()
-            ->where('role', 'student')
-            ->where('class_id', $classroom->id)
-            ->orderBy('name')
-            ->paginate(50)
-            ->withQueryString();
-
-        $studentIds = $students->getCollection()->pluck('id')->all();
-
-        $sessions = ExamSession::query()
-            ->where('exam_id', $exam->id)
-            ->whereIn('student_id', $studentIds)
-            ->orderByDesc('id')
-            ->get(['id', 'session_id', 'student_id', 'status', 'risk_state', 'violation_count', 'start_time', 'end_time']);
-
-        $latestSessionByStudentId = $sessions
-            ->groupBy('student_id')
-            ->map(fn (Collection $group): ?ExamSession => $group->first());
-
-        $resultsByStudentId = Result::query()
-            ->where('quiz_id', $exam->id)
-            ->whereIn('user_id', $studentIds)
-            ->get()
-            ->keyBy('user_id');
-
-        return view('examiner.exam_sessions.class-results', [
-            'exam' => $exam->loadMissing('course'),
-            'classroom' => $classroom,
-            'students' => $students,
-            'latestSessionByStudentId' => $latestSessionByStudentId,
-            'resultsByStudentId' => $resultsByStudentId,
-        ]);
-    }
-
     public function courseOverview(Request $request, Course $course): View
     {
         $user = $request->user();
@@ -544,9 +508,15 @@ class ExamSessionReviewController extends Controller
         ];
     }
 
-    public function show(Request $request, ExamSession $examSession, SensitiveStorageService $sensitiveStorage): View
+    public function show(Request $request, Quiz $exam, ExamSession $examSession, SensitiveStorageService $sensitiveStorage): View
     {
         $this->authorize('view', $examSession);
+
+        // The session must belong to the {exam} segment of the URL — otherwise
+        // 404 so URLs like /quizzes/A/sessions/<session-of-B> aren't reachable.
+        if ((int) $examSession->exam_id !== (int) $exam->id) {
+            abort(404);
+        }
 
         $examSession->load(['student', 'exam.course']);
 
@@ -610,14 +580,6 @@ class ExamSessionReviewController extends Controller
             $verificationEvidenceUrl = route('examiner.exam-sessions.evidence.verification', $examSession);
         }
 
-        $classResultsUrl = null;
-        if ($exam !== null && $examSession->class_id) {
-            $cr = Classroom::query()->find((int) $examSession->class_id);
-            if ($cr !== null && $cr->courses()->whereKey((int) $exam->course_id)->exists()) {
-                $classResultsUrl = route('examiner.exams.classes.results', [$exam, $cr]);
-            }
-        }
-
         $isAssignmentSession = (bool) ($exam?->isAssignment());
         $assignmentStudentResponse = null;
         $assignmentPasteAttemptCount = 0;
@@ -637,6 +599,16 @@ class ExamSessionReviewController extends Controller
                 }
                 break;
             }
+        }
+
+        // Question review rows — collapsed accordion in the view. Skip for
+        // assignments (essays are graded in the manual grading queue).
+        $questionReview = [];
+        if (! $isAssignmentSession && $examSession->status === 'submitted') {
+            $questionReview = StudentExamResultBreakdown::rows(
+                $examSession,
+                includeCorrectAnswers: true,
+            );
         }
 
         $assignmentSessionContext = null;
@@ -667,12 +639,12 @@ class ExamSessionReviewController extends Controller
             'invalidateForRetakeUrl' => $canManageResults
                 ? route('examiner.exam-sessions.invalidate-for-retake', $examSession)
                 : null,
-            'classResultsUrl' => $classResultsUrl,
             'isAssignmentSession' => $isAssignmentSession,
             'assignmentSessionContext' => $assignmentSessionContext,
             'assignmentSubmissionFiles' => $assignmentSubmissionFiles,
             'assignmentStudentResponse' => $assignmentStudentResponse,
             'assignmentPasteAttemptCount' => $assignmentPasteAttemptCount,
+            'questionReview' => $questionReview,
         ]);
     }
 

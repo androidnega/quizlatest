@@ -1,3 +1,5 @@
+import './preventViewportZoom';
+import './studentDashboardCountdown';
 import axios from 'axios';
 import {
     ProctoringRuntimeEngine,
@@ -14,6 +16,7 @@ import {
 } from './examAnswerOfflineQueue';
 import { attachEssayAntiClipboard, ESSAY_CLIPBOARD_WARNING_MESSAGE } from './essayAntiClipboard';
 import { attachExamIntegritySurface } from './examIntegritySurface';
+import { mountAssignmentAnswerEditor } from './assignmentAnswerEditor';
 
 const DEBOUNCE_MS = 1600;
 const POLL_MS = 12000;
@@ -271,6 +274,8 @@ async function main() {
     const requireCameraMonitoring = meta('qs-require-camera-monitoring') === '1';
     const assignmentMode = meta('qs-assignment-mode') === '1';
     const assignmentClipboardBlock = meta('qs-assignment-clipboard-block') === '1';
+    const assignmentAllowsTextMeta = meta('qs-assignment-allows-text') !== '0';
+    const assignmentAllowCode = meta('qs-assignment-allow-code') === '1';
     const examClipboardLock = meta('qs-exam-clipboard-lock') === '1';
     const examScreenshotMitigation = meta('qs-exam-screenshot-mitigation') === '1';
     const examScreenRecordMitigation = meta('qs-exam-screen-record-mitigation') === '1';
@@ -311,38 +316,7 @@ async function main() {
         flushIntervalMs: 4500,
         maxBatch: 14,
         onFlushResult: (data) => {
-            if (!data || typeof data !== 'object') {
-                return;
-            }
-            if (data.status === 'submitted_held' && !serverDone) {
-                serverDone = true;
-                submitInputLock = false;
-                stopSubmitPersistence();
-                stopTimer();
-                stopHeartbeat();
-                updateBanner(
-                    typeof data.message === 'string' && data.message
-                        ? data.message
-                        : 'Your assessment has been submitted and is held for review.',
-                    true,
-                );
-                examStateEngine.syncFromBackend({
-                    ...(latestPayload || {}),
-                    session_status: 'submitted',
-                    exam_ui_state: 'held',
-                    exam_status: 'submitted_held',
-                });
-                setSaveIndicator('Held for review', true);
-                if (els.btnSubmit) {
-                    els.btnSubmit.disabled = true;
-                }
-                syncControlDisabled();
-                syncFullscreenGate();
-                hideExamTabSwitchModal();
-            }
-            if (typeof data.client_message === 'string' && data.client_message !== '' && !serverDone) {
-                updateBanner(data.client_message, true);
-            }
+            applyTabSwitchServerDecision(data);
         },
     });
 
@@ -404,11 +378,24 @@ async function main() {
             void proctoringBatcher
                 .enqueue({
                     event_type: 'possible_screenshot_attempt',
-                    flagged: false,
+                    flagged: true,
                     metadata: {
                         ...md,
                         keys: signal,
                         detection_note: 'Best-effort only; browsers cannot detect every screenshot.',
+                    },
+                })
+                .catch(() => {});
+        }
+        if (!assignmentMode && (signal === 'screen_record_shortcut' || signal === 'display_capture_request')) {
+            void proctoringBatcher
+                .enqueue({
+                    event_type: 'possible_screen_record_attempt',
+                    flagged: true,
+                    metadata: {
+                        ...md,
+                        source: signal,
+                        detection_note: 'Best-effort only; OS-level recorders cannot be fully detected.',
                     },
                 })
                 .catch(() => {});
@@ -588,7 +575,14 @@ async function main() {
             return;
         }
         const fi = firstIncompleteIndex();
-        furthestIdx = fi >= flatQuestions.length ? flatQuestions.length - 1 : fi;
+        const next = fi >= flatQuestions.length ? flatQuestions.length - 1 : fi;
+        // High-water mark: skipping past an unanswered question still leaves
+        // it (and every earlier question) reachable from the nav. Without
+        // this, `firstIncompleteIndex()` would pull the frontier back to the
+        // first skipped question on every hydrate.
+        if (next > furthestIdx) {
+            furthestIdx = next;
+        }
     }
 
     function pruneLocalPayloadFromServer() {
@@ -715,19 +709,97 @@ async function main() {
         btn.classList.toggle('ring-amber-200', on);
     }
 
+    let activeAssignmentEditor = null;
+
+    function destroyAssignmentEditor() {
+        if (activeAssignmentEditor) {
+            activeAssignmentEditor.destroy();
+            activeAssignmentEditor = null;
+        }
+    }
+
+    function assignmentAllowsTextAnswer() {
+        const ex = latestPayload?.exam;
+        if (ex && typeof ex === 'object' && ex.assignment_allows_text === false) {
+            return false;
+        }
+        return assignmentAllowsTextMeta;
+    }
+
+    function attachEssayClipboardIfNeeded(el, questionId) {
+        const useGuard = !examClipboardLock && (!assignmentMode || assignmentClipboardBlock);
+        if (!useGuard) {
+            return;
+        }
+        attachEssayAntiClipboard(el, {
+            showWarning: showEssayClipboardWarning,
+            onBlocked: (actionType) => enqueueEssayClipboardAttempt(questionId, actionType),
+        });
+    }
+
+    function mountAssignmentEssayEditor(wrap, q, saved) {
+        destroyAssignmentEditor();
+        if (!assignmentAllowsTextAnswer()) {
+            wrap.replaceChildren();
+            const note = document.createElement('p');
+            note.className = 'px-4 py-6 text-sm text-slate-500';
+            note.textContent = 'Typed answers are disabled for this assignment. Upload a file if required.';
+            wrap.appendChild(note);
+            return;
+        }
+        activeAssignmentEditor = mountAssignmentAnswerEditor(wrap, {
+            initialText: saved?.text ?? '',
+            allowCode: assignmentAllowCode,
+            onInput: (text) => {
+                lastLocalPayload.set(q.id, { type: 'essay', text });
+                bumpLocalAnswerUi();
+                scheduleSave(q.id, () => ({ type: 'essay', text }));
+            },
+            attachClipboardGuard: (el) => attachEssayClipboardIfNeeded(el, q.id),
+        });
+    }
+
+    function isOnLastQuestion() {
+        return flatQuestions.length > 0 && currentIdx >= flatQuestions.length - 1;
+    }
+
+    function syncNextQuestionButton() {
+        const next = document.getElementById('btn-q-next');
+        if (!next) {
+            return;
+        }
+        const onLast = isOnLastQuestion();
+        const label = assignmentMode ? 'Submit assignment' : 'Submit';
+        if (onLast) {
+            next.innerHTML = `<span class="min-w-0 truncate">${label}</span><i class="fa-solid fa-check shrink-0" aria-hidden="true"></i>`;
+            next.classList.remove('bg-slate-900', 'hover:bg-slate-800');
+            next.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+            next.dataset.qLastSubmit = '1';
+        } else {
+            next.innerHTML =
+                '<span class="min-w-0 truncate">Next question</span><i class="fa-solid fa-arrow-right shrink-0" aria-hidden="true"></i>';
+            next.classList.add('bg-slate-900', 'hover:bg-slate-800');
+            next.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+            delete next.dataset.qLastSubmit;
+        }
+    }
+
     function syncNavButtonsInQuestion() {
         const n = flatQuestions.length;
         const q = flatQuestions[currentIdx];
-        const atFrontier = currentIdx === furthestIdx;
-        const frontierComplete = q ? isQuestionFullyAnswered(q) : true;
         const back = document.getElementById('btn-q-back');
         const next = document.getElementById('btn-q-next');
         if (back) {
             back.disabled = currentIdx <= 0;
         }
+        // Students may skip a question they don't know the answer to; the
+        // Next button is never gated by whether the current question has an
+        // answer. We still flag unanswered questions in the nav pills, and
+        // the submit confirm dialog warns about any unanswered ones.
         if (next) {
-            next.disabled = currentIdx >= n - 1 || (atFrontier && !frontierComplete);
+            next.disabled = false;
         }
+        syncNextQuestionButton();
     }
 
     function updateAnswerSummary() {
@@ -738,14 +810,34 @@ async function main() {
     }
 
     function setSaveIndicator(text, ok = true) {
-        if (!els.saveIndicator) {
+        const targets = [
+            els.saveIndicator,
+            document.getElementById('save-indicator-dock'),
+        ].filter((el) => el instanceof HTMLElement);
+        if (targets.length === 0) {
             return;
         }
-        els.saveIndicator.textContent = text;
-        els.saveIndicator.classList.toggle('text-slate-500', ok);
-        els.saveIndicator.classList.toggle('text-rose-600', !ok);
-        els.saveIndicator.classList.toggle('font-medium', !ok);
-        els.saveIndicator.classList.remove('text-qs-muted', 'text-qs-danger');
+        for (const el of targets) {
+            el.textContent = text;
+            el.classList.toggle('text-slate-500', ok);
+            el.classList.toggle('text-rose-600', !ok);
+            el.classList.toggle('font-medium', !ok);
+            el.classList.remove('text-qs-muted', 'text-qs-danger');
+        }
+    }
+
+    function syncSubmitMirrorButtons() {
+        const mirrors = document.querySelectorAll('[data-submit-mirror]');
+        if (!els.btnSubmit || mirrors.length === 0) {
+            return;
+        }
+        mirrors.forEach((btn) => {
+            if (!(btn instanceof HTMLButtonElement)) {
+                return;
+            }
+            btn.disabled = els.btnSubmit.disabled;
+            btn.textContent = els.btnSubmit.textContent;
+        });
     }
 
     function syncAssignmentStudentPanel(data) {
@@ -960,6 +1052,7 @@ async function main() {
             return;
         }
         els.btnSubmit.disabled = serverDone || riskInputsDisabled || submitInputLock;
+        syncSubmitMirrorButtons();
     }
 
     function setSubmitButtonSubmitting(isSubmitting) {
@@ -973,6 +1066,7 @@ async function main() {
             els.btnSubmit.disabled = riskInputsDisabled || submitInputLock;
             els.btnSubmit.textContent = submitUiDefaultText;
         }
+        syncSubmitMirrorButtons();
     }
 
     function stopSubmitPersistence() {
@@ -1024,17 +1118,10 @@ async function main() {
         stopTimer();
         void clearSessionPending(sessionId);
         syncControlDisabled();
-        updateBanner(
-            assignmentMode ? 'Assignment submitted. You may close this page.' : 'Exam submitted. You may close this page.',
-            true,
-        );
-        setSaveIndicator('Submitted', true);
-        if (els.btnSubmit) {
-            els.btnSubmit.disabled = true;
-            els.btnSubmit.textContent = submitUiDefaultText;
-        }
+        destroyAssignmentEditor();
         syncFullscreenGate();
         hideExamTabSwitchModal();
+        window.location.assign(`/student/exam/${encodeURIComponent(sessionId)}/submitted`);
     }
 
     /**
@@ -1132,15 +1219,39 @@ async function main() {
     }
 
     async function advanceQuestionNext() {
-        if (currentIdx >= flatQuestions.length - 1) {
-            return;
-        }
         const q = flatQuestions[currentIdx];
-        if (currentIdx === furthestIdx && !isQuestionFullyAnswered(q)) {
+        if (!q) {
             return;
         }
         await flushDebouncerForQuestion(q.id);
+        if (currentIdx >= flatQuestions.length - 1) {
+            const unansweredCount = flatQuestions.reduce(
+                (n, item) => (item && !isQuestionFullyAnswered(item) ? n + 1 : n),
+                0,
+            );
+            let confirmMsg = assignmentMode
+                ? 'Submit this assignment? You cannot undo this.'
+                : 'Submit your exam? You cannot undo this.';
+            if (unansweredCount > 0) {
+                const noun = unansweredCount === 1 ? 'question is' : 'questions are';
+                confirmMsg = `${unansweredCount} ${noun} unanswered. ${confirmMsg}`;
+            }
+            if (!window.confirm(confirmMsg)) {
+                return;
+            }
+            setSubmitButtonSubmitting(true);
+            await submitExam('manual');
+            if (!serverDone) {
+                setSubmitButtonSubmitting(false);
+            }
+            return;
+        }
         currentIdx += 1;
+        // Keep furthestIdx tracking forward progress so the nav pills stay
+        // accurate even when the student skipped instead of answering.
+        if (currentIdx > furthestIdx) {
+            furthestIdx = currentIdx;
+        }
         pruneLocalPayloadFromServer();
         refreshFrontierFromAnswers();
         renderQuestion();
@@ -1267,39 +1378,55 @@ async function main() {
         if (!els.main) {
             return;
         }
+        destroyAssignmentEditor();
         const q = flatQuestions[currentIdx];
         els.main.innerHTML = '';
         if (!q) {
             return;
         }
 
+        const assignmentSingle = assignmentMode && flatQuestions.length === 1;
+
         const root = document.createElement('div');
-        root.className = 'space-y-6';
+        root.className = assignmentSingle ? '' : 'space-y-6';
         root.dataset.questionId = String(q.id);
 
         const card = document.createElement('div');
-        card.className = 'overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm';
+        card.className = assignmentSingle
+            ? 'overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm'
+            : 'overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm';
 
         const head = document.createElement('div');
-        head.className = 'border-b border-slate-100 px-5 py-5 sm:px-8 sm:py-7';
+        head.className = assignmentSingle
+            ? 'border-b border-slate-100 bg-slate-50/70 px-5 py-4 sm:px-6'
+            : 'border-b border-slate-100 px-5 py-5 sm:px-8 sm:py-7';
         const headRow = document.createElement('div');
-        headRow.className = 'flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between';
+        headRow.className = assignmentSingle
+            ? 'min-w-0'
+            : 'flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between';
 
         const titleCol = document.createElement('div');
         titleCol.className = 'min-w-0';
         const meta = document.createElement('p');
-        meta.className = 'text-xs font-extrabold uppercase tracking-widest text-slate-400';
-        meta.textContent = `Question ${currentIdx + 1} of ${flatQuestions.length}`;
+        meta.className = assignmentSingle
+            ? 'text-xs font-semibold uppercase tracking-wide text-[#1677C8]'
+            : 'text-xs font-extrabold uppercase tracking-widest text-slate-400';
+        meta.textContent = assignmentSingle
+            ? `${q.marks} ${Number(q.marks) === 1 ? 'mark' : 'marks'} · ${questionTypeLabel(q.type)}`
+            : `Question ${currentIdx + 1} of ${flatQuestions.length}`;
         const h = document.createElement('h2');
-        h.className =
-            'mt-4 max-w-3xl break-words text-2xl font-extrabold leading-snug text-slate-950 sm:text-3xl';
+        h.className = assignmentSingle
+            ? 'mt-2 break-words text-base font-semibold leading-relaxed text-slate-900 sm:text-lg'
+            : 'mt-4 max-w-3xl break-words text-2xl font-extrabold leading-snug text-slate-950 sm:text-3xl';
         h.innerHTML = escapeHtml(q.question_text || '').replace(/\n/g, '<br/>');
         const marks = document.createElement('p');
         marks.className = 'mt-2 text-sm font-semibold text-slate-500';
         marks.textContent = `${q.marks} marks · ${questionTypeLabel(q.type)}`;
         titleCol.appendChild(meta);
         titleCol.appendChild(h);
-        titleCol.appendChild(marks);
+        if (!assignmentSingle) {
+            titleCol.appendChild(marks);
+        }
 
         const flagBtn = document.createElement('button');
         flagBtn.type = 'button';
@@ -1309,14 +1436,63 @@ async function main() {
         flagBtn.innerHTML = '<i class="fa-regular fa-flag me-2" aria-hidden="true"></i>Flag';
         flagBtn.addEventListener('click', () => toggleCurrentQuestionFlag());
 
-        headRow.appendChild(titleCol);
-        headRow.appendChild(flagBtn);
-        head.appendChild(headRow);
+        if (assignmentSingle) {
+            head.appendChild(titleCol);
+        } else {
+            headRow.appendChild(titleCol);
+            headRow.appendChild(flagBtn);
+            head.appendChild(headRow);
+        }
 
         const body = document.createElement('div');
-        body.className = 'px-5 py-6 sm:px-8 sm:py-8';
+        body.className = assignmentSingle ? 'p-5 sm:p-6' : 'px-5 py-6 sm:px-8 sm:py-8';
 
         const saved = getEffectivePayload(q);
+
+        if (assignmentSingle && q.type === 'essay') {
+            const promptSlot = document.getElementById('assignment-question-slot');
+            const splitLayout = promptSlot instanceof HTMLElement;
+
+            root.className = splitLayout ? 'qs-at-question qs-at-question--split' : 'qs-at-question';
+
+            const labelEl = document.createElement('p');
+            labelEl.className = 'qs-at-question__label';
+            labelEl.textContent = `${q.marks} ${Number(q.marks) === 1 ? 'mark' : 'marks'}`;
+            const prompt = document.createElement('div');
+            prompt.className = 'qs-at-question__prompt';
+            prompt.innerHTML = escapeHtml(q.question_text || '').replace(/\n/g, '<br/>');
+            const wrap = document.createElement('div');
+            wrap.className = 'qs-at-question__editor-wrap';
+            mountAssignmentEssayEditor(wrap, q, saved);
+            const footNav = document.createElement('div');
+            footNav.className =
+                'flex flex-col gap-2 border-t border-slate-100 px-4 py-4 sm:px-5';
+            const singleNextBtn = document.createElement('button');
+            singleNextBtn.type = 'button';
+            singleNextBtn.id = 'btn-q-next';
+            singleNextBtn.dataset.qAction = 'next';
+            singleNextBtn.className =
+                'inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40';
+            singleNextBtn.innerHTML =
+                '<span>Submit assignment</span><i class="fa-solid fa-check shrink-0" aria-hidden="true"></i>';
+            singleNextBtn.addEventListener('click', () => void advanceQuestionNext());
+            footNav.append(singleNextBtn);
+            const foot = document.createElement('p');
+            foot.className = 'qs-at-question__foot';
+            foot.textContent = 'Your work saves automatically.';
+
+            if (splitLayout) {
+                promptSlot.replaceChildren(labelEl, prompt);
+                root.append(wrap, footNav, foot);
+            } else {
+                root.append(labelEl, prompt, wrap, footNav, foot);
+            }
+            els.main.appendChild(root);
+            updateExamMetaPanel();
+            syncNavButtonsInQuestion();
+            syncControlDisabled();
+            return;
+        }
 
         const applyMcqCardClasses = (labelEl, on) => {
             labelEl.className =
@@ -1478,25 +1654,27 @@ async function main() {
             }
             body.appendChild(blanksRoot);
         } else if (q.type === 'essay') {
-            const ta = document.createElement('textarea');
-            ta.rows = 10;
-            ta.className =
-                'block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-sans text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/15';
-            ta.value = saved?.text ?? '';
-            ta.addEventListener('input', () => {
-                lastLocalPayload.set(q.id, { type: 'essay', text: ta.value });
-                bumpLocalAnswerUi();
-                scheduleSave(q.id, () => ({ type: 'essay', text: ta.value }));
-            });
-            const usePerQuestionEssayClipboard =
-                !examClipboardLock && (!assignmentMode || assignmentClipboardBlock);
-            if (usePerQuestionEssayClipboard) {
-                attachEssayAntiClipboard(ta, {
-                    showWarning: showEssayClipboardWarning,
-                    onBlocked: (actionType) => enqueueEssayClipboardAttempt(q.id, actionType),
+            if (assignmentMode) {
+                const wrap = document.createElement('div');
+                wrap.className = assignmentSingle
+                    ? 'qs-at-question__editor-wrap'
+                    : 'px-5 py-4 sm:px-8 sm:py-6';
+                mountAssignmentEssayEditor(wrap, q, saved);
+                body.appendChild(wrap);
+            } else {
+                const ta = document.createElement('textarea');
+                ta.rows = 10;
+                ta.className =
+                    'block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 font-sans text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/15';
+                ta.value = saved?.text ?? '';
+                ta.addEventListener('input', () => {
+                    lastLocalPayload.set(q.id, { type: 'essay', text: ta.value });
+                    bumpLocalAnswerUi();
+                    scheduleSave(q.id, () => ({ type: 'essay', text: ta.value }));
                 });
+                attachEssayClipboardIfNeeded(ta, q.id);
+                body.appendChild(ta);
             }
-            body.appendChild(ta);
         }
 
         const foot = document.createElement('div');
@@ -1519,17 +1697,25 @@ async function main() {
         nextBtn.innerHTML =
             '<span class="min-w-0 truncate">Next question</span><i class="fa-solid fa-arrow-right shrink-0" aria-hidden="true"></i>';
 
-        foot.appendChild(backBtn);
-        foot.appendChild(nextBtn);
+        if (!assignmentSingle) {
+            foot.appendChild(backBtn);
+            foot.appendChild(nextBtn);
+        }
 
         card.appendChild(head);
         card.appendChild(body);
-        card.appendChild(foot);
+        if (!assignmentSingle) {
+            card.appendChild(foot);
+        }
         root.appendChild(card);
         els.main.appendChild(root);
 
-        backBtn.addEventListener('click', () => retreatQuestionBack());
-        nextBtn.addEventListener('click', () => void advanceQuestionNext());
+        if (!assignmentSingle) {
+            backBtn.addEventListener('click', () => retreatQuestionBack());
+            nextBtn.addEventListener('click', () => void advanceQuestionNext());
+        } else if (assignmentMode && q.type === 'essay') {
+            syncNavButtonsInQuestion();
+        }
 
         updateExamMetaPanel();
         syncFlagButton();
@@ -1538,31 +1724,21 @@ async function main() {
     }
 
     function applySubmittedFromState(data) {
-        if (data.session_status === 'submitted') {
-            serverDone = true;
-            submitInputLock = false;
-            stopSubmitPersistence();
-            stopTimer();
-            stopHeartbeat();
-            const held = data.exam_ui_state === 'held';
-            if (assignmentMode) {
-                updateBanner(
-                    held ? 'Under review — your result is held.' : 'Assignment submitted. Thank you.',
-                    true,
-                );
-                setSaveIndicator(held ? 'Held for review' : 'Submitted', true);
-            } else {
-                updateBanner(held ? 'Under review — your result is held.' : 'Exam submitted.', true);
-                setSaveIndicator('Submitted', true);
-            }
-            if (els.btnSubmit) {
-                els.btnSubmit.disabled = true;
-                els.btnSubmit.textContent = submitUiDefaultText;
-            }
-            syncControlDisabled();
-            syncFullscreenGate();
-            hideExamTabSwitchModal();
+        if (data.session_status !== 'submitted') {
+            return;
         }
+        if (!window.location.pathname.endsWith('/submitted')) {
+            window.location.assign(`/student/exam/${encodeURIComponent(sessionId)}/submitted`);
+            return;
+        }
+        serverDone = true;
+        submitInputLock = false;
+        stopSubmitPersistence();
+        stopTimer();
+        stopHeartbeat();
+        syncControlDisabled();
+        syncFullscreenGate();
+        hideExamTabSwitchModal();
     }
 
     async function fetchState() {
@@ -1867,7 +2043,75 @@ async function main() {
     const TAB_SWITCH_WARN_MAX = 3;
     let tabSwitchDocWasHidden = false;
     let tabSwitchReturnCount = 0;
+    let tabSwitchRecordInFlight = false;
     let proctoringOverlayClearing = false;
+
+    function applyTabSwitchServerDecision(data) {
+        if (!data || typeof data !== 'object' || assignmentMode || serverDone) {
+            return;
+        }
+
+        if (typeof data.tab_switch_count === 'number') {
+            tabSwitchReturnCount = Math.max(0, data.tab_switch_count);
+        }
+
+        if (data.status === 'submitted_held') {
+            latestPayload = {
+                ...(latestPayload || {}),
+                session_status: 'submitted',
+                exam_ui_state: 'held',
+                tab_switch_count: tabSwitchReturnCount,
+            };
+            applySubmittedFromState(latestPayload);
+            updateBanner(
+                typeof data.message === 'string' && data.message
+                    ? data.message
+                    : 'Your assessment has been submitted because you left the screen three times.',
+                true,
+            );
+            examStateEngine.syncFromBackend(latestPayload);
+            hideExamTabSwitchModal();
+            void fetchState().catch(() => {});
+
+            return;
+        }
+
+        if (typeof data.client_message === 'string' && data.client_message !== '') {
+            updateBanner(data.client_message, true);
+        }
+
+        if (data.status === 'logged' && typeof data.tab_switch_count === 'number') {
+            updateProctoringFromState({
+                ...(latestPayload || {}),
+                tab_switch_count: data.tab_switch_count,
+            });
+            showExamTabSwitchModal();
+        }
+    }
+
+    async function recordTabSwitchStrike() {
+        if (assignmentMode || serverDone || tabSwitchRecordInFlight) {
+            return;
+        }
+        tabSwitchRecordInFlight = true;
+        try {
+            await proctoringBatcher.enqueue({
+                event_type: 'tab_switch',
+                flagged: true,
+                metadata: {
+                    session_id: sessionId,
+                    student_id: studentId,
+                    exam_id: examId,
+                },
+            });
+            const data = await proctoringBatcher.flush();
+            applyTabSwitchServerDecision(data);
+        } catch {
+            updateBanner('Could not record leaving the exam page. Please stay on this tab.', true);
+        } finally {
+            tabSwitchRecordInFlight = false;
+        }
+    }
 
     function proctoringBlurOverlayCopy(reason) {
         const r = String(reason || '');
@@ -1932,9 +2176,8 @@ async function main() {
         if (els.pauseOverlay && !els.pauseOverlay.classList.contains('hidden')) {
             return;
         }
-        tabSwitchReturnCount += 1;
         tabSwitchReturnCount = Math.max(tabSwitchReturnCount, Number(latestPayload?.tab_switch_count) || 0);
-        const displayLevel = Math.min(tabSwitchReturnCount, TAB_SWITCH_WARN_MAX);
+        const displayLevel = Math.min(Math.max(tabSwitchReturnCount, 1), TAB_SWITCH_WARN_MAX);
         ensureExamTabSwitchDots();
         const host = document.getElementById('exam-tab-switch-dots');
         const dots = host?.querySelectorAll('span');
@@ -1959,7 +2202,7 @@ async function main() {
             }
             if (document.visibilityState === 'visible' && tabSwitchDocWasHidden) {
                 tabSwitchDocWasHidden = false;
-                showExamTabSwitchModal();
+                void recordTabSwitchStrike();
             }
             if (document.visibilityState === 'visible') {
                 requestAnimationFrame(() => {
@@ -1969,6 +2212,20 @@ async function main() {
         });
         document.getElementById('btn-tab-switch-dismiss')?.addEventListener('click', () => {
             hideExamTabSwitchModal();
+        });
+
+        window.addEventListener('blur', () => {
+            if (assignmentMode || serverDone) {
+                return;
+            }
+            tabSwitchDocWasHidden = true;
+        });
+        window.addEventListener('focus', () => {
+            if (assignmentMode || serverDone || !tabSwitchDocWasHidden) {
+                return;
+            }
+            tabSwitchDocWasHidden = false;
+            void recordTabSwitchStrike();
         });
     }
 
@@ -2017,7 +2274,10 @@ async function main() {
         if (serverDone) {
             return;
         }
-        if (!window.confirm('Submit your exam? You cannot undo this.')) {
+        const confirmMsg = assignmentMode
+            ? 'Submit this assignment? You cannot undo this.'
+            : 'Submit your exam? You cannot undo this.';
+        if (!window.confirm(confirmMsg)) {
             return;
         }
         setSubmitButtonSubmitting(true);
@@ -2025,6 +2285,18 @@ async function main() {
         if (!serverDone) {
             setSubmitButtonSubmitting(false);
         }
+    });
+
+    document.querySelectorAll('[data-submit-mirror]').forEach((node) => {
+        if (!(node instanceof HTMLButtonElement) || node === els.btnSubmit) {
+            return;
+        }
+        node.addEventListener('click', () => {
+            if (!els.btnSubmit || els.btnSubmit.disabled) {
+                return;
+            }
+            els.btnSubmit.click();
+        });
     });
 
     function stopMicLevelMeter() {
@@ -2115,18 +2387,21 @@ async function main() {
         if (typeof data?.tab_switch_count === 'number' && !assignmentMode) {
             tabSwitchReturnCount = Math.max(tabSwitchReturnCount, data.tab_switch_count);
             const host = document.getElementById('exam-tab-switch-dots');
+            ensureExamTabSwitchDots();
             if (host && host.childElementCount > 0) {
-                const displayLevel = Math.min(Math.max(1, data.tab_switch_count), TAB_SWITCH_WARN_MAX);
+                const displayLevel = Math.min(Math.max(0, data.tab_switch_count), TAB_SWITCH_WARN_MAX);
+                const filled = displayLevel > 0 ? displayLevel : 0;
                 const dots = host.querySelectorAll('span');
                 dots.forEach((d, i) => {
                     d.className =
-                        i < displayLevel
+                        i < filled
                             ? 'h-2 w-2 shrink-0 rounded-full bg-red-500'
                             : 'h-2 w-2 shrink-0 rounded-full bg-slate-200';
                 });
                 const lvl = document.getElementById('exam-tab-switch-level');
                 if (lvl) {
-                    lvl.textContent = `Warning ${displayLevel} of ${TAB_SWITCH_WARN_MAX}`;
+                    lvl.textContent =
+                        filled > 0 ? `Warning ${filled} of ${TAB_SWITCH_WARN_MAX}` : '';
                 }
             }
         }
@@ -2233,10 +2508,11 @@ async function main() {
             if (requireCameraMonitoring) {
                 els.videoStatus?.classList?.remove('hidden');
                 let stream;
+                const { qsProctoringMediaRequest } = await import('./cameraConstraints.js');
                 try {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    stream = await navigator.mediaDevices.getUserMedia(qsProctoringMediaRequest(true));
                 } catch {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    stream = await navigator.mediaDevices.getUserMedia(qsProctoringMediaRequest(false));
                 }
                 if (els.recordingBadge) {
                     els.recordingBadge.classList.remove('hidden');

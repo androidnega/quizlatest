@@ -286,6 +286,7 @@ class ProctoringOrchestratorService
         return match ($eventType) {
             'tab_switch' => $this->ingestTabSwitch($examSession, $settings, $metadata, $severity, $flagged, $now),
             'phone_detected' => $this->ingestPhoneDetected($examSession, $settings, $metadata, $severity, $flagged, $now),
+            'multiple_faces' => $this->ingestMultipleFaces($examSession, $settings, $metadata, $severity, $flagged, $now),
             'face_covered', 'face_obstructed', 'face_not_clear' => $this->ingestFaceObstruction(
                 $examSession,
                 $settings,
@@ -296,10 +297,175 @@ class ProctoringOrchestratorService
                 $eventType,
             ),
             'possible_screenshot_attempt' => $this->ingestScreenshotAttempt($examSession, $settings, $metadata, $severity, $flagged, $now),
+            'possible_screen_record_attempt' => $this->ingestScreenRecordAttempt($examSession, $metadata, $severity, $now),
             'external_display_risk' => $this->ingestExternalDisplayRisk($examSession, $settings, $metadata, $severity, $flagged, $now),
             'proctoring_overlay_resolved' => $this->ingestOverlayResolved($examSession, $metadata, $now),
             default => $this->ingestLegacyWeightedEvent($examSession, $eventType, $settings, $metadata, $severity, $flagged, $now),
         };
+    }
+
+    /** Multiple faces must be visible continuously for this many seconds before we auto-submit. */
+    public const MULTIPLE_FACES_AUTO_SUBMIT_SECONDS = 30;
+
+    /**
+     * Multiple faces: auto-submit when 2+ faces are continuously detected
+     * for {@see self::MULTIPLE_FACES_AUTO_SUBMIT_SECONDS} seconds. Until
+     * then we surface progressive warnings.
+     *
+     * The client sends two pieces of metadata on each tick:
+     *  - "duration_ms" — how long the second face has been continuously visible
+     *  - "phase"       — "started" | "continuing" | "auto_submit_threshold_reached"
+     *
+     * The server treats duration_ms as authoritative (it can also reconstruct
+     * the duration from prior events as a fallback for older clients).
+     *
+     * @param  array<string, mixed>  $settings
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function ingestMultipleFaces(
+        ExamSession $examSession,
+        array $settings,
+        array $metadata,
+        ?int $severity,
+        bool $flagged,
+        Carbon $now,
+    ): array {
+        $session = $examSession->fresh() ?? $examSession;
+        $events = is_array($session->violation_events) ? $session->violation_events : [];
+
+        // Debounce identical strikes; we only need a tick every ~10 s for UI.
+        $cooldownSeconds = 8;
+        if ($this->isInCooldown($events, 'multiple_faces', $now, $cooldownSeconds)) {
+            return array_merge($this->emptyDecision($session), ['action' => 'debounced']);
+        }
+
+        $clientDurationMs = isset($metadata['duration_ms']) ? (int) $metadata['duration_ms'] : 0;
+        $serverDurationSeconds = $this->durationFromContinuousEvents($events, 'multiple_faces', $now);
+        $durationSeconds = max((int) round($clientDurationMs / 1000), $serverDurationSeconds);
+
+        $thresholdSeconds = self::MULTIPLE_FACES_AUTO_SUBMIT_SECONDS;
+        $previousRiskState = (string) $session->risk_state;
+        $autoSubmit = $durationSeconds >= $thresholdSeconds;
+        $action = $autoSubmit ? 'autosubmit' : 'warn';
+
+        $remaining = max(0, $thresholdSeconds - $durationSeconds);
+        $clientMessage = $autoSubmit
+            ? "Multiple faces were visible for {$thresholdSeconds} seconds. Your assessment has been submitted for review."
+            : ($remaining > 0
+                ? "Multiple faces detected. Make sure only you are visible — auto-submit in {$remaining}s if it continues."
+                : 'Multiple faces detected. Make sure only you are visible to the camera.');
+
+        // Weighted score still moves the risk bar, but the decisive rule is the time-based one above.
+        $weights = is_array($settings['violation_weights'] ?? null)
+            ? $settings['violation_weights']
+            : self::normalizeViolationWeights([]);
+        $scoreDelta = (int) ($weights['multiple_faces'] ?? 25);
+        $newScore = ((int) $session->violation_score) + $scoreDelta;
+        $riskState = $autoSubmit
+            ? 'locked'
+            : $this->resolveRiskState($settings, $newScore);
+
+        $events[] = [
+            'event_type' => 'multiple_faces',
+            'score' => $scoreDelta,
+            'timestamp' => $now->toISOString(),
+            'cooldown_applied' => false,
+            'action' => $action,
+            'duration_seconds' => $durationSeconds,
+            'threshold_seconds' => $thresholdSeconds,
+        ];
+
+        $this->persistProctoringEvent(
+            $session,
+            'multiple_faces',
+            $metadata + ['duration_seconds' => $durationSeconds, 'threshold_seconds' => $thresholdSeconds],
+            $severity ?? 2,
+            true,
+            $action,
+            $riskState,
+            $now,
+        );
+
+        $examStatus = (string) ($session->exam_status ?? 'active');
+        if (! $autoSubmit && $session->status !== 'submitted') {
+            $examStatus = 'flagged_for_review';
+        }
+
+        $session->update([
+            'violation_events' => $events,
+            'violation_score' => $newScore,
+            'violation_count' => (int) $session->violation_count + 1,
+            'last_event_time' => $now,
+            'risk_state' => $riskState,
+            'exam_status' => $examStatus,
+        ]);
+
+        $out = $session->fresh() ?? $session;
+        $this->dispatchRealtimeNotifications(
+            $out,
+            'multiple_faces',
+            $previousRiskState,
+            $riskState,
+            $newScore,
+            $action,
+            $autoSubmit ? null : $clientMessage,
+            $autoSubmit ? $clientMessage : null,
+            $newScore - $scoreDelta,
+        );
+
+        return [
+            'score' => $newScore,
+            'risk_state' => $riskState,
+            'action' => $action,
+            'auto_submit' => $autoSubmit,
+            'client_message' => $clientMessage,
+            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'proctoring_overlay' => [
+                'active' => (bool) ($out->proctoring_blur_active ?? false),
+                'reason' => $out->proctoring_blur_reason,
+                'message' => null,
+            ],
+        ];
+    }
+
+    /**
+     * Walk back through {@see ExamSession::$violation_events} and compute
+     * how long the named event type has been continuously firing without
+     * a gap longer than 15 seconds. Used as a server-side fallback when
+     * the client does not (or cannot) report duration_ms itself.
+     *
+     * @param  list<array<string, mixed>>  $events
+     */
+    private function durationFromContinuousEvents(array $events, string $eventType, Carbon $now): int
+    {
+        $maxGapSeconds = 15;
+        $oldestStreakStart = null;
+        $lastSeen = null;
+
+        for ($i = count($events) - 1; $i >= 0; $i--) {
+            $event = $events[$i];
+            if (! is_array($event) || ($event['event_type'] ?? '') !== $eventType) {
+                continue;
+            }
+            $ts = $event['timestamp'] ?? null;
+            if ($ts === null) {
+                break;
+            }
+            $time = $ts instanceof Carbon ? $ts : Carbon::parse((string) $ts);
+
+            if ($lastSeen !== null && abs($lastSeen->diffInSeconds($time)) > $maxGapSeconds) {
+                break;
+            }
+            $lastSeen = $time;
+            $oldestStreakStart = $time;
+        }
+
+        if ($oldestStreakStart === null) {
+            return 0;
+        }
+
+        return (int) max(0, abs($oldestStreakStart->diffInSeconds($now)));
     }
 
     /**
@@ -635,9 +801,14 @@ class ProctoringOrchestratorService
 
         $session = $examSession->fresh() ?? $examSession;
         $events = is_array($session->violation_events) ? $session->violation_events : [];
-        $auto = filter_var($settings['screenshot_autosubmit_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
-        $action = $auto ? 'autosubmit' : 'warn';
-        $riskState = $auto ? 'locked' : 'warning';
+
+        // Screenshot attempts always auto-submit. The legacy
+        // `screenshot_autosubmit_enabled` flag is retained for downstream
+        // tooling that reads it, but is no longer required for enforcement.
+        unset($settings);
+        $auto = true;
+        $action = 'autosubmit';
+        $riskState = 'locked';
         $prevRisk = (string) $session->risk_state;
 
         $events[] = [
@@ -663,11 +834,11 @@ class ProctoringOrchestratorService
             'violation_events' => $events,
             'last_event_time' => $now,
             'risk_state' => $riskState,
-            'exam_status' => $auto ? 'flagged_for_review' : ($session->exam_status ?? 'active'),
+            'exam_status' => 'flagged_for_review',
         ]);
 
         $out = $session->fresh() ?? $session;
-        $msg = 'Screenshot attempts are not allowed during this assessment.';
+        $msg = 'Screenshot attempts are not allowed. Your assessment has been submitted for review.';
         $this->dispatchRealtimeNotifications(
             $out,
             'possible_screenshot_attempt',
@@ -684,6 +855,76 @@ class ProctoringOrchestratorService
             'risk_state' => $riskState,
             'action' => $action,
             'auto_submit' => $auto,
+            'client_message' => $msg,
+            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'proctoring_overlay' => ['active' => false, 'reason' => null, 'message' => null],
+        ];
+    }
+
+    /**
+     * Screen recording attempts (keyboard shortcuts like Cmd+Shift+5,
+     * Win+G, or the `getDisplayMedia` Web API being invoked) are treated
+     * as an immediate, unconditional auto-submit.
+     *
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function ingestScreenRecordAttempt(
+        ExamSession $examSession,
+        array $metadata,
+        ?int $severity,
+        Carbon $now,
+    ): array {
+        $metadata['detection_note'] = 'Browser-based logging only; OS-level recorders cannot be fully detected or prevented.';
+
+        $session = $examSession->fresh() ?? $examSession;
+        $events = is_array($session->violation_events) ? $session->violation_events : [];
+        $prevRisk = (string) $session->risk_state;
+
+        $events[] = [
+            'event_type' => 'possible_screen_record_attempt',
+            'score' => 0,
+            'timestamp' => $now->toISOString(),
+            'cooldown_applied' => false,
+            'action' => 'autosubmit',
+        ];
+
+        $this->persistProctoringEvent(
+            $session,
+            'possible_screen_record_attempt',
+            $metadata,
+            $severity ?? 2,
+            true,
+            'autosubmit',
+            'locked',
+            $now,
+        );
+
+        $session->update([
+            'violation_events' => $events,
+            'last_event_time' => $now,
+            'risk_state' => 'locked',
+            'exam_status' => 'flagged_for_review',
+        ]);
+
+        $out = $session->fresh() ?? $session;
+        $msg = 'Screen recording is not allowed. Your assessment has been submitted for review.';
+        $this->dispatchRealtimeNotifications(
+            $out,
+            'possible_screen_record_attempt',
+            $prevRisk,
+            'locked',
+            (int) ($out->violation_score ?? 0),
+            'autosubmit',
+            null,
+            $msg,
+        );
+
+        return [
+            'score' => (int) ($out->violation_score ?? 0),
+            'risk_state' => 'locked',
+            'action' => 'autosubmit',
+            'auto_submit' => true,
             'client_message' => $msg,
             'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
             'proctoring_overlay' => ['active' => false, 'reason' => null, 'message' => null],
@@ -882,6 +1123,7 @@ class ProctoringOrchestratorService
             $action,
             null,
             null,
+            $newScore - $scoreDelta,
         );
 
         return [
@@ -942,6 +1184,7 @@ class ProctoringOrchestratorService
         string $action,
         ?string $overrideWarningMessage,
         ?string $autoSubmitStudentMessage = null,
+        ?int $previousViolationScore = null,
     ): void {
         if ($riskState !== $previousRiskState) {
             broadcast(new ProctoringRiskUpdateEvent(
@@ -971,7 +1214,9 @@ class ProctoringOrchestratorService
             $reason = match ($eventType) {
                 'tab_switch' => 'tab_switch_limit',
                 'phone_detected' => 'phone_detected',
+                'multiple_faces' => 'multiple_faces_limit',
                 'possible_screenshot_attempt' => 'screenshot_attempt',
+                'possible_screen_record_attempt' => 'screen_record_attempt',
                 default => 'violation_threshold',
             };
             broadcast(new ExamAutoSubmitEvent(
@@ -994,6 +1239,20 @@ class ProctoringOrchestratorService
                 message: $heldMsg,
                 reason: 'submitted_held',
             ));
+        } elseif (
+            $previousViolationScore !== null
+            && $violationScore >= ResultFinalizationService::HOLD_VIOLATION_THRESHOLD
+            && $previousViolationScore < ResultFinalizationService::HOLD_VIOLATION_THRESHOLD
+        ) {
+            // First time the running risk score crosses the hold threshold (60).
+            // The student keeps working, but their result will be held for review.
+            broadcast(new ExamHeldResultEvent(
+                sessionId: $examSession->session_id,
+                examId: (int) $examSession->exam_id,
+                studentId: (int) $examSession->student_id,
+                message: 'Your assessment will continue, but your result has been flagged and will be held for review by your lecturer.',
+                reason: 'violation_threshold',
+            ));
         }
     }
 
@@ -1007,6 +1266,7 @@ class ProctoringOrchestratorService
             'phone_detected' => 'A mobile device was detected. Your assessment has been submitted for review.',
             'face_covered', 'face_obstructed', 'face_not_clear' => 'Please remove your hand or anything covering your face.',
             'possible_screenshot_attempt' => 'Screenshot attempts are not allowed during this assessment.',
+            'possible_screen_record_attempt' => 'Screen recording is not allowed. Your assessment has been submitted for review.',
             'external_display_risk' => 'External display risk detected. Disconnect it to continue.',
             'essay_clipboard_attempt' => 'Clipboard use is restricted during essay answers.',
             'exam_integrity_signal' => 'An exam integrity safeguard was triggered. Please stay within the exam window.',
@@ -1089,7 +1349,9 @@ class ProctoringOrchestratorService
         $ts = $lastSame['timestamp'];
         $lastAt = $ts instanceof Carbon ? $ts : Carbon::parse((string) $ts);
 
-        return $now->diffInSeconds($lastAt) < $cooldownSeconds;
+        // Carbon 3 returns signed diffs by default, so use abs() to mean
+        // "elapsed time" regardless of direction.
+        return abs($now->diffInSeconds($lastAt)) < $cooldownSeconds;
     }
 
     /**
@@ -1107,6 +1369,6 @@ class ProctoringOrchestratorService
         $ts = $last['timestamp'];
         $lastAt = $ts instanceof Carbon ? $ts : Carbon::parse((string) $ts);
 
-        return $now->diffInSeconds($lastAt) < $cooldownSeconds;
+        return abs($now->diffInSeconds($lastAt)) < $cooldownSeconds;
     }
 }
