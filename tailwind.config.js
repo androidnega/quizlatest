@@ -14,20 +14,24 @@ export default {
         extend: {
             colors: {
                 /**
-                 * Must stay in sync with resources/css/app.css `:root` — Tailwind compiles
-                 * `text-qs-primary`, `bg-qs-card`, etc. from here; arbitrary `var(--qs-*)` uses those variables.
+                 * Brand palette is resolved at runtime via CSS RGB-triplet variables
+                 * defined in resources/css/app.css `:root` (and overridden under
+                 * `prefers-color-scheme: dark`). The `<alpha-value>` placeholder
+                 * lets Tailwind utilities keep using opacity modifiers like
+                 * `bg-qs-primary/20` and `focus:ring-qs-danger/45` even though
+                 * the underlying color is theme-aware.
                  */
                 qs: {
-                    bg: '#ffffff',
-                    primary: '#56aebb',
-                    accent: '#56aebb',
-                    soft: '#d5e7ea',
-                    card: '#ffffff',
-                    surface: '#ffffff',
-                    text: '#15343a',
-                    muted: '#5f7478',
-                    danger: '#e46f2e',
-                    'danger-soft': '#fff0e7',
+                    bg: 'rgb(var(--qs-bg-rgb) / <alpha-value>)',
+                    primary: 'rgb(var(--qs-primary-rgb) / <alpha-value>)',
+                    accent: 'rgb(var(--qs-accent-rgb) / <alpha-value>)',
+                    soft: 'rgb(var(--qs-soft-rgb) / <alpha-value>)',
+                    card: 'rgb(var(--qs-card-rgb) / <alpha-value>)',
+                    surface: 'rgb(var(--qs-surface-rgb) / <alpha-value>)',
+                    text: 'rgb(var(--qs-text-rgb) / <alpha-value>)',
+                    muted: 'rgb(var(--qs-muted-rgb) / <alpha-value>)',
+                    danger: 'rgb(var(--qs-danger-rgb) / <alpha-value>)',
+                    'danger-soft': 'rgb(var(--qs-danger-soft-rgb) / <alpha-value>)',
                 },
             },
             fontFamily: {

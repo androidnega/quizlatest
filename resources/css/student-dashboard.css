@@ -1056,6 +1056,49 @@
     margin-right: 0.25rem;
 }
 
+.qs-std-dash-countdown__live {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+/* ---------- /work page countdown pill dynamic expiry swap ----------
+   Same pattern as the dashboard feed-rows: live clock + pre-rendered
+   Start CTA in one wrapper; CSS swaps on `.is-expired`. */
+.qs-std-dash-countdown__expired {
+    display: none;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    background: #16a34a;
+    color: #ffffff;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.qs-std-dash-countdown__expired i {
+    font-size: 0.9em;
+}
+
+.qs-std-dash-countdown.is-expired .qs-std-dash-countdown__live {
+    display: none;
+}
+
+.qs-std-dash-countdown.is-expired .qs-std-dash-countdown__expired {
+    display: inline-flex;
+}
+
+.qs-std-dash-countdown.is-expired .qs-std-dash-countdown__expired--closed {
+    background: #b91c1c;
+}
+
+.qs-std-dash-countdown.is-expired .qs-std-dash-countdown__expired--overdue {
+    background: #b45309;
+}
+
 /* Prominent countdown pill used in the student worklist cards. */
 .qs-std-countdown-pill {
     display: inline-flex;
@@ -1540,61 +1583,27 @@
     flex-direction: column;
     gap: 0.5rem;
     padding: 0.85rem 0.95rem 0.9rem;
-    background: var(--wl-card-bg, #ffffff);
-    border: 1px solid #e2e8f0;
-    border-radius: 0.95rem;
+    background: var(--wl-card-bg, #f4f6fa);
+    border: 1px solid #e5e9f0;
+    border-radius: 0.85rem;
     color: #0f172a;
     min-width: 0;
     transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .qs-wl-item:hover {
-    background: var(--wl-card-hover, #f8fafc);
-    border-color: var(--wl-accent, #cbd5e1);
+    background: var(--wl-card-hover, #eef1f6);
+    border-color: #d4dae3;
 }
 
-/* Slow ambient card-color cycle (Results / list-page calm rhythm) */
+/* Shimmer variant intentionally inherits the calm base style now —
+   no cycling animation, no left-edge accents. */
 .qs-wl-list--shimmer .qs-wl-item {
-    isolation: isolate;
-    background: transparent;
-}
-
-.qs-wl-list--shimmer .qs-wl-item::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    z-index: -1;
-    background-color: #ffffff;
-    animation: qs-wl-card-cycle 200s ease-in-out infinite alternate;
-    animation-delay: calc(var(--card-i, 0) * -22s);
-    transition: opacity 0.25s ease;
+    background: var(--wl-card-bg, #f4f6fa);
 }
 
 .qs-wl-list--shimmer .qs-wl-item:hover {
-    background: var(--wl-card-hover, #f8fafc);
-}
-
-.qs-wl-list--shimmer .qs-wl-item:hover::before {
-    opacity: 0;
-}
-
-@keyframes qs-wl-card-cycle {
-    0%   { background-color: #ffffff; }
-    14%  { background-color: #f8fafc; } /* slate-50 */
-    28%  { background-color: #f0f9ff; } /* sky-50   */
-    42%  { background-color: #ecfdf5; } /* emerald-50 */
-    57%  { background-color: #eef2ff; } /* indigo-50 */
-    71%  { background-color: #f5f3ff; } /* violet-50 */
-    85%  { background-color: #fffbeb; } /* amber-50  */
-    100% { background-color: #fdf2f8; } /* pink-50   */
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .qs-wl-list--shimmer .qs-wl-item::before {
-        animation: none;
-        background-color: var(--wl-card-bg, #ffffff);
-    }
+    background: var(--wl-card-hover, #eef1f6);
 }
 
 .qs-wl-item__head {
@@ -1797,14 +1806,14 @@
     transform: translateX(2px);
 }
 
-/* Section-coloured tokens */
+/* Section-coloured tokens — accent hues are kept (for icon badge, status
+   pills, dot) but card backgrounds are intentionally uniform so the list
+   reads as a calm, single surface rather than a multi-coloured patchwork. */
 .qs-wl-group--active_now,
 .qs-wl-item--active_now {
     --wl-accent: #10b981;
     --wl-accent-soft: rgba(16, 185, 129, 0.14);
     --wl-accent-deep: #047857;
-    --wl-card-bg: #ffffff;
-    --wl-card-hover: #ecfdf5;
 }
 
 .qs-wl-group--continue,
@@ -1812,8 +1821,6 @@
     --wl-accent: #0ea5e9;
     --wl-accent-soft: rgba(14, 165, 233, 0.14);
     --wl-accent-deep: #0369a1;
-    --wl-card-bg: #f8fafc;
-    --wl-card-hover: #f0f9ff;
 }
 
 .qs-wl-group--assignments_due,
@@ -1821,8 +1828,6 @@
     --wl-accent: #f59e0b;
     --wl-accent-soft: rgba(245, 158, 11, 0.16);
     --wl-accent-deep: #b45309;
-    --wl-card-bg: #fafaf9;
-    --wl-card-hover: #fffbeb;
 }
 
 .qs-wl-group--upcoming,
@@ -1830,8 +1835,6 @@
     --wl-accent: #64748b;
     --wl-accent-soft: rgba(100, 116, 139, 0.14);
     --wl-accent-deep: #334155;
-    --wl-card-bg: #fafafa;
-    --wl-card-hover: #f1f5f9;
 }
 
 .qs-wl-group--submitted_work,
@@ -1839,8 +1842,6 @@
     --wl-accent: #8b5cf6;
     --wl-accent-soft: rgba(139, 92, 246, 0.14);
     --wl-accent-deep: #6d28d9;
-    --wl-card-bg: #ffffff;
-    --wl-card-hover: #f5f3ff;
 }
 
 .qs-wl-group--results_released,
@@ -1848,8 +1849,6 @@
     --wl-accent: #6366f1;
     --wl-accent-soft: rgba(99, 102, 241, 0.14);
     --wl-accent-deep: #4338ca;
-    --wl-card-bg: #f8fafc;
-    --wl-card-hover: #eef2ff;
 }
 
 .qs-wl-group--closed_missed,
@@ -1857,8 +1856,6 @@
     --wl-accent: #f43f5e;
     --wl-accent-soft: rgba(244, 63, 94, 0.14);
     --wl-accent-deep: #be123c;
-    --wl-card-bg: #fafafa;
-    --wl-card-hover: #fff1f2;
 }
 
 .qs-wl-empty {
@@ -1893,6 +1890,103 @@
 }
 
 /* =====================================================================
+   Assessment type tag — small chip used on result/worklist cards to
+   surface whether the row is an Assignment / Quiz / Mid / Exam.
+   Reusable across student listings.
+   ===================================================================== */
+
+.qs-type-tag {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 100%;
+    padding: 0.2rem 0.55rem 0.2rem 0.45rem;
+    border-radius: 999px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    font-size: 0.62rem;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.qs-type-tag i {
+    flex: none;
+    font-size: 0.78em;
+    line-height: 1;
+}
+
+.qs-type-tag__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* When the parent card is hovered, gently lift the tag too. */
+.qs-wl-item:hover .qs-type-tag {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px -8px rgba(15, 23, 42, 0.35);
+}
+
+/* Per-type palettes (background, border, ink, icon hue). */
+.qs-type-tag--assignment {
+    background: #fef3c7;
+    border-color: #fcd34d;
+    color: #92400e;
+}
+.qs-type-tag--assignment i { color: #b45309; }
+
+.qs-type-tag--quiz {
+    background: #e0f2fe;
+    border-color: #7dd3fc;
+    color: #075985;
+}
+.qs-type-tag--quiz i { color: #0369a1; }
+
+.qs-type-tag--mid {
+    background: #ede9fe;
+    border-color: #c4b5fd;
+    color: #5b21b6;
+}
+.qs-type-tag--mid i { color: #6d28d9; }
+
+.qs-type-tag--exam {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #991b1b;
+}
+.qs-type-tag--exam i { color: #dc2626; }
+
+@media (min-width: 768px) {
+    .qs-type-tag {
+        font-size: 0.66rem;
+        padding: 0.25rem 0.65rem 0.25rem 0.55rem;
+        gap: 0.4rem;
+    }
+}
+
+@media (max-width: 360px) {
+    .qs-type-tag {
+        font-size: 0.6rem;
+        padding: 0.18rem 0.45rem;
+        letter-spacing: 0.04em;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .qs-type-tag,
+    .qs-wl-item:hover .qs-type-tag {
+        transition: none;
+        transform: none;
+    }
+}
+
+/* =====================================================================
    "Open & new assessments" feed cards — modern two-up grid
    ===================================================================== */
 
@@ -1924,18 +2018,17 @@
     align-items: flex-start;
     gap: 0.75rem;
     padding: 0.75rem 0.85rem;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.85rem;
+    background: #f4f6fa;
+    border: 1px solid #e5e9f0;
+    border-radius: 0.75rem;
     text-decoration: none;
     color: inherit;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 a.qs-std-feed-card:hover {
-    border-color: #cbd5e1;
-    box-shadow: 0 4px 14px -8px rgba(15, 23, 42, 0.12);
-    transform: translateY(-1px);
+    background: #eef1f6;
+    border-color: #d4dae3;
 }
 
 /* Tone palettes — soft surface + deep accent (no gradient) */
@@ -1971,6 +2064,23 @@ a.qs-std-feed-card:hover {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
+}
+
+.qs-std-feed-card__tag {
+    display: inline-flex;
+    align-self: flex-start;
+    align-items: center;
+    margin: 0 0 0.15rem;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    background: var(--feed-tone-soft, #f1f5f9);
+    color: var(--feed-tone, #475569);
+    font-size: 0.56rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    line-height: 1;
 }
 
 .qs-std-feed-card__title {
@@ -2068,36 +2178,14 @@ a.qs-std-feed-card:hover .qs-std-feed-card__action i {
         gap: 1rem;
         padding: 1.05rem 1.15rem;
         border-radius: 1rem;
-        border-color: #eef2f7;
-        background: #ffffff;
+        border-color: #e5e9f0;
+        background: #f4f6fa;
         overflow: hidden;
     }
 
-    /* Tone-colored sweep that animates in on hover. */
-    .qs-std-feed-card::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        left: 0;
-        width: 3px;
-        background: var(--feed-tone);
-        border-top-left-radius: inherit;
-        border-bottom-left-radius: inherit;
-        transform: scaleY(0);
-        transform-origin: center;
-        transition: transform 0.28s ease, width 0.2s ease;
-    }
-
     a.qs-std-feed-card:hover {
-        border-color: transparent;
-        box-shadow: 0 18px 32px -22px rgba(15, 23, 42, 0.25);
-        transform: translateY(-2px);
-    }
-
-    a.qs-std-feed-card:hover::before {
-        transform: scaleY(1);
-        width: 4px;
+        border-color: #d4dae3;
+        background: #eef1f6;
     }
 
     .qs-std-feed-card__icon {
@@ -2159,6 +2247,58 @@ a.qs-std-feed-card:hover .qs-std-feed-card__action i {
     border: 1px solid #e2e8f0;
     border-radius: 0.65rem;
     max-width: 100%;
+}
+
+.qs-wl-countdown__live {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+/* ---------- Worklist countdown dynamic expiry swap ----------
+   When studentDashboardCountdown.js adds `.is-expired`, hide the live
+   label + grid and reveal the data-driven Start/Closed/Submit-now pill.
+   The whole row stays on the page — it just transforms. */
+.qs-wl-countdown__expired {
+    display: none;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    background: #16a34a;
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.qs-wl-countdown__expired i {
+    font-size: 0.85em;
+}
+
+.qs-wl-countdown.is-expired {
+    background: transparent;
+    border-color: transparent;
+    padding: 0;
+}
+
+.qs-wl-countdown.is-expired .qs-wl-countdown__live {
+    display: none;
+}
+
+.qs-wl-countdown.is-expired .qs-wl-countdown__expired {
+    display: inline-flex;
+}
+
+.qs-wl-countdown.is-expired .qs-wl-countdown__expired--closed {
+    background: #b91c1c;
+}
+
+.qs-wl-countdown.is-expired .qs-wl-countdown__expired--overdue {
+    background: #b45309;
 }
 
 .qs-wl-countdown--compact {
@@ -2616,19 +2756,6 @@ a.qs-std-feed-card:hover .qs-std-feed-card__action i {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 0.85rem;
     }
-
-    /* Tablet/desktop: give the resting tile a soft tone-tinted surface
-       and border. Hover still inverts to the deep solid color.          */
-    .qs-stat-grid--dash .qs-stat-card {
-        background: var(--qs-stat-hover-bg, #f8fafc);
-        border-color: var(--qs-stat-icon-hover-bg, #e2e8f0);
-    }
-
-    .qs-stat-grid--dash .qs-stat-card--link:hover {
-        background: var(--qs-stat-solid, #0f172a);
-        border-color: var(--qs-stat-solid, #0f172a);
-        color: #ffffff;
-    }
 }
 
 @media (min-width: 1024px) {
@@ -2641,9 +2768,10 @@ a.qs-std-feed-card:hover .qs-std-feed-card__action i {
 /* ---------------------------------------------------------------------
    Desktop / tablet — "Editorial" stat card.
 
-   White surface, thick colored bar on the LEFT, oversized tone-colored
-   number, outlined icon in the top-right, refined lift-and-fill hover.
-   Mobile keeps its compact row layout further down.
+   Each card sits on a SOFT TONE-TINTED surface at rest (no left bar,
+   no white default). A subtle tone halo in the top-right corner stays
+   visible at all times and intensifies on hover. Mobile keeps its
+   compact row layout further down.
    --------------------------------------------------------------------- */
 @media (min-width: 640px) {
     .qs-stat-grid--dash .qs-stat-card {
@@ -2651,34 +2779,28 @@ a.qs-std-feed-card:hover .qs-std-feed-card__action i {
         display: flex;
         flex-direction: column;
         gap: 0;
-        padding: 1.25rem 1.4rem 1.15rem 1.55rem;
-        background: #ffffff;
-        border: 1px solid #eef2f7;
+        padding: 1.25rem 1.4rem 1.15rem 1.4rem;
+        background: var(--qs-stat-hover-bg, #f4f6fa);
+        border: 1px solid var(--qs-stat-icon-bg, #eef2f7);
         border-radius: 1.15rem;
         min-height: 12rem;
         overflow: hidden;
         isolation: isolate;
         transition:
+            background-color 0.25s ease,
             border-color 0.25s ease,
             box-shadow 0.25s ease,
             transform 0.25s ease;
     }
 
-    /* Repurpose the legacy stripe as a thick LEFT accent bar. */
+    /* Left accent bar is hidden by default — the tone now comes from the
+       tinted surface itself. */
     .qs-stat-grid--dash .qs-stat-card__stripe {
-        display: block;
-        top: 0;
-        bottom: 0;
-        left: 0;
-        right: auto;
-        width: 4px;
-        height: auto;
-        background: var(--qs-stat-stripe, #cbd5e1);
-        border-radius: 0;
-        transition: width 0.25s ease, background-color 0.25s ease;
+        display: none;
     }
 
-    /* Soft tone halo in the top-right corner — purely decorative. */
+    /* Soft tone halo in the top-right corner — visible by default so the
+       card reads as a richer surface rather than a flat tinted block. */
     .qs-stat-grid--dash .qs-stat-card::after {
         content: "";
         position: absolute;
@@ -2688,16 +2810,16 @@ a.qs-std-feed-card:hover .qs-std-feed-card__action i {
         height: 7rem;
         border-radius: 999px;
         background: var(--qs-stat-icon-bg, #f1f5f9);
-        opacity: 0;
+        opacity: 0.9;
         z-index: -1;
-        transform: scale(0.85);
+        transform: scale(1);
         transition: opacity 0.3s ease, transform 0.3s ease;
         pointer-events: none;
     }
 
     .qs-stat-grid--dash .qs-stat-card--link:hover::after {
         opacity: 1;
-        transform: scale(1);
+        transform: scale(1.05);
     }
 
     .qs-stat-grid--dash .qs-stat-card__top {
@@ -2800,22 +2922,23 @@ a.qs-std-feed-card:hover .qs-std-feed-card__action i {
         transition: transform 0.3s ease;
     }
 
-    /* Hover — white card stays, left bar widens, icon fills, lifts. */
+    /* Hover — flood the card with the deep solid tone, invert text/icon. */
     .qs-stat-grid--dash .qs-stat-card--link:hover {
-        background: #ffffff;
-        border-color: var(--qs-stat-icon-fg, #0f172a);
-        color: #0f172a;
+        background: var(--qs-stat-solid, #0f172a);
+        border-color: var(--qs-stat-solid, #0f172a);
+        color: #ffffff;
         transform: translateY(-3px);
-        box-shadow: 0 22px 45px -22px rgba(15, 23, 42, 0.28);
+        box-shadow: 0 22px 45px -22px rgba(15, 23, 42, 0.45);
     }
 
-    .qs-stat-grid--dash .qs-stat-card--link:hover .qs-stat-card__stripe {
-        width: 7px;
+    .qs-stat-grid--dash .qs-stat-card--link:hover::after {
+        background: rgba(255, 255, 255, 0.18);
     }
 
     .qs-stat-grid--dash .qs-stat-card--link:hover .qs-stat-card__icon {
-        background: var(--qs-stat-icon-fg, #0f172a);
+        background: rgba(255, 255, 255, 0.2);
         color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.45);
         transform: rotate(-6deg) scale(1.05);
     }
 
@@ -2827,43 +2950,25 @@ a.qs-std-feed-card:hover .qs-std-feed-card__action i {
         transform: translateX(4px);
     }
 
-    /* Reset hover colors — this style intentionally avoids the
-       full-color flood used previously. Each part keeps its tone.       */
-    .qs-stat-grid--dash .qs-stat-card--link:hover .qs-stat-card__eyebrow {
-        color: var(--qs-stat-eyebrow, #475569);
-    }
-
-    .qs-stat-grid--dash .qs-stat-card--link:hover .qs-stat-card__value {
-        color: var(--qs-stat-icon-fg, #0f172a);
-    }
-
-    .qs-stat-grid--dash .qs-stat-card--link:hover .qs-stat-card__label {
-        color: #475569;
-    }
-
+    /* Invert all text colors so the card reads on the deep surface. */
+    .qs-stat-grid--dash .qs-stat-card--link:hover .qs-stat-card__eyebrow,
+    .qs-stat-grid--dash .qs-stat-card--link:hover .qs-stat-card__value,
+    .qs-stat-grid--dash .qs-stat-card--link:hover .qs-stat-card__label,
+    .qs-stat-grid--dash .qs-stat-card--link:hover .qs-stat-card__hint,
     .qs-stat-grid--dash .qs-stat-card--link:hover .qs-stat-card__cta {
-        color: var(--qs-stat-cta, #475569);
-        border-top-color: transparent;
+        color: #ffffff;
     }
 
     .qs-stat-grid--dash .qs-stat-card--link:hover .qs-stat-card__value[data-qs-stat-zero="1"] {
-        color: #cbd5e1;
+        color: rgba(255, 255, 255, 0.65);
     }
 }
 
 @media (min-width: 1024px) {
     .qs-stat-grid--dash .qs-stat-card {
-        padding: 1.5rem 1.55rem 1.3rem 1.75rem;
+        padding: 1.5rem 1.55rem 1.3rem 1.55rem;
         min-height: 13.5rem;
         border-radius: 1.25rem;
-    }
-
-    .qs-stat-grid--dash .qs-stat-card__stripe {
-        width: 5px;
-    }
-
-    .qs-stat-grid--dash .qs-stat-card--link:hover .qs-stat-card__stripe {
-        width: 9px;
     }
 
     .qs-stat-grid--dash .qs-stat-card__value {
@@ -2909,17 +3014,15 @@ a.qs-std-feed-card:hover .qs-std-feed-card__action i {
         gap: 0 0.75rem;
         padding: 0.7rem 0.85rem;
         border-radius: 0.85rem;
-        background: #ffffff;
-        border: 1px solid #e5e7eb;
+        background: var(--qs-stat-hover-bg, #f4f6fa);
+        border: 1px solid var(--qs-stat-icon-bg, #e5e7eb);
         overflow: hidden;
     }
 
-    /* Solid hover/active color uses the tone's accent and inverts the
-       text colors so the row still reads. Keep the existing behavior.   */
+    /* Active/press deepens the same tone without a full color flood. */
     .qs-stat-grid--dash .qs-stat-card--link:active {
-        background: var(--qs-stat-solid, #0f172a);
-        border-color: var(--qs-stat-solid, #0f172a);
-        color: #ffffff;
+        background: var(--qs-stat-icon-bg, #e5e7eb);
+        border-color: var(--qs-stat-icon-fg, #0f172a);
     }
 
     .qs-stat-grid--dash .qs-stat-card__stripe,
@@ -4172,3 +4275,2240 @@ a.qs-std-feed-card:hover .qs-std-feed-card__action i {
 }
 
 .qs-profile-photo-block { margin-top: 0; }
+
+/* =====================================================================
+   Wallet-style mobile dashboard (super-admin toggleable).
+   Renders only at phone widths (<lg = 1023.98px). Everything is scoped
+   under .qs-std-wallet so it never leaks into the standard layout.
+   ===================================================================== */
+
+/* Default wallet palette = QuizSnap teal (matches the main website).
+   Themed alternatives override these vars via [data-theme="..."]. */
+.qs-std-wallet {
+    --w-hero-deep: #0e2a30;
+    --w-hero: #15343a;
+    --w-hero-soft: #1f4a52;
+    --w-accent: #e46f2e;
+    --w-accent-deep: #c75a1f;
+    --w-accent-ink: #ffffff;
+    --w-lime: var(--w-accent);
+    --w-lime-deep: var(--w-accent-deep);
+    --w-green-deep: var(--w-hero-deep);
+    --w-green: var(--w-hero);
+    --w-green-soft: var(--w-hero-soft);
+    --w-ink: #0f172a;
+    --w-ink-soft: #1e293b;
+    --w-page: #ffffff;
+    --w-card: #ffffff;
+    --w-border: #e5e7eb;
+    --w-muted: #64748b;
+
+    position: relative;
+    display: block;
+    width: 100%;
+    /* Extra top padding so the entire wallet stack (green hero + docked
+       actions card + recent activity) sits lower on the screen. This is
+       generous on purpose — 1.5rem was visually imperceptible on the
+       device the user reviewed. safe-area-inset-top is added on top so
+       iOS notches stay clear. */
+    padding: calc(env(safe-area-inset-top, 0px) + 3.5rem) 1rem 0;
+    color: var(--w-ink);
+}
+
+/* Forest = the original wallet look (dark green + lime). */
+.qs-std-wallet[data-theme="forest"] {
+    --w-hero-deep: #14523c;
+    --w-hero: #1b6b4e;
+    --w-hero-soft: #2a7a5c;
+    --w-accent: #c9f656;
+    --w-accent-deep: #aef252;
+    --w-accent-ink: #14523c;
+}
+
+/* Midnight indigo. */
+.qs-std-wallet[data-theme="indigo"] {
+    --w-hero-deep: #1e1b4b;
+    --w-hero: #312e81;
+    --w-hero-soft: #4338ca;
+    --w-accent: #7dd3fc;
+    --w-accent-deep: #38bdf8;
+    --w-accent-ink: #0c1e45;
+}
+
+/* Sunset coral. */
+.qs-std-wallet[data-theme="coral"] {
+    --w-hero-deep: #9a3412;
+    --w-hero: #c2410c;
+    --w-hero-soft: #ea580c;
+    --w-accent: #fde68a;
+    --w-accent-deep: #fcd34d;
+    --w-accent-ink: #7c2d12;
+}
+
+/* Noir wallet — matte-black fintech feel with QuizSnap-themed accents.
+   The accent stays QuizSnap teal so the dashboard still reads as "us"
+   while the surface goes full dark like a modern banking app. */
+.qs-std-wallet[data-theme="noir"] {
+    --w-hero-deep: #050507;
+    --w-hero: #0b0b10;
+    --w-hero-soft: #16161e;
+    --w-accent: #2dd4bf;
+    --w-accent-deep: #14b8a6;
+    --w-accent-ink: #04141a;
+    --w-ink: #f1f5f9;
+    --w-ink-soft: #cbd5e1;
+    --w-page: #0b0b10;
+    --w-card: #16161e;
+    --w-border: #1f1f29;
+    --w-muted: #94a3b8;
+}
+
+/* Noir surface treatment — switch the page itself to dark and dial the
+   wallet cards / chips / pills to the matte-black + cyan-accent palette.
+   Scoped under data-theme so other themes keep their bright surfaces. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] {
+    background-color: #050507;
+    color: #f1f5f9;
+}
+.qs-std-wallet[data-theme="noir"] .qs-std-wallet__actions-card,
+.qs-std-wallet[data-theme="noir"] .qs-std-wallet__activity-card {
+    background: linear-gradient(180deg, #16161e 0%, #0e0e16 100%);
+    border-color: #1f1f29;
+    color: #f1f5f9;
+    box-shadow:
+        0 18px 32px -16px rgba(0, 0, 0, 0.75),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.qs-std-wallet[data-theme="noir"] .qs-std-wallet__action-tile {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: #232331;
+    color: #e2e8f0;
+}
+.qs-std-wallet[data-theme="noir"] .qs-std-wallet__action-tile i {
+    color: #2dd4bf;
+}
+.qs-std-wallet[data-theme="noir"] .qs-std-wallet__action-tile:hover {
+    background: rgba(45, 212, 191, 0.08);
+    border-color: rgba(45, 212, 191, 0.35);
+}
+.qs-std-wallet[data-theme="noir"] .qs-std-wallet__activity-title,
+.qs-std-wallet[data-theme="noir"] .qs-std-wallet__activity-list-title,
+.qs-std-wallet[data-theme="noir"] .qs-std-wallet__hero-title {
+    color: #f8fafc;
+}
+.qs-std-wallet[data-theme="noir"] .qs-std-wallet__activity-meta,
+.qs-std-wallet[data-theme="noir"] .qs-std-wallet__activity-date,
+.qs-std-wallet[data-theme="noir"] .qs-std-wallet__hero-caption,
+.qs-std-wallet[data-theme="noir"] .qs-std-wallet__greet-lead {
+    color: rgba(226, 232, 240, 0.7);
+}
+.qs-std-wallet[data-theme="noir"] .qs-std-wallet__activity-cta--ghost {
+    background: rgba(255, 255, 255, 0.06);
+    color: #e2e8f0;
+    border: 1px solid #1f1f29;
+}
+.qs-std-wallet[data-theme="noir"] .qs-std-wallet__activity-cta--primary {
+    background: var(--w-accent);
+    color: var(--w-accent-ink);
+}
+.qs-std-wallet[data-theme="noir"] .qs-std-wallet__bell {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f1f5f9;
+}
+/* The broader cross-page noir treatment (mobile header, FAB, floating
+   desktop header, page-wrap, list-page body, cards, inputs, tables, etc.)
+   lives at the BOTTOM of this file in the "NOIR THEME — cross-page dark
+   mode" block, scoped under body.qs-std--wallet[data-qs-wallet-theme="noir"]
+   so we don't leak any of it onto the other themes. */
+
+/* Hide the wallet view on tablet/desktop — keep classic layout there. */
+@media (min-width: 1024px) {
+    .qs-std-wallet {
+        display: none;
+    }
+}
+
+/* --------------------------- HERO --------------------------- */
+
+.qs-std-wallet__hero {
+    position: relative;
+    margin: 0 -1rem 0;
+    /* Extra bottom padding so the gradient extends well past the caption
+       AND so the actions card below can climb back up into the green by
+       ~half its height without colliding with the hero copy. */
+    padding: 1.1rem 1.25rem 4.5rem;
+    background: linear-gradient(180deg, var(--w-green-deep) 0%, var(--w-green) 70%, var(--w-green-soft) 100%);
+    color: #ffffff;
+    border-bottom-left-radius: 1.75rem;
+    border-bottom-right-radius: 1.75rem;
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.qs-std-wallet__hero::after {
+    /* Soft lime glow behind the balance number — purely decorative. */
+    content: "";
+    position: absolute;
+    top: -3rem;
+    right: -3.5rem;
+    width: 13rem;
+    height: 13rem;
+    border-radius: 999px;
+    background: radial-gradient(closest-side, rgba(201, 246, 86, 0.25), rgba(201, 246, 86, 0) 70%);
+    z-index: -1;
+    pointer-events: none;
+}
+
+.qs-std-wallet__hero-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.qs-std-wallet__greet {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    text-decoration: none;
+    color: inherit;
+    min-width: 0;
+}
+
+.qs-std-wallet__avatar {
+    flex: none;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.18);
+    border: 1.5px solid rgba(255, 255, 255, 0.35);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.qs-std-wallet__avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.qs-std-wallet__greet-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+    min-width: 0;
+}
+
+.qs-std-wallet__greet-lead {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.78);
+}
+
+.qs-std-wallet__greet-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 10rem;
+}
+
+.qs-std-wallet__bell {
+    flex: none;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+    border: 1.5px solid rgba(255, 255, 255, 0.22);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    text-decoration: none;
+    transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.qs-std-wallet__bell:hover,
+.qs-std-wallet__bell:focus-visible {
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.34);
+}
+
+.qs-std-wallet__bell-dot {
+    position: absolute;
+    top: -0.25rem;
+    right: -0.25rem;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 0.6rem;
+    font-weight: 800;
+    line-height: 1.1rem;
+    text-align: center;
+    border: 1.5px solid var(--w-hero-deep);
+}
+
+/* Hero focus — the only thing sitting on the hero gradient besides the
+   greeting + bell. Title first, large mono clock under it, tiny caption
+   below. No card background, no extra CTAs — clean and sleek. */
+.qs-std-wallet__hero-focus {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 1.35rem auto 0;
+    padding: 0;
+    text-align: center;
+    color: #ffffff;
+    text-decoration: none;
+    background: transparent;
+    width: 100%;
+    max-width: 22rem;
+    /* The hero container is a plain <div> now — only the inline Start /
+       Resume / Submit pill is a real link. Reset cursor + text selection
+       so the surface feels informational, not falsely tappable. */
+    cursor: default;
+    user-select: none;
+}
+
+/* Inner pills are the only interactive elements inside the hero, so they
+   are the ones that show a pointer cursor + focus ring. */
+.qs-std-wallet__hero-focus a {
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.qs-std-wallet__hero-focus a:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.7);
+    outline-offset: 3px;
+    border-radius: 999px;
+}
+
+.qs-std-wallet__hero-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #ffffff;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    letter-spacing: -0.005em;
+}
+
+.qs-std-wallet__hero-clock {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.2rem;
+    color: #ffffff;
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.qs-std-wallet__hero-clock-live {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.2rem;
+}
+
+.qs-std-wallet__hero-clock-seg {
+    font-size: 2.05rem;
+    letter-spacing: -0.01em;
+    min-width: 1.5ch;
+    text-align: center;
+}
+
+.qs-std-wallet__hero-clock-sep {
+    font-size: 1.9rem;
+    color: rgba(255, 255, 255, 0.55);
+    line-height: 1;
+}
+
+/* ---------- Mobile hero dynamic expiry swap ----------
+   When the JS adds `.is-expired`, hide the ticking clock and reveal the
+   data-driven CTA pill so the wallet hero becomes a START button. */
+.qs-std-wallet__hero-expired {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.7rem 1.4rem;
+    border-radius: 999px;
+    background: var(--w-accent);
+    color: var(--w-accent-ink);
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: -0.005em;
+    line-height: 1;
+    white-space: nowrap;
+    /* The expired pill may render as either an <a> (ready / overdue —
+       tappable) or a <span> (closed — informational). Both share the
+       same base style; the anchor variant inherits pointer + focus
+       from the .qs-std-wallet__hero-focus a rule above. */
+    text-decoration: none;
+}
+
+a.qs-std-wallet__hero-expired:hover {
+    filter: brightness(1.06);
+}
+
+.qs-std-wallet__hero-expired i {
+    font-size: 1.1em;
+}
+
+.qs-std-wallet__hero-clock.is-expired .qs-std-wallet__hero-clock-live {
+    display: none;
+}
+
+.qs-std-wallet__hero-clock.is-expired .qs-std-wallet__hero-expired {
+    display: inline-flex;
+}
+
+/* When the window has CLOSED on the student, swap the accent pill for a
+   warning-tinted pill so they can tell at a glance it's no longer an
+   action — the click still navigates, but the messaging matches. */
+.qs-std-wallet__hero-clock.is-expired .qs-std-wallet__hero-expired--closed {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fee2e2;
+    box-shadow: inset 0 0 0 1.5px rgba(239, 68, 68, 0.4);
+}
+
+.qs-std-wallet__hero-clock.is-expired .qs-std-wallet__hero-expired--overdue {
+    background: rgba(251, 191, 36, 0.18);
+    color: #fef3c7;
+    box-shadow: inset 0 0 0 1.5px rgba(251, 191, 36, 0.4);
+}
+
+/* The "Opens in" caption stops being accurate once the countdown ends —
+   hide it. The CTA pill carries the post-expiry message on its own. */
+.qs-std-wallet__hero-focus:has(.qs-std-wallet__hero-clock.is-expired) .qs-std-wallet__hero-caption {
+    visibility: hidden;
+}
+
+/* Standalone Start pill — rendered in the hero when there is no live
+   countdown but a quiz is startable right now (digest returned a cta_label
+   like "Start quiz"). Same visual language as the expired-state pill so
+   the surface feels consistent whether the timer just ticked to 0 or the
+   quiz was already open when the dashboard loaded. */
+.qs-std-wallet__hero-start {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.7rem 1.4rem;
+    border-radius: 999px;
+    background: var(--w-accent);
+    color: var(--w-accent-ink);
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: -0.005em;
+    line-height: 1;
+    white-space: nowrap;
+    text-decoration: none;
+    transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+a.qs-std-wallet__hero-start:hover {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+}
+
+.qs-std-wallet__hero-start i {
+    font-size: 1.1em;
+}
+
+.qs-std-wallet__hero-caption {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--w-accent);
+}
+
+.qs-std-wallet__hero-focus--idle .qs-std-wallet__hero-title {
+    color: rgba(255, 255, 255, 0.92);
+    font-weight: 600;
+}
+
+.qs-std-wallet__hero-focus--idle .qs-std-wallet__hero-caption {
+    color: rgba(255, 255, 255, 0.65);
+}
+
+/* Idle hero is intentionally non-interactive: the markup renders as a
+   plain <div> instead of an <a>, so there is no navigation target. The
+   default cursor + lack of pointer-events on text reinforces that this
+   surface is informational only — the student should not feel a tap is
+   waiting for them. The Start button (when a quiz IS startable) is the
+   only tappable element in the hero. */
+div.qs-std-wallet__hero-focus--idle {
+    cursor: default;
+}
+div.qs-std-wallet__hero-focus--idle .qs-std-wallet__hero-title,
+div.qs-std-wallet__hero-focus--idle .qs-std-wallet__hero-caption {
+    user-select: none;
+}
+
+.qs-std-wallet__chips {
+    /* Pushed down so it doesn't crowd the hero focus / caption above —
+       gives the hero countdown room to breathe before the filter card. */
+    margin-top: 2.5rem;
+    padding: 0.85rem 0.9rem;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 1.2rem;
+}
+
+.qs-std-wallet__chips-label {
+    margin: 0 0 0.55rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.qs-std-wallet__chip-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+
+.qs-std-wallet__chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.qs-std-wallet__chip:hover {
+    border-color: rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.qs-std-wallet__chip--active {
+    background: var(--w-accent);
+    border-color: var(--w-accent);
+    color: var(--w-accent-ink);
+}
+
+.qs-std-wallet__chip--active:hover {
+    background: var(--w-accent-deep);
+    border-color: var(--w-accent-deep);
+    color: var(--w-accent-ink);
+}
+
+.qs-std-wallet__chip-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.85rem 0.4rem 0.7rem;
+    border-radius: 999px;
+    background: var(--w-green-deep);
+    color: #ffffff;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-decoration: none;
+    border: 1.5px solid rgba(255, 255, 255, 0.18);
+    transition: background-color 0.18s ease;
+}
+
+.qs-std-wallet__chip-add i {
+    font-size: 0.7em;
+}
+
+.qs-std-wallet__chip-add:hover {
+    background: #0c3a2a;
+}
+
+/* --------------------------- QUICK ACTIONS --------------------------- */
+
+.qs-std-wallet__actions-card {
+    position: relative;
+    /* Climbs back UP into the green hero by ~half its height so the card
+       feels like it's docking into the gradient — the hero pushes down
+       and this card pushes up to meet it. The extra `padding-bottom` on
+       .qs-std-wallet__hero above (`4.5rem`) is what gives this overlap
+       room without crowding the hero copy. */
+    margin: -3rem 0 1rem;
+    z-index: 2;
+    padding: 1rem 0.85rem;
+    background: var(--w-card);
+    border: 1px solid #eef2f7;
+    border-radius: 1.25rem;
+    box-shadow: 0 18px 32px -22px rgba(15, 23, 42, 0.15);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.qs-std-wallet__action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.1rem;
+    text-decoration: none;
+    color: var(--w-ink);
+    text-align: center;
+    min-width: 0;
+}
+
+.qs-std-wallet__action-circle {
+    position: relative;
+    width: 2.85rem;
+    height: 2.85rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    border: 1.5px solid currentColor;
+}
+
+.qs-std-wallet__action-circle--assessments {
+    color: #0369a1;
+    background: #e0f2fe;
+}
+
+.qs-std-wallet__action-circle--assignments {
+    color: #b45309;
+    background: #fef3c7;
+}
+
+.qs-std-wallet__action-circle--results {
+    color: #047857;
+    background: #d1fae5;
+}
+
+.qs-std-wallet__action-circle--notices {
+    color: #6d28d9;
+    background: #ede9fe;
+}
+
+.qs-std-wallet__action-badge {
+    position: absolute;
+    top: -0.2rem;
+    right: -0.35rem;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 0.6rem;
+    font-weight: 800;
+    line-height: 1.1rem;
+    border: 2px solid var(--w-card);
+}
+
+.qs-std-wallet__action-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--w-ink);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+/* --------------------------- RECENT ACTIVITY --------------------------- */
+
+.qs-std-wallet__activity-card {
+    margin: 0 0 1rem;
+    padding: 1rem 0.95rem 0.65rem;
+    background: var(--w-card);
+    border: 1px solid #eef2f7;
+    border-radius: 1.25rem;
+    box-shadow: 0 16px 30px -22px rgba(15, 23, 42, 0.12);
+}
+
+.qs-std-wallet__activity-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.65rem;
+}
+
+.qs-std-wallet__activity-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--w-ink);
+}
+
+.qs-std-wallet__activity-more {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--w-lime-deep);
+    text-decoration: none;
+}
+
+.qs-std-wallet__activity-more:hover {
+    color: var(--w-green);
+}
+
+.qs-std-wallet__activity-empty {
+    margin: 0;
+    padding: 1.5rem 0.5rem;
+    text-align: center;
+    color: var(--w-muted);
+    font-size: 0.85rem;
+}
+
+.qs-std-wallet__activity-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.qs-std-wallet__activity-item + .qs-std-wallet__activity-item {
+    border-top: 1px solid #f1f5f9;
+}
+
+.qs-std-wallet__activity-link {
+    /* Clean two-column layout: icon · (title + course + date) · CTA pill.
+       The CTA is server-side classified as start (theme accent button) or
+       ghost (neutral pill) so the row always reads like a real entry with
+       a clear primary action on the right. */
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.85rem 0.1rem;
+    text-decoration: none;
+    color: var(--w-ink);
+}
+
+.qs-std-wallet__activity-icon {
+    flex: none;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+}
+
+.qs-std-wallet__activity-icon--assessments { background: #e0f2fe; color: #0369a1; }
+.qs-std-wallet__activity-icon--assignments { background: #fef3c7; color: #b45309; }
+.qs-std-wallet__activity-icon--results     { background: #d1fae5; color: #047857; }
+.qs-std-wallet__activity-icon--notices     { background: #ede9fe; color: #6d28d9; }
+
+.qs-std-wallet__activity-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.qs-std-wallet__activity-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--w-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.qs-std-wallet__activity-sub {
+    margin-top: 0.15rem;
+    font-size: 0.72rem;
+    color: var(--w-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Date now lives under the title in the body column — gives the row a
+   cleaner single right-side action and removes the cramped right column. */
+.qs-std-wallet__activity-date {
+    margin-top: 0.2rem;
+    font-size: 0.68rem;
+    color: var(--w-muted);
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+}
+
+/* CTA pill on the right side of the row — primary (Start/Open/Resume/
+   Submit) uses the theme accent so the row clearly looks "actionable",
+   ghost is a neutral chip for non-actionable copy like "Instructions". */
+.qs-std-wallet__activity-cta {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.005em;
+    white-space: nowrap;
+    transition: transform 0.18s ease, background-color 0.18s ease;
+}
+
+.qs-std-wallet__activity-cta i {
+    font-size: 0.95em;
+}
+
+.qs-std-wallet__activity-cta--primary {
+    background: var(--w-accent);
+    color: var(--w-accent-ink);
+    box-shadow: 0 6px 12px -8px color-mix(in srgb, var(--w-accent) 80%, transparent);
+}
+
+.qs-std-wallet__activity-link:hover .qs-std-wallet__activity-cta--primary,
+.qs-std-wallet__activity-link:focus-visible .qs-std-wallet__activity-cta--primary {
+    background: var(--w-accent-deep);
+    color: var(--w-accent-ink);
+    transform: translateX(2px);
+}
+
+.qs-std-wallet__activity-cta--ghost {
+    background: #f1f5f9;
+    color: var(--w-ink-soft);
+    border: 1px solid #e2e8f0;
+}
+
+/* --------------------------- FLOATING BOTTOM NAV --------------------------- */
+
+.qs-std-wallet__nav {
+    position: fixed;
+    left: 1rem;
+    right: 1rem;
+    bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+    z-index: 40;
+    background: var(--w-green-deep);
+    color: rgba(255, 255, 255, 0.85);
+    border-radius: 1.4rem;
+    padding: 0.55rem 0.75rem;
+    box-shadow: 0 20px 35px -16px rgba(15, 23, 42, 0.45);
+    display: flex;
+    justify-content: center;
+    /* Allow the FAB to overflow above the bar. */
+}
+
+.qs-std-wallet__nav-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr 4rem 1fr 1fr;
+    align-items: center;
+    width: 100%;
+    gap: 0.25rem;
+}
+
+.qs-std-wallet__nav-spacer {
+    width: 100%;
+    height: 1px;
+}
+
+.qs-std-wallet__nav-item {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.4rem 0.35rem;
+    text-decoration: none;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.65rem;
+    font-weight: 600;
+    border-radius: 999px;
+    transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.qs-std-wallet__nav-item:hover {
+    color: #ffffff;
+}
+
+.qs-std-wallet__nav-item.is-active {
+    background: var(--w-accent);
+    color: var(--w-accent-ink);
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+}
+
+.qs-std-wallet__nav-item.is-active .qs-std-wallet__nav-icon i,
+.qs-std-wallet__nav-item.is-active .qs-std-wallet__nav-label {
+    color: var(--w-accent-ink);
+}
+
+.qs-std-wallet__nav-icon {
+    line-height: 1;
+}
+
+.qs-std-wallet__nav-icon i {
+    font-size: 1.05rem;
+}
+
+.qs-std-wallet__nav-label {
+    line-height: 1;
+}
+
+.qs-std-wallet__nav-fab {
+    position: absolute;
+    left: 50%;
+    bottom: 1.05rem;
+    transform: translateX(-50%);
+    width: 3.4rem;
+    height: 3.4rem;
+    border-radius: 999px;
+    background: var(--w-accent);
+    color: var(--w-accent-ink);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    box-shadow: 0 14px 24px -10px rgba(0, 0, 0, 0.35), 0 0 0 6px var(--w-hero-deep);
+    text-decoration: none;
+    transition: background-color 0.18s ease, transform 0.18s ease;
+}
+
+.qs-std-wallet__nav-fab:hover,
+.qs-std-wallet__nav-fab:focus-visible {
+    background: var(--w-accent-deep);
+    transform: translateX(-50%) translateY(-2px);
+}
+
+.qs-std-wallet__nav-fab-dot {
+    position: absolute;
+    top: -0.15rem;
+    right: -0.25rem;
+    min-width: 1.2rem;
+    height: 1.2rem;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 0.65rem;
+    font-weight: 800;
+    line-height: 1.2rem;
+    text-align: center;
+    border: 2px solid var(--w-hero-deep);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .qs-std-wallet__hero-focus:focus-visible,
+    .qs-std-wallet__nav-fab:hover {
+        transform: none;
+    }
+}
+
+/* ===================================================================
+   Desktop hero countdown card — appears at the top of the student
+   desktop dashboard, mirrors the cream/dark "exam ticket" reference.
+   Hidden on phones (< lg) — the mobile wallet hero handles that surface.
+
+   The card honours the active wallet theme palette (`--w-hero*`, `--w-accent*`)
+   when the super admin has enabled the wallet experience, but ALSO works
+   in the default classic dashboard via cream/dark fallbacks.
+   =================================================================== */
+
+.qs-std-hero-countdown {
+    /* Cream / dark fallbacks for the classic (non-wallet) dashboard. The
+       wallet body-level vars (--w-hero*, --w-accent*) take over when the
+       super admin has enabled the wallet UI. */
+    --hc-cream: #fbe9c8;
+    --hc-cream-soft: #fff2d4;
+    --hc-ink: #2b1607;
+    --hc-ink-soft: #4a2a17;
+    --hc-accent: #d97706;
+}
+
+body.qs-std--wallet .qs-std-hero-countdown {
+    --hc-cream: color-mix(in srgb, var(--w-accent) 22%, #fff8e8);
+    --hc-cream-soft: color-mix(in srgb, var(--w-accent) 12%, #ffffff);
+    --hc-ink: var(--w-hero-deep);
+    --hc-ink-soft: var(--w-hero);
+    --hc-accent: var(--w-accent);
+}
+
+.qs-std-hero-countdown__card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto;
+    align-items: stretch;
+    gap: 1.5rem;
+    padding: 1rem 1rem 1rem 1rem;
+    background: var(--hc-cream);
+    border-radius: 1.25rem;
+    color: var(--hc-ink);
+    text-decoration: none;
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04), 0 8px 24px -16px rgba(15, 23, 42, 0.18);
+    min-height: 5.25rem;
+    /* The card itself is informational — only the inline Start / Resume /
+       Submit pill in the dark right block is clickable. No hover lift, no
+       link cursor on the surface. Stops the lecturer/student from feeling
+       like the whole strip is tappable while the timer is still running. */
+    cursor: default;
+}
+
+/* The actionable pills inside the dark timer block are real links and
+   should look that way: pointer + subtle hover lift + focus ring. */
+.qs-std-hero-countdown__card a {
+    cursor: pointer;
+    text-decoration: none;
+    transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.qs-std-hero-countdown__card a:hover {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+}
+
+.qs-std-hero-countdown__card a:focus-visible {
+    outline: 2px solid var(--hc-accent, #56aebb);
+    outline-offset: 3px;
+    border-radius: 999px;
+}
+
+.qs-std-hero-countdown__chip {
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.85rem;
+    background: var(--hc-ink);
+    color: var(--hc-cream);
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    flex: none;
+}
+
+.qs-std-hero-countdown__slot {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    gap: 0.15rem;
+}
+
+.qs-std-hero-countdown__slot-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--hc-ink) 65%, transparent);
+}
+
+.qs-std-hero-countdown__slot-value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--hc-ink);
+    line-height: 1.15;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qs-std-hero-countdown__slot-sub {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: color-mix(in srgb, var(--hc-ink) 70%, transparent);
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qs-std-hero-countdown__timer {
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0.7rem 1.1rem;
+    background: var(--hc-ink);
+    color: var(--hc-cream);
+    border-radius: 0.85rem;
+    min-width: 12rem;
+    text-align: right;
+}
+
+.qs-std-hero-countdown__status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--hc-cream) 75%, transparent);
+}
+
+.qs-std-hero-countdown__status-dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+    background: var(--hc-cream);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--hc-cream) 25%, transparent);
+}
+
+.qs-std-hero-countdown--tone-urgent .qs-std-hero-countdown__status-dot {
+    background: #fca5a5;
+    box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.35);
+}
+
+.qs-std-hero-countdown__clock {
+    font-size: 1.85rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    color: var(--hc-cream);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.qs-std-hero-countdown__clock--cta {
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.qs-std-hero-countdown__clock-sep {
+    color: color-mix(in srgb, var(--hc-cream) 55%, transparent);
+}
+
+.qs-std-hero-countdown__clock-days {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: color-mix(in srgb, var(--hc-cream) 70%, transparent);
+}
+
+/* ---------- Expired / dynamic swap ----------
+   When studentDashboardCountdown.js adds `.is-expired` to the timer
+   block, we hide the live status + clock + days overflow and reveal the
+   data-driven CTA ("Start now" / "Closed" / "Submit now"). The whole
+   transition happens in CSS — no page reload, no JS template rewrite. */
+.qs-std-hero-countdown__expired {
+    display: none;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.55rem;
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: -0.005em;
+    color: var(--hc-cream);
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.qs-std-hero-countdown__expired i {
+    font-size: 1.05em;
+    line-height: 1;
+}
+
+.qs-std-hero-countdown__timer.is-expired .qs-std-hero-countdown__live,
+.qs-std-hero-countdown__timer.is-expired .qs-std-hero-countdown__clock,
+.qs-std-hero-countdown__timer.is-expired .qs-std-hero-countdown__clock-days {
+    display: none;
+}
+
+.qs-std-hero-countdown__timer.is-expired .qs-std-hero-countdown__expired {
+    display: inline-flex;
+}
+
+/* Closed / overdue colour cues so the student can tell the surface state
+   apart at a glance. Ready (window just opened) keeps the cream/accent
+   palette since it's the most common — and most positive — outcome. */
+.qs-std-hero-countdown__timer.is-expired .qs-std-hero-countdown__expired--ready {
+    color: color-mix(in srgb, var(--hc-cream) 92%, #ffffff);
+}
+
+.qs-std-hero-countdown__timer.is-expired .qs-std-hero-countdown__expired--closed {
+    color: #fecaca;
+}
+
+.qs-std-hero-countdown__timer.is-expired .qs-std-hero-countdown__expired--overdue {
+    color: #fde68a;
+}
+
+/* When the window has just OPENED, give the dark timer block a subtle
+   accent ring so the student's eye is drawn to the "Start now" CTA. */
+.qs-std-hero-countdown__timer.is-expired:has(.qs-std-hero-countdown__expired--ready) {
+    box-shadow: inset 0 0 0 1.5px var(--hc-accent);
+}
+
+/* Permanent Start pill — appears when a quiz is startable RIGHT NOW
+   (no countdown). Uses the same dark-block container as the live clock
+   so the ticket layout stays consistent. */
+.qs-std-hero-countdown__start {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.55rem;
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: -0.005em;
+    color: var(--hc-cream);
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.qs-std-hero-countdown__start i {
+    font-size: 1.05em;
+    color: var(--hc-accent);
+}
+
+/* Subtle accent ring on the dark block so the student's eye is drawn
+   to the Start CTA — same visual treatment as the post-expiry ready
+   state for consistency. */
+.qs-std-hero-countdown__timer:has(.qs-std-hero-countdown__start) {
+    box-shadow: inset 0 0 0 1.5px var(--hc-accent);
+}
+
+@media (max-width: 1023.98px) {
+    /* The wallet hero owns this surface on mobile; never render the
+       desktop card on phones. */
+    .qs-std-hero-countdown { display: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .qs-std-hero-countdown__card a:hover,
+    .qs-std-hero-countdown__card a:focus-visible {
+        transform: none;
+    }
+    a.qs-std-wallet__hero-start:hover,
+    a.qs-std-wallet__hero-expired:hover {
+        transform: none;
+    }
+}
+
+/* ===================================================================
+   Cross-page mobile chrome theming.
+   When the super admin has enabled the wallet UI, the layout adds the
+   following attributes to <body>:
+     - .qs-std--wallet            (boolean flag)
+     - data-qs-wallet-theme="..." (slug from StudentDashboardBrandingService)
+
+   We mirror the wallet palette onto the existing mobile header and FAB
+   so every student page (worklist, results, notifications, materials,
+   help, profile, etc.) reads as one consistent themed product on phones.
+   Tablet/desktop (>=lg) is untouched.
+   =================================================================== */
+
+body.qs-std--wallet {
+    --w-hero-deep: #0e2a30;
+    --w-hero: #15343a;
+    --w-hero-soft: #1f4a52;
+    --w-accent: #e46f2e;
+    --w-accent-deep: #c75a1f;
+    --w-accent-ink: #ffffff;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="forest"] {
+    --w-hero-deep: #14523c;
+    --w-hero: #1b6b4e;
+    --w-hero-soft: #2a7a5c;
+    --w-accent: #c9f656;
+    --w-accent-deep: #aef252;
+    --w-accent-ink: #14523c;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="indigo"] {
+    --w-hero-deep: #1e1b4b;
+    --w-hero: #312e81;
+    --w-hero-soft: #4338ca;
+    --w-accent: #7dd3fc;
+    --w-accent-deep: #38bdf8;
+    --w-accent-ink: #0c1e45;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="coral"] {
+    --w-hero-deep: #9a3412;
+    --w-hero: #c2410c;
+    --w-hero-soft: #ea580c;
+    --w-accent: #fde68a;
+    --w-accent-deep: #fcd34d;
+    --w-accent-ink: #7c2d12;
+}
+
+@media (max-width: 1023px) {
+    /* Mobile sticky header: take on the wallet hero gradient + white text. */
+    body.qs-std--wallet .qs-std-mobile-header__bar {
+        background: linear-gradient(180deg, var(--w-hero-deep) 0%, var(--w-hero) 80%, var(--w-hero-soft) 100%);
+        color: #ffffff;
+        border-bottom-color: transparent;
+        box-shadow: 0 4px 12px -8px rgba(0, 0, 0, 0.4);
+    }
+
+    body.qs-std--wallet .qs-std-mobile-header__bar a {
+        color: #ffffff;
+    }
+
+    body.qs-std--wallet .qs-std-mobile-header__menu-btn,
+    body.qs-std--wallet .qs-std-mobile-header .qs-std-shell-icon-btn {
+        color: #ffffff;
+    }
+
+    body.qs-std--wallet .qs-std-mobile-header__menu-btn:hover,
+    body.qs-std--wallet .qs-std-mobile-header .qs-std-shell-icon-btn:hover {
+        background: rgba(255, 255, 255, 0.16);
+    }
+
+    /* Mobile menu sheet header tinted with the theme accent. */
+    body.qs-std--wallet .qs-std-mobile-menu__head {
+        background: linear-gradient(135deg, var(--w-hero-deep), var(--w-hero));
+        color: #ffffff;
+        border-bottom-color: transparent;
+    }
+
+    body.qs-std--wallet .qs-std-mobile-menu__head .qs-std-mobile-menu__title {
+        color: #ffffff;
+    }
+
+    body.qs-std--wallet .qs-std-mobile-menu__head .qs-std-mobile-header__menu-btn {
+        color: #ffffff;
+    }
+
+    body.qs-std--wallet .qs-std-mobile-menu__list a.qs-std-mobile-menu__link.is-active {
+        background: color-mix(in srgb, var(--w-hero) 8%, transparent);
+        color: var(--w-hero-deep);
+    }
+
+    body.qs-std--wallet .qs-std-mobile-menu__badge {
+        background: var(--w-accent);
+        color: var(--w-accent-ink);
+    }
+
+    /* Bottom FAB toggle + active pill use the theme accent. */
+    body.qs-std--wallet .qs-std-fab__toggle {
+        background: var(--w-hero);
+        box-shadow:
+            0 12px 28px color-mix(in srgb, var(--w-hero-deep) 60%, transparent),
+            0 2px 6px rgba(15, 23, 42, 0.18);
+    }
+
+    body.qs-std--wallet .qs-std-fab__toggle:focus-visible {
+        outline-color: color-mix(in srgb, var(--w-accent) 70%, transparent);
+    }
+
+    body.qs-std--wallet .qs-std-fab__item.is-active {
+        background: var(--w-hero-deep);
+        border-color: var(--w-hero-deep);
+        color: #ffffff;
+    }
+
+    body.qs-std--wallet .qs-std-fab__item.is-active .qs-std-fab__item-icon {
+        background: var(--w-accent);
+        color: var(--w-accent-ink);
+    }
+
+    body.qs-std--wallet .qs-std-fab__item-icon {
+        background: color-mix(in srgb, var(--w-accent) 22%, transparent);
+        color: var(--w-hero-deep);
+    }
+
+    /* Notification bell badge: use the same red across themes, with a thin
+       hero-tinted ring so it reads cleanly against the new header. */
+    body.qs-std--wallet .qs-std-mobile-header .qs-std-shell-icon-btn span[class*="bg-["][class*="ef3340"],
+    body.qs-std--wallet .qs-std-mobile-header .qs-std-shell-icon-btn .absolute {
+        border: 1.5px solid var(--w-hero-deep);
+    }
+}
+
+/* ===================================================================
+   NOIR THEME — CROSS-PAGE DARK MODE
+   --------------------------------------------------------------------
+   When the super admin picks the "Noir wallet" theme, every student-
+   facing page (dashboard, worklist, assignments, results, notifications,
+   help, profile, etc.) flips into a matte-black surface with cyan
+   accents — not just the wallet hero. The overrides below are all
+   scoped under body.qs-std--wallet[data-qs-wallet-theme="noir"] so the
+   other four themes (teal/forest/indigo/coral) remain unchanged.
+   The "noir" wallet palette tokens are defined further up the file
+   (.qs-std-wallet[data-theme="noir"] { --w-* }); this block reuses
+   those token values + adds its own dedicated palette for cross-page
+   surfaces (page bg, cards, borders, inputs).
+   =================================================================== */
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] {
+    /* Cross-page noir palette — one source of truth for every override
+       below so accent colour / card depth / borders stay consistent. */
+    --noir-bg: #050507;
+    --noir-surface: #16161e;
+    --noir-surface-soft: #0e0e16;
+    --noir-surface-strong: #1f1f29;
+    --noir-border: #232331;
+    --noir-border-soft: #1f1f29;
+    --noir-ink: #f1f5f9;
+    --noir-ink-soft: #cbd5e1;
+    --noir-ink-muted: #94a3b8;
+    --noir-accent: #2dd4bf;
+    --noir-accent-soft: rgba(45, 212, 191, 0.12);
+    --noir-accent-strong: #14b8a6;
+    --noir-accent-ink: #04141a;
+    --noir-danger: #f87171;
+    --noir-warning: #fbbf24;
+    --noir-success: #34d399;
+    color-scheme: dark;
+}
+
+/* ---------- Page chrome (covers every student route) ---------- */
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll {
+    background-color: var(--noir-bg);
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-page-wrap {
+    background-color: transparent;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-page-head {
+    background: transparent;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-page-head__title {
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-page-head__sub {
+    color: var(--noir-ink-muted);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std--list-page .qs-app-main-scroll,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-list-page,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-list-page__body {
+    background: transparent;
+    color: var(--noir-ink);
+}
+
+/* The mobile list-page chrome was overriding to plain white — neutralise
+   that on noir so the worklist / assignments pages don't flash a white
+   strip behind their cards. */
+@media (max-width: 1023px) {
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std--list-page .qs-app-main-scroll {
+        background: var(--noir-bg);
+    }
+}
+
+/* ---------- Desktop floating header ----------
+   Replace the rainbow hue animation with a static matte-black surface
+   so the top bar matches the rest of the dark page on noir. The cyan
+   accent ring on the avatar still pops against the dark gradient. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-shell-header__bar {
+    animation: none;
+    background: linear-gradient(180deg, #0b0b10 0%, #050507 100%);
+    border: 1px solid var(--noir-border-soft);
+    box-shadow:
+        0 2px 12px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-shell-header__bar .brand-logo .text-qs-text,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-shell-header__bar .brand-logo--interactive .brand-logo__char--snap {
+    color: var(--noir-ink-soft);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-shell-header .qs-std-pill-nav__track {
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--noir-border-soft);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-shell-header .qs-std-pill-nav__track a[class*='bg-white'] {
+    background-color: var(--noir-accent) !important;
+    color: var(--noir-accent-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-shell-header .qs-std-shell-icon-btn {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-color: var(--noir-border-soft);
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-shell-header .qs-std-shell-icon-btn:hover {
+    background-color: rgba(45, 212, 191, 0.14);
+    border-color: var(--noir-accent);
+}
+
+/* ---------- Mobile sticky header (every page) ---------- */
+@media (max-width: 1023px) {
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-mobile-header__bar {
+        background: linear-gradient(180deg, #050507 0%, #0b0b10 80%, #16161e 100%);
+        color: var(--noir-ink);
+        border-bottom: 1px solid var(--noir-border-soft);
+        box-shadow: 0 4px 14px -8px rgba(0, 0, 0, 0.75);
+    }
+
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-mobile-header__bar .qs-std-shell-icon-btn {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-color: var(--noir-border-soft);
+        color: var(--noir-ink);
+    }
+
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-mobile-header__bar .qs-std-shell-icon-btn:hover,
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-mobile-header__menu-btn:hover {
+        background-color: rgba(45, 212, 191, 0.18);
+    }
+
+    /* The mobile menu sheet (slide-down list of student destinations)
+       must match the rest of the dark UI — otherwise opening the menu
+       flashes a bright white sheet on noir. */
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-mobile-menu__sheet,
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-mobile-menu__list,
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-mobile-menu__foot {
+        background-color: var(--noir-surface);
+        color: var(--noir-ink);
+    }
+
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-mobile-menu__head {
+        background: linear-gradient(180deg, #050507 0%, #0b0b10 100%);
+        color: var(--noir-ink);
+        border-bottom: 1px solid var(--noir-border-soft);
+    }
+
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-mobile-menu__list a.qs-std-mobile-menu__link {
+        color: var(--noir-ink-soft);
+        border-bottom: 1px solid var(--noir-border-soft);
+    }
+
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-mobile-menu__list a.qs-std-mobile-menu__link.is-active {
+        background-color: rgba(45, 212, 191, 0.10);
+        color: var(--noir-accent);
+    }
+
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-mobile-menu__badge {
+        background: var(--noir-accent);
+        color: var(--noir-accent-ink);
+    }
+
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-mobile-menu__backdrop {
+        background-color: rgba(0, 0, 0, 0.7);
+    }
+}
+
+/* ---------- Bottom FAB toggle + items (every page) ---------- */
+@media (max-width: 1023px) {
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-fab__toggle {
+        background: var(--noir-accent);
+        color: var(--noir-accent-ink);
+        box-shadow:
+            0 12px 28px rgba(45, 212, 191, 0.35),
+            0 2px 6px rgba(0, 0, 0, 0.5);
+    }
+
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-fab__toggle:focus-visible {
+        outline-color: rgba(45, 212, 191, 0.7);
+    }
+
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-fab__item {
+        background-color: var(--noir-surface);
+        border: 1px solid var(--noir-border-soft);
+        color: var(--noir-ink-soft);
+    }
+
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-fab__item.is-active {
+        background-color: var(--noir-accent);
+        border-color: var(--noir-accent);
+        color: var(--noir-accent-ink);
+    }
+
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-fab__item.is-active .qs-std-fab__item-icon {
+        background-color: rgba(0, 0, 0, 0.18);
+        color: var(--noir-accent-ink);
+    }
+
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-fab__item-icon {
+        background-color: rgba(45, 212, 191, 0.18);
+        color: var(--noir-accent);
+    }
+
+    body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-fab__backdrop {
+        background-color: rgba(0, 0, 0, 0.7);
+    }
+}
+
+/* ---------- Shared card / panel surfaces ----------
+   Cards on /work, /assignments, /results, /notifications, and the
+   desktop dashboard mostly use one of these classes. Override them all
+   at once so we don't have to know which page we're on. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-card,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-panel,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-hub-card,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-quick-link {
+    background-color: var(--noir-surface);
+    border-color: var(--noir-border);
+    color: var(--noir-ink);
+    box-shadow: 0 8px 22px -16px rgba(0, 0, 0, 0.7);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-card--interactive:hover,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-hub-card:hover,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-quick-link:hover {
+    background-color: var(--noir-surface-strong);
+    border-color: var(--noir-accent);
+    box-shadow: 0 14px 32px -16px rgba(0, 0, 0, 0.8);
+}
+
+/* ---------- Stat tiles (dashboard + results overview) ---------- */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-stat,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-grid--dash > .qs-std-stat,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-grid .qs-std-stat {
+    background-color: var(--noir-surface);
+    border: 1px solid var(--noir-border);
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-stat__value {
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-stat__label {
+    color: var(--noir-ink-muted);
+}
+
+/* ---------- Feed cards (dashboard "Open & new assessments") ----------
+   The feed-tone soft palette is dialled back to dark-friendly tints so
+   the cards stop glowing against the matte black background. The tone
+   indicator stripe stays bright (it's a status hint, not a surface). */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-feed-card {
+    background-color: var(--noir-surface);
+    border-color: var(--noir-border);
+    color: var(--noir-ink);
+    --feed-tone-soft: rgba(45, 212, 191, 0.12);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-feed-card__title {
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-feed-card__subtitle,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-feed-card__meta,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-feed-card__tag {
+    color: var(--noir-ink-muted);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] a.qs-std-feed-card:hover {
+    background-color: var(--noir-surface-strong);
+    border-color: var(--noir-accent);
+}
+
+/* ---------- Worklist list (`/work` + dashboard worklist partial) ---------- */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-list {
+    background-color: var(--noir-surface);
+    border-color: var(--noir-border);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-item,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-list > * {
+    color: var(--noir-ink);
+    border-color: var(--noir-border-soft);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-list--shimmer .qs-wl-item:hover {
+    background-color: var(--noir-surface-strong);
+}
+
+/* ---------- Notifications inbox ---------- */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-notif-header,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-notif-list,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-notif-item {
+    background-color: var(--noir-surface);
+    border-color: var(--noir-border);
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-notif-header__title,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-notif-item__title {
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-notif-header__eyebrow,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-notif-item__meta,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-notif-item__body {
+    color: var(--noir-ink-muted);
+}
+
+/* ---------- Buttons ----------
+   Only the primary button gets a hue swap (cyan accent). Secondary +
+   ghost buttons inherit the surface palette automatically so they stay
+   readable on the dark page. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-btn {
+    background-color: var(--noir-surface-strong);
+    color: var(--noir-ink);
+    border-color: var(--noir-border);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-btn:hover {
+    background-color: var(--noir-surface);
+    border-color: var(--noir-accent);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-btn--primary {
+    background-color: var(--noir-accent);
+    color: var(--noir-accent-ink);
+    border-color: var(--noir-accent);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-btn--primary:hover {
+    background-color: var(--noir-accent-strong);
+    border-color: var(--noir-accent-strong);
+    color: var(--noir-accent-ink);
+}
+
+/* ---------- Generic Tailwind utility safety net ----------
+   The student app uses a lot of Tailwind utilities directly (especially
+   on the worklist/assignments/results pages). These rules catch the
+   most common surface combos (`bg-white`, `bg-slate-50`, `text-slate-*`)
+   ONLY inside the student app scroll area so we don't bleed dark styles
+   into modal portals or third-party widgets mounted elsewhere. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .bg-white {
+    background-color: var(--noir-surface) !important;
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .bg-slate-50,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .bg-slate-100,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .bg-gray-50,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .bg-gray-100 {
+    background-color: var(--noir-surface-soft) !important;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .border-slate-200,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .border-slate-100,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .border-gray-200,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .border-gray-100 {
+    border-color: var(--noir-border) !important;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .text-slate-900,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .text-slate-800,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .text-slate-700,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .text-gray-900,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .text-gray-800,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .text-gray-700 {
+    color: var(--noir-ink) !important;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .text-slate-600,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .text-slate-500,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .text-slate-400,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .text-gray-600,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .text-gray-500,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .text-gray-400 {
+    color: var(--noir-ink-muted) !important;
+}
+
+/* ---------- Form inputs ----------
+   Selectors are conservative — only common form primitives inside the
+   student scroll area get the dark treatment. File pickers and the
+   profile photo cropper handle their own theming. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll input[type="text"],
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll input[type="email"],
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll input[type="password"],
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll input[type="number"],
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll input[type="tel"],
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll input[type="search"],
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll input[type="url"],
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll input[type="date"],
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll input[type="datetime-local"],
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll textarea,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll select {
+    background-color: var(--noir-surface-soft);
+    border-color: var(--noir-border);
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll input::placeholder,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll textarea::placeholder {
+    color: rgba(148, 163, 184, 0.6);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll input:focus,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll textarea:focus,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll select:focus {
+    outline: 2px solid var(--noir-accent);
+    outline-offset: 1px;
+    border-color: var(--noir-accent);
+}
+
+/* ---------- Tables ----------
+   Used on /results and a couple of admin-ish student pages. Keep zebra
+   stripes legible by tinting alternate rows a touch lighter. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll table {
+    background-color: var(--noir-surface);
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll thead,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll th {
+    background-color: var(--noir-surface-strong);
+    color: var(--noir-ink-soft);
+    border-color: var(--noir-border);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll td,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll tr {
+    border-color: var(--noir-border-soft);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll tbody tr:nth-child(even) {
+    background-color: rgba(255, 255, 255, 0.015);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll tbody tr:hover {
+    background-color: rgba(45, 212, 191, 0.06);
+}
+
+/* ---------- Links (default text links inside content) ----------
+   The exclusion list is intentionally broad: any "themed" element that
+   already paints itself with a filled accent background (the worklist
+   action pills, FAB, wallet hero quick-actions, type-tag chips, etc.)
+   sets its own ink colour and must NOT be re-coloured by this generic
+   link rule — otherwise the text inside the filled pill becomes the
+   same colour as the pill background and disappears (matte-on-matte). */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll a:not([class*="bg-"]):not([class*="qs-std-btn"]):not([class*="qs-wl-action"]):not([class*="qs-std-fab"]):not([class*="qs-std-wallet__quick"]):not([class*="qs-type-tag"]):not([class*="qs-std-pill"]):not([class*="qs-std-wallet__hero-start"]):not([class*="qs-std-wallet__hero-expired"]):not([class*="qs-std-hero-countdown__start"]):not([class*="qs-std-hero-countdown__expired"]):not([class*="qs-std-wallet__nav"]) {
+    color: var(--noir-accent);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll a:not([class*="bg-"]):not([class*="qs-std-btn"]):not([class*="qs-wl-action"]):not([class*="qs-std-fab"]):not([class*="qs-std-wallet__quick"]):not([class*="qs-type-tag"]):not([class*="qs-std-pill"]):not([class*="qs-std-wallet__hero-start"]):not([class*="qs-std-wallet__hero-expired"]):not([class*="qs-std-hero-countdown__start"]):not([class*="qs-std-hero-countdown__expired"]):not([class*="qs-std-wallet__nav"]):hover {
+    color: var(--noir-accent-strong);
+}
+
+/* Explicit ink colour on the wallet bottom nav surfaces so even if the
+   exclusion list ever drifts, the FAB icon and inactive nav labels
+   stay visible. The circular FAB needs near-black ink on its cyan
+   fill, and the four side tabs (Home / Materials / Results / Profile)
+   need a soft off-white tint when inactive (the active tab is already
+   painted by the existing .is-active rule which uses --w-accent-ink). */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-wallet__nav-fab,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-wallet__nav-fab i {
+    color: var(--noir-accent-ink) !important;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-wallet__nav-item:not(.is-active),
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-wallet__nav-item:not(.is-active) i {
+    color: rgba(241, 245, 249, 0.78) !important;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-wallet__nav-item:not(.is-active):hover,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-wallet__nav-item:not(.is-active):hover i {
+    color: var(--noir-ink) !important;
+}
+
+/* ---------- Mobile wallet activity-card carry-over ----------
+   Already themed inside the wallet partial, but the activity icons get
+   their own light tints from the `--{tone}` modifiers; on noir we want
+   the icons to land on the cyan accent so they pop against the matte
+   black tiles. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-std-wallet__activity-icon {
+    background-color: rgba(45, 212, 191, 0.12);
+    color: var(--noir-accent);
+}
+
+/* ---------- Status banner (session('status') strip in the layout) ---------- */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-app-main-scroll .qs-std-page-wrap > .bg-white {
+    background-color: var(--noir-surface) !important;
+    border-color: var(--noir-border) !important;
+    color: var(--noir-ink) !important;
+}
+
+/* ---------- Stat tile cards (Submissions/Released/Awaiting on /results,
+   plus the desktop dashboard stats grid). These use `.qs-stat-card`
+   which hard-codes a white background, so the broad Tailwind safety
+   net above doesn't catch them. Override the base + minimal variant. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card--minimal {
+    background: var(--noir-surface);
+    border-color: var(--noir-border);
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card__value {
+    color: var(--noir-ink) !important;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card__value[data-qs-stat-zero="1"] {
+    color: rgba(148, 163, 184, 0.7) !important;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card__label,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card__hint {
+    color: var(--noir-ink-muted) !important;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card__eyebrow {
+    color: var(--noir-accent) !important;
+}
+
+/* Tone icon chips: keep their accent hue but soften the chip background
+   so they read as confident accents on the matte black surface. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card--assessments .qs-stat-card__icon { background: rgba(14, 165, 233, 0.18); color: #7dd3fc; }
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card--assignments .qs-stat-card__icon { background: rgba(245, 158, 11, 0.18); color: #fbbf24; }
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card--results .qs-stat-card__icon     { background: rgba(16, 185, 129, 0.18); color: #34d399; }
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card--notices .qs-stat-card__icon     { background: rgba(139, 92, 246, 0.18); color: #c4b5fd; }
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card--slate .qs-stat-card__icon       { background: rgba(148, 163, 184, 0.18); color: var(--noir-ink-soft); }
+
+/* Hover-as-link variant flips to the cyan accent — keeps the hover
+   affordance consistent with the rest of the noir interactive surfaces. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card--link:hover {
+    background: var(--noir-surface-strong);
+    border-color: var(--noir-accent);
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card--link:hover .qs-stat-card__icon {
+    background: rgba(45, 212, 191, 0.18);
+    color: var(--noir-accent);
+    box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.4);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card--link:hover .qs-stat-card__eyebrow,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-stat-card--link:hover .qs-stat-card__cta {
+    color: var(--noir-accent);
+}
+
+/* ---------- Worklist / result tickets (.qs-wl-item) ----------
+   These power the `/work` worklist, `/results` ticket grid, dashboard
+   worklist preview, and a few other listings. The base styling sets a
+   light grey card with white text — we need to flip that to dark with
+   light text on noir. Per-bucket modifier classes set `--wl-accent`,
+   which we re-route to the noir cyan so the primary action button
+   stays on-brand instead of flashing purple/amber on the dark page. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-item {
+    background: var(--noir-surface);
+    border-color: var(--noir-border);
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-list--shimmer .qs-wl-item,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-item:hover,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-list--shimmer .qs-wl-item:hover {
+    background: var(--noir-surface-strong);
+    border-color: var(--noir-accent);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-item__title,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-item__status-label {
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-item__sub,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-item__status,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-item__status-score,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-item__format {
+    color: var(--noir-ink-muted);
+}
+
+/* Help card body + bullet list. The base styles hard-code a dark slate
+   (#475569) for the body copy and disc list, which collapses to a
+   nearly-invisible smudge on the matte black noir surface. Lift the
+   contrast back to the noir soft-ink token so paragraphs read clearly. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-help-item__body,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-help-item__bullets {
+    color: var(--noir-ink-soft);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-help-item__bullets li::marker {
+    color: var(--noir-accent);
+}
+
+/* ---------- Worklist panel (.qs-wl-panel) ----------
+   This is the big container card used on /work and on the dashboard
+   worklist preview. The base styles set a hard-white surface + a
+   slate-50 header strip, so on noir the whole card looked like a
+   bright white bar dropped on top of the matte-black page. Repaint
+   every part of the panel (shell, header strip, eyebrow, title,
+   avatar chip, "All assignments" CTA, empty-state CTA, and the
+   body background) so the panel feels like a native dark surface.   */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-panel {
+    background: var(--noir-surface);
+    border-color: var(--noir-border);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-panel__head {
+    background: var(--noir-surface-strong);
+    border-bottom-color: var(--noir-border-soft);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-panel__avatar {
+    background: rgba(45, 212, 191, 0.14);
+    border-color: rgba(45, 212, 191, 0.32);
+    color: var(--noir-accent);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-panel__eyebrow {
+    color: var(--noir-accent);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-panel__title {
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-panel__cta {
+    background: transparent;
+    border-color: rgba(45, 212, 191, 0.4);
+    color: var(--noir-accent);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-panel__cta:hover {
+    background: rgba(45, 212, 191, 0.1);
+    border-color: var(--noir-accent);
+    color: var(--noir-accent);
+}
+
+/* Empty-state inside the panel. The title was already covered by the
+   broad rule above (.qs-wl-empty__title → noir ink), but the sub-copy
+   uses the inherited body grey, so re-state it explicitly so it lands
+   on noir-ink-soft instead of the inherited dim slate. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-empty {
+    color: var(--noir-ink-soft);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-empty__sub {
+    color: var(--noir-ink-soft);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-item__icon {
+    background: rgba(45, 212, 191, 0.16);
+    color: var(--noir-accent);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-empty__title {
+    color: var(--noir-ink);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-empty__icon {
+    background: rgba(45, 212, 191, 0.14);
+    color: var(--noir-accent);
+}
+
+/* Per-bucket pills (Graded / Submitted / Pending / etc.) — soften the
+   tinted backgrounds so they don't glow against the dark page. The
+   bucket modifier still drives the hue. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-pill {
+    background: var(--wl-accent-soft, rgba(45, 212, 191, 0.16));
+    color: #e2e8f0;
+    border-color: transparent;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-pill--time {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--noir-ink-soft);
+    border-color: var(--noir-border-soft);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-pill--time i {
+    color: var(--noir-ink-muted);
+}
+
+/* Primary worklist action button (e.g. "View result", "Open assignment",
+   "Continue"). Route every bucket through the cyan accent on noir so
+   the button feels on-brand instead of inheriting the bucket purple.
+   We force the ink colour via !important on the child span + icon
+   because the generic "every <a> inside the noir page is cyan" rule
+   below would otherwise leak in and make the label invisible on the
+   cyan background (matte cyan text on matte cyan pill). */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-action--primary {
+    background: var(--noir-accent);
+    color: var(--noir-accent-ink) !important;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-action--primary span,
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-action--primary i {
+    color: var(--noir-accent-ink) !important;
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-wl-action--primary:hover {
+    background: var(--noir-accent-strong);
+    color: var(--noir-accent-ink) !important;
+}
+
+/* ---------- Type tag chips (.qs-type-tag--{assignment|quiz|mid|exam}) ----------
+   The default palettes are warm pastel-on-light (e.g. amber on cream
+   for assignment, sky-on-cyan for quiz). On a matte black page those
+   pastels glow uncomfortably, so we keep the hue but flip them to
+   tinted-on-dark with a thin accent border. */
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-type-tag {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--noir-border);
+    color: var(--noir-ink-soft);
+}
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-type-tag--assignment {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.32);
+    color: #fbbf24;
+}
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-type-tag--assignment i { color: #fbbf24; }
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-type-tag--quiz {
+    background: rgba(14, 165, 233, 0.12);
+    border-color: rgba(14, 165, 233, 0.32);
+    color: #7dd3fc;
+}
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-type-tag--quiz i { color: #7dd3fc; }
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-type-tag--mid {
+    background: rgba(139, 92, 246, 0.12);
+    border-color: rgba(139, 92, 246, 0.32);
+    color: #c4b5fd;
+}
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-type-tag--mid i { color: #c4b5fd; }
+
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-type-tag--exam {
+    background: rgba(244, 63, 94, 0.12);
+    border-color: rgba(244, 63, 94, 0.32);
+    color: #fda4af;
+}
+body.qs-std--wallet[data-qs-wallet-theme="noir"] .qs-type-tag--exam i { color: #fda4af; }
+
+/* ===================================================================
+   CROSS-THEME ACCENT PROPAGATION (teal / forest / indigo / coral)
+   --------------------------------------------------------------------
+   The four light wallet themes (teal/forest/indigo/coral) used to live
+   only inside the wallet hero — every other student page rendered with
+   neutral grey/blue defaults regardless of which theme was selected.
+   This block lifts the chosen theme's --w-accent / --w-hero tokens up
+   onto a small set of high-visibility surfaces (primary worklist
+   action buttons, focus rings on stat cards, the desktop floating
+   header brand pill) so the lecturer / student can SEE the theme
+   they chose without having to scroll back to the hero.
+   Noir is handled above and intentionally NOT touched here.
+   =================================================================== */
+
+/* Primary worklist action button (e.g. "View result", "Open assignment")
+   adopts the chosen wallet accent. Falls back to the brand teal so any
+   page rendered before the body wakes up still looks right. */
+body.qs-std--wallet:not([data-qs-wallet-theme="noir"]) .qs-wl-action--primary {
+    background: var(--w-hero, #15343a);
+    color: #ffffff;
+}
+
+body.qs-std--wallet:not([data-qs-wallet-theme="noir"]) .qs-wl-action--primary:hover {
+    background: var(--w-hero-deep, #0e2a30);
+    color: #ffffff;
+}
+
+/* The .qs-std-btn--primary is used by every "primary CTA" across the
+   student app (Resume / Start / View assessments etc.). Make it adopt
+   the chosen accent so the theme isn't a hero-only surprise. */
+body.qs-std--wallet:not([data-qs-wallet-theme="noir"]) .qs-std-btn--primary {
+    background-color: var(--w-hero, #15343a);
+    border-color: var(--w-hero, #15343a);
+    color: #ffffff;
+}
+
+body.qs-std--wallet:not([data-qs-wallet-theme="noir"]) .qs-std-btn--primary:hover {
+    background-color: var(--w-hero-deep, #0e2a30);
+    border-color: var(--w-hero-deep, #0e2a30);
+    color: #ffffff;
+}
+
+/* Stat-card focus ring on light themes — pull the chosen accent so
+   keyboard focus is themed. */
+body.qs-std--wallet:not([data-qs-wallet-theme="noir"]) .qs-stat-card--link:focus-visible {
+    outline-color: var(--w-hero, #38bdf8);
+}
+
+/* =============================================================
+   Dark mode overrides: follow OS Dark Appearance.
+   We re-tint rules that pinned literal hex colors (slate-*/white)
+   so the result detail page, notifications page, and other student
+   dashboard surfaces stay legible on a dark background. The Tailwind
+   `qs.*` palette is already CSS-variable-driven and adapts on its own.
+   ============================================================= */
+@media (prefers-color-scheme: dark) {
+    /* Result detail page (student.results.show) */
+    .qs-result-action {
+        background: var(--qs-card);
+        border-color: var(--qs-soft);
+        color: var(--qs-text);
+    }
+    .qs-result-action--ghost:hover {
+        background: var(--qs-surface);
+        border-color: var(--qs-primary);
+        color: var(--qs-text);
+    }
+
+    .qs-result-hero,
+    .qs-result-feedback,
+    .qs-result-breakdown {
+        background: var(--qs-card);
+        border-color: var(--qs-soft);
+    }
+
+    .qs-result-hero__title,
+    .qs-result-dial__value,
+    .qs-result-hero__big,
+    .qs-result-breakdown__title { color: var(--qs-text); }
+    .qs-result-hero__big-of,
+    .qs-result-hero__note,
+    .qs-result-breakdown__sub { color: var(--qs-muted); }
+    .qs-result-feedback__title { color: var(--qs-muted); }
+    .qs-result-feedback__text  { color: var(--qs-text); }
+    .qs-result-dial__track     { color: var(--qs-soft); }
+
+    .qs-result-breakdown__head {
+        background: var(--qs-surface);
+        border-bottom-color: var(--qs-soft);
+    }
+    .qs-result-breakdown__body > * { background: var(--qs-card); }
+
+    .qs-result-empty {
+        background: var(--qs-surface);
+        border-color: var(--qs-soft);
+    }
+
+    /* Status pills: re-tint to muted variants so they read on dark.
+       Border + icon colors keep the semantic hue. */
+    .qs-result-state--amber  { background: rgba(245, 158, 11, 0.10); border-color: rgba(245, 158, 11, 0.40); }
+    .qs-result-state--amber  .qs-result-state__icon    { background: rgba(245, 158, 11, 0.22); color: #fcd34d; }
+    .qs-result-state--amber  .qs-result-state__eyebrow { color: #fcd34d; }
+    .qs-result-state--amber  .qs-result-state__text    { color: #fde68a; }
+    .qs-result-state--amber  .qs-result-state__title   { color: #fef3c7; }
+
+    .qs-result-state--sky    { background: rgba(56, 189, 248, 0.10); border-color: rgba(56, 189, 248, 0.40); }
+    .qs-result-state--sky    .qs-result-state__icon    { background: rgba(56, 189, 248, 0.22); color: #7dd3fc; }
+    .qs-result-state--sky    .qs-result-state__eyebrow { color: #7dd3fc; }
+    .qs-result-state--sky    .qs-result-state__text    { color: #bae6fd; }
+    .qs-result-state--sky    .qs-result-state__title   { color: #e0f2fe; }
+
+    .qs-result-state--violet { background: rgba(167, 139, 250, 0.10); border-color: rgba(167, 139, 250, 0.40); }
+    .qs-result-state--violet .qs-result-state__icon    { background: rgba(167, 139, 250, 0.22); color: #c4b5fd; }
+    .qs-result-state--violet .qs-result-state__eyebrow { color: #c4b5fd; }
+    .qs-result-state--violet .qs-result-state__text    { color: #ddd6fe; }
+    .qs-result-state--violet .qs-result-state__title   { color: #ede9fe; }
+
+    /* Notifications page header card */
+    .qs-notif-header {
+        background: var(--qs-card);
+        border-color: var(--qs-soft);
+    }
+    .qs-notif-header__icon {
+        background: rgba(56, 189, 248, 0.18);
+        color: #7dd3fc;
+    }
+    .qs-notif-header__title  { color: var(--qs-text); }
+    .qs-notif-header__eyebrow,
+    .qs-notif-header__hint   { color: var(--qs-muted); }
+    .qs-notif-header__count  {
+        background: var(--qs-text);
+        color: var(--qs-bg);
+    }
+}
