@@ -19,11 +19,11 @@
         // shine sweep), the card lifts and casts a deeper coloured shadow,
         // and the icon chip scales + brightens. All four bento tiles share
         // the same recipe so they read as one family on hover.
-        $satelliteBase = 'group relative isolate flex h-full flex-col overflow-hidden rounded-2xl p-3.5 pr-12 text-white shadow-md transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-1 hover:shadow-xl sm:p-4 sm:pr-14';
-        $satelliteIconBadge = 'absolute right-2.5 top-2.5 inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white/12 text-white ring-1 ring-inset ring-white/20 transition duration-300 ease-out group-hover:scale-110 group-hover:bg-white/20 group-hover:ring-white/30 sm:right-3 sm:top-3';
+        $satelliteBase = 'group relative isolate flex h-full flex-col overflow-hidden rounded-2xl p-3 pr-11 text-white shadow-md transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-1 hover:shadow-xl sm:p-3.5 sm:pr-12';
+        $satelliteIconBadge = 'absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/12 text-white ring-1 ring-inset ring-white/20 transition duration-300 ease-out group-hover:scale-110 group-hover:bg-white/20 group-hover:ring-white/30 sm:right-2.5 sm:top-2.5';
         $metricLabel = 'relative text-[10px] font-semibold uppercase tracking-[0.12em] text-white/75';
-        $metricValue = 'relative mt-0.5 text-[1.75rem] font-bold leading-none tracking-tight tabular-nums text-white sm:text-[1.9rem]';
-        $metricFootLink = 'relative mt-auto pt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-white/90 underline-offset-2 transition hover:text-white hover:underline';
+        $metricValue = 'relative mt-0.5 text-[1.5rem] font-bold leading-none tracking-tight tabular-nums text-white sm:text-[1.65rem]';
+        $metricFootLink = 'relative mt-auto pt-1.5 inline-flex items-center gap-1.5 text-[11px] font-semibold text-white/90 underline-offset-2 transition hover:text-white hover:underline';
 
         // Two overlay spans shared by every card. Raw strings so each card
         // can include them at the top without repeating markup. Both are
@@ -59,27 +59,27 @@
                      watermark numeral — one flat color so the card reads
                      as a single tone with maximum calm. Internal density
                      trimmed so the card sits short. --}}
-                <article class="group relative isolate flex flex-col overflow-hidden rounded-3xl bg-[#1f6a78] p-5 text-white shadow-md shadow-[#0d3f49]/30 transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-1 hover:shadow-xl hover:shadow-[#0d3f49]/50 sm:p-5 md:col-span-2 xl:col-span-2">
+                <article class="group relative isolate flex flex-col overflow-hidden rounded-3xl bg-[#1f6a78] p-4 text-white shadow-md shadow-[#0d3f49]/30 transition-[transform,box-shadow] duration-300 ease-out will-change-transform hover:-translate-y-1 hover:shadow-xl hover:shadow-[#0d3f49]/50 sm:p-4 md:col-span-2 xl:col-span-2">
                     {!! $hoverHighlight !!}
                     {!! $hoverShine !!}
                     {{-- TOP: eyebrow + small icon chip --}}
                     <div class="relative flex items-center justify-between gap-4">
-                        <p class="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/85">
+                        <p class="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/85">
                             <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-white/90"></span>
                             {{ __('Assessments') }}
                         </p>
-                        <span aria-hidden="true" class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/12 text-white ring-1 ring-inset ring-white/20 transition duration-300 ease-out group-hover:scale-110 group-hover:bg-white/20 group-hover:ring-white/30">
-                            <i class="fa-solid fa-file-lines text-[12px]"></i>
+                        <span aria-hidden="true" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/12 text-white ring-1 ring-inset ring-white/20 transition duration-300 ease-out group-hover:scale-110 group-hover:bg-white/20 group-hover:ring-white/30">
+                            <i class="fa-solid fa-file-lines text-[11px]"></i>
                         </span>
                     </div>
 
                     {{-- HEADLINE: number + live chip + descriptor on a single
                          row so the card stays compact vertically. --}}
-                    <div class="relative mt-3">
-                        <p class="flex flex-wrap items-baseline gap-x-3 gap-y-2">
-                            <span class="text-[2.75rem] font-bold leading-none tabular-nums text-white sm:text-[3rem]">{{ $quizTotalCount }}</span>
+                    <div class="relative mt-2.5">
+                        <p class="flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5">
+                            <span class="text-[2.25rem] font-bold leading-none tabular-nums text-white sm:text-[2.5rem]">{{ $quizTotalCount }}</span>
                             @if ($publishedAssessmentsCount > 0)
-                                <span class="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-inset ring-white/20">
+                                <span class="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white ring-1 ring-inset ring-white/20">
                                     <span class="relative flex h-1.5 w-1.5">
                                         <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75"></span>
                                         <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-white"></span>
@@ -88,14 +88,14 @@
                                 </span>
                             @endif
                         </p>
-                        <p class="mt-1.5 max-w-md text-[13px] leading-snug text-white/80">{{ __('Everything you own across your courses.') }}</p>
+                        <p class="mt-1 max-w-md text-[12px] leading-snug text-white/75">{{ __('Everything you own across your courses.') }}</p>
                     </div>
 
                     {{-- BOTTOM: divider + mix row + footer link. --}}
-                    <div class="relative mt-4 pt-4">
+                    <div class="relative mt-3 pt-3">
                         <div class="border-t border-white/15"></div>
                         @if ($heroTotal > 0)
-                            <div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2.5">
+                            <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
                                 {{-- Mix bar with inline label --}}
                                 <div class="flex min-w-0 flex-1 items-center gap-3">
                                     <span class="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/60">{{ __('Mix') }}</span>
@@ -133,18 +133,18 @@
                                 </ul>
                             </div>
                         @else
-                            <p class="mt-3 max-w-md text-xs leading-relaxed text-white/85">
+                            <p class="mt-2 max-w-md text-[11px] leading-snug text-white/75">
                                 {{ __('You have no assessments yet. Create one to start collecting submissions.') }}
                             </p>
                         @endif
 
-                        <div class="mt-4 flex items-center justify-between gap-3">
+                        <div class="mt-3 flex items-center justify-between gap-3">
                             <a href="{{ route('examiner.exams.index', $dashboardProctoringQueryBase) }}"
-                               class="inline-flex items-center gap-2 rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-[#1f6a78] shadow-sm transition duration-150 ease-out hover:-translate-y-0.5 hover:bg-white/95 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 focus:ring-offset-[#1f6a78]">
+                               class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-[#1f6a78] shadow-sm transition duration-150 ease-out hover:-translate-y-0.5 hover:bg-white/95 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 focus:ring-offset-[#1f6a78]">
                                 {{ __('View all') }}
-                                <i class="fa-solid fa-arrow-right text-[11px] transition group-hover:translate-x-0.5"></i>
+                                <i class="fa-solid fa-arrow-right text-[10px] transition group-hover:translate-x-0.5"></i>
                             </a>
-                            <span class="hidden text-[11px] uppercase tracking-[0.16em] text-white/55 sm:inline">{{ __('Across all courses') }}</span>
+                            <span class="hidden text-[10px] uppercase tracking-[0.14em] text-white/55 sm:inline">{{ __('Across all courses') }}</span>
                         </div>
                     </div>
                 </article>
@@ -160,10 +160,10 @@
                     <p class="{{ $metricLabel }}">{{ __('Open now') }}</p>
                     <p class="{{ $metricValue }}">{{ $activeAssessmentsCount }}</p>
                     <span aria-hidden="true" class="{{ $satelliteIconBadge }}">
-                        <i class="fa-solid fa-door-open text-[12px]"></i>
+                        <i class="fa-solid fa-door-open text-[11px]"></i>
                     </span>
                     @if ($activeAssessmentsCount > 0)
-                        <p class="mt-2">
+                        <p class="relative mt-1.5">
                             <span class="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white ring-1 ring-inset ring-white/20">
                                 <span class="relative flex h-1.5 w-1.5" aria-hidden="true">
                                     <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75"></span>
@@ -173,9 +173,9 @@
                             </span>
                         </p>
                     @else
-                        <p class="mt-2 text-[11px] leading-snug text-white/75">{{ __('Nothing inside its window right now.') }}</p>
+                        <p class="relative mt-1.5 text-[11px] leading-snug text-white/70">{{ __('Nothing inside its window right now.') }}</p>
                     @endif
-                    <p class="mt-2 text-[11px] leading-snug text-white/75">{{ __('Students can start or submit during the schedule window.') }}</p>
+                    <p class="relative mt-1.5 text-[11px] leading-snug text-white/70">{{ __('Students can start or submit during the schedule window.') }}</p>
                 </article>
 
                 {{-- SATELLITE 2 — Submissions. Solid deep-indigo tone. --}}
@@ -185,9 +185,9 @@
                     <p class="{{ $metricLabel }}">{{ __('Submissions') }}</p>
                     <p class="{{ $metricValue }}">{{ $submittedSessionsCount }}</p>
                     <span aria-hidden="true" class="{{ $satelliteIconBadge }}">
-                        <i class="fa-solid fa-paper-plane text-[12px]"></i>
+                        <i class="fa-solid fa-paper-plane text-[11px]"></i>
                     </span>
-                    <p class="mt-2 text-[11px] leading-snug text-white/75">{{ __('Total student attempts that finished.') }}</p>
+                    <p class="relative mt-1.5 text-[11px] leading-snug text-white/70">{{ __('Total student attempts that finished.') }}</p>
                     <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['tab' => 'active'])) }}"
                        class="{{ $metricFootLink }}">
                         {{ __('Browse active') }}
@@ -202,8 +202,8 @@
                     {!! $hoverHighlight !!}
                     {!! $hoverShine !!}
                     <p class="{{ $metricLabel }}">{{ __('Needs grading') }}</p>
-                    <div class="mt-0.5 flex flex-wrap items-baseline gap-3">
-                        <p class="text-[1.75rem] font-bold leading-none tracking-tight tabular-nums text-white sm:text-[1.9rem]">{{ $pendingManualGradingCount }}</p>
+                    <div class="relative mt-0.5 flex flex-wrap items-baseline gap-2.5">
+                        <p class="text-[1.5rem] font-bold leading-none tracking-tight tabular-nums text-white sm:text-[1.65rem]">{{ $pendingManualGradingCount }}</p>
                         @if ($heldResultsCount > 0)
                             <span class="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white ring-1 ring-inset ring-white/20">
                                 <i class="fa-solid fa-triangle-exclamation text-[10px]" aria-hidden="true"></i>
@@ -212,9 +212,9 @@
                         @endif
                     </div>
                     <span aria-hidden="true" class="{{ $satelliteIconBadge }}">
-                        <i class="fa-solid fa-list-check text-[12px]"></i>
+                        <i class="fa-solid fa-list-check text-[11px]"></i>
                     </span>
-                    <p class="mt-2 text-[11px] leading-snug text-white/75">
+                    <p class="relative mt-1.5 text-[11px] leading-snug text-white/70">
                         @if ($pendingManualGradingCount > 0)
                             {{ __('Distinct submissions waiting on essay grading. Tap to open the queue and apply AI suggestions or grade manually.') }}
                         @else
