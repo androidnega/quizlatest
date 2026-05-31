@@ -9,20 +9,18 @@
     @php
         $integrityTotal = $proctoringFlaggedSessionsCount + $autoSubmittedSessionsCount + $heldResultsCount;
 
-        // Bento-grid design: soft pastel tiles. Each card sits on its own
-        // light tinted background (-50) with a matching hairline border,
-        // darker matching text for the label/value, and a slightly more
-        // saturated chip in the top-right for the icon. No overlays, no
-        // gradients — the only motion on hover is a small lift, a tinted
-        // shadow, a touch more saturation on the surface, and the icon
-        // chip scales gently.
-        $satelliteBase = 'group relative isolate flex h-full flex-col overflow-hidden rounded-2xl border p-3 pr-11 shadow-sm transition-[transform,box-shadow,background-color] duration-300 ease-out will-change-transform hover:-translate-y-1 hover:shadow-md sm:p-3.5 sm:pr-12';
-        $satelliteIconBadge = 'absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-lg ring-1 ring-inset transition duration-300 ease-out group-hover:scale-110 sm:right-2.5 sm:top-2.5';
-        $metricLabel = 'relative text-[10px] font-semibold uppercase tracking-[0.12em]';
-        $metricValue = 'relative mt-0.5 text-[1.5rem] font-bold leading-none tracking-tight tabular-nums sm:text-[1.65rem]';
-        $metricFootLink = 'relative mt-auto pt-1.5 inline-flex items-center gap-1.5 text-[11px] font-semibold underline-offset-2 transition hover:underline';
+        // Glance-card design: each card lays a circular progress donut on
+        // the left and label + body content on the right. The donut is
+        // an SVG with a track + accent arc; the metric value sits inside
+        // the ring. Cards keep the soft pastel surface (-50 background,
+        // -100 hairline border, darker matching text) from the previous
+        // style, hover lifts and slightly saturates the surface, and the
+        // ring colour matches each card's tone.
+        $cardBase = 'group relative isolate flex h-full flex-col overflow-hidden rounded-2xl border p-3 shadow-sm transition-[transform,box-shadow,background-color] duration-300 ease-out will-change-transform hover:-translate-y-1 hover:shadow-md sm:p-3.5';
+        $cardFootLink = 'inline-flex items-center gap-1.5 text-[11px] font-semibold underline-offset-2 transition hover:underline';
 
-        // Hero math: percent breakdown for the inline draft/published bar.
+        // Hero math: percent breakdown for the donut (published share of
+        // the library, with a draft secondary arc layered behind).
         $heroTotal = max(0, (int) $quizTotalCount);
         $heroDraft = max(0, (int) $draftAssessmentsCount);
         $heroPublished = max(0, (int) $publishedAssessmentsCount);
@@ -30,6 +28,18 @@
         $heroPublishedPct = $heroTotal > 0 ? (int) round(($heroPublished / $heroTotal) * 100) : 0;
         $heroDraftPct = $heroTotal > 0 ? (int) round(($heroDraft / $heroTotal) * 100) : 0;
         $heroOtherPct = max(0, 100 - $heroPublishedPct - $heroDraftPct);
+
+        // Per-satellite ring percentages.
+        // Open now → fraction of published that's inside its schedule window.
+        $openRingPct = $heroPublished > 0
+            ? min(100, (int) round(($activeAssessmentsCount / $heroPublished) * 100))
+            : ($activeAssessmentsCount > 0 ? 100 : 0);
+        // Submissions → decorative full ring once any submission lands.
+        $submissionsRingPct = $submittedSessionsCount > 0 ? 100 : 0;
+        // Needs grading → share of submissions still awaiting a grade.
+        $gradingRingPct = $submittedSessionsCount > 0
+            ? min(100, (int) round(($pendingManualGradingCount / $submittedSessionsCount) * 100))
+            : 0;
     @endphp
 
     <div class="space-y-6">
@@ -48,89 +58,70 @@
                      watermark numeral — one flat color so the card reads
                      as a single tone with maximum calm. Internal density
                      trimmed so the card sits short. --}}
-                <article class="{{ $satelliteBase }} bg-cyan-50 border-cyan-100 hover:bg-cyan-100/70 hover:shadow-cyan-200/40 md:col-span-2 xl:col-span-2">
-                    {{-- TOP: eyebrow + small icon chip --}}
-                    <div class="relative flex items-center justify-between gap-4">
-                        <p class="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-700">
-                            <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-cyan-500"></span>
-                            {{ __('Assessments') }}
-                        </p>
-                        <span aria-hidden="true" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-cyan-100 text-cyan-700 ring-1 ring-inset ring-cyan-200/80 transition duration-300 ease-out group-hover:scale-110 group-hover:bg-cyan-200/70">
-                            <i class="fa-solid fa-file-lines text-[11px]"></i>
-                        </span>
-                    </div>
+                <article class="{{ $cardBase }} bg-cyan-50 border-cyan-100 hover:bg-cyan-100/70 hover:shadow-cyan-200/40 md:col-span-2 xl:col-span-2">
+                    <div class="flex items-start gap-3 sm:gap-4">
+                        {{-- DONUT — published share of the total library; ring %
+                             reads in the center. --}}
+                        <div class="relative shrink-0">
+                            <svg viewBox="0 0 36 36" class="h-[4.5rem] w-[4.5rem] -rotate-90 transition-transform duration-300 ease-out group-hover:rotate-[-84deg] sm:h-[5rem] sm:w-[5rem]" aria-hidden="true">
+                                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="currentColor" stroke-width="3" class="text-cyan-200/70"/>
+                                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"
+                                        stroke-dasharray="{{ $heroPublishedPct }} 100"
+                                        class="text-cyan-600 transition-[stroke-dasharray] duration-500"/>
+                            </svg>
+                            <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-cyan-900">
+                                <span class="text-[0.95rem] font-bold leading-none tabular-nums">{{ $heroPublishedPct }}%</span>
+                                <span class="mt-0.5 text-[8px] font-semibold uppercase tracking-wider text-cyan-700/70">{{ __('live') }}</span>
+                            </div>
+                        </div>
 
-                    {{-- HEADLINE: number + live chip + descriptor --}}
-                    <div class="relative mt-2.5">
-                        <p class="flex flex-wrap items-baseline gap-x-2.5 gap-y-1.5">
-                            <span class="text-[2.25rem] font-bold leading-none tabular-nums text-cyan-900 sm:text-[2.5rem]">{{ $quizTotalCount }}</span>
-                            @if ($publishedAssessmentsCount > 0)
-                                <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-800 ring-1 ring-inset ring-emerald-200/80">
-                                    <span class="relative flex h-1.5 w-1.5">
-                                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75"></span>
-                                        <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                        {{-- BODY --}}
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-700">{{ __('Assessments') }}</p>
+                            <p class="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                <span class="text-[1.5rem] font-bold leading-none tabular-nums text-cyan-900 sm:text-[1.65rem]">{{ $quizTotalCount }}</span>
+                                @if ($publishedAssessmentsCount > 0)
+                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-800 ring-1 ring-inset ring-emerald-200/80">
+                                        <span class="relative flex h-1.5 w-1.5">
+                                            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75"></span>
+                                            <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                        </span>
+                                        {{ $publishedAssessmentsCount }} {{ __('live') }}
                                     </span>
-                                    {{ $publishedAssessmentsCount }} {{ __('live') }}
-                                </span>
-                            @endif
-                        </p>
-                        <p class="mt-1 max-w-md text-[12px] leading-snug text-cyan-800/80">{{ __('Everything you own across your courses.') }}</p>
-                    </div>
+                                @endif
+                            </p>
+                            <p class="mt-1 max-w-md text-[12px] leading-snug text-cyan-800/80">{{ __('Everything you own across your courses.') }}</p>
 
-                    {{-- BOTTOM: divider + mix row + footer link. --}}
-                    <div class="relative mt-3 pt-3">
-                        <div class="border-t border-cyan-200/60"></div>
-                        @if ($heroTotal > 0)
-                            <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-                                {{-- Mix bar with inline label --}}
-                                <div class="flex min-w-0 flex-1 items-center gap-3">
-                                    <span class="text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-700/70">{{ __('Mix') }}</span>
-                                    <div class="flex h-1.5 min-w-[6rem] flex-1 overflow-hidden rounded-full bg-cyan-200/60" role="img" aria-label="{{ __('Draft and published mix') }}">
-                                        @if ($heroPublishedPct > 0)
-                                            <span class="block h-full bg-cyan-600" style="width: {{ $heroPublishedPct }}%"></span>
-                                        @endif
-                                        @if ($heroDraftPct > 0)
-                                            <span class="block h-full bg-cyan-400" style="width: {{ $heroDraftPct }}%"></span>
-                                        @endif
-                                        @if ($heroOtherPct > 0)
-                                            <span class="block h-full bg-cyan-300" style="width: {{ $heroOtherPct }}%"></span>
-                                        @endif
-                                    </div>
-                                </div>
-                                {{-- Inline stat pills --}}
-                                <ul class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+                            @if ($heroTotal > 0)
+                                <ul class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px]">
                                     <li class="inline-flex items-center gap-1.5 text-cyan-900">
                                         <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-cyan-600"></span>
                                         <span class="font-semibold uppercase tracking-wider text-cyan-700/80">{{ __('Published') }}</span>
-                                        <span class="text-sm font-bold tabular-nums">{{ $heroPublished }}</span>
+                                        <span class="text-[12px] font-bold tabular-nums">{{ $heroPublished }}</span>
                                     </li>
                                     <li class="inline-flex items-center gap-1.5 text-cyan-900">
                                         <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-cyan-400"></span>
                                         <span class="font-semibold uppercase tracking-wider text-cyan-700/80">{{ __('Draft') }}</span>
-                                        <span class="text-sm font-bold tabular-nums">{{ $heroDraft }}</span>
+                                        <span class="text-[12px] font-bold tabular-nums">{{ $heroDraft }}</span>
                                     </li>
                                     @if ($heroOther > 0)
                                         <li class="inline-flex items-center gap-1.5 text-cyan-900">
                                             <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-cyan-300"></span>
                                             <span class="font-semibold uppercase tracking-wider text-cyan-700/80">{{ __('Archived') }}</span>
-                                            <span class="text-sm font-bold tabular-nums">{{ $heroOther }}</span>
+                                            <span class="text-[12px] font-bold tabular-nums">{{ $heroOther }}</span>
                                         </li>
                                     @endif
                                 </ul>
-                            </div>
-                        @else
-                            <p class="mt-2 max-w-md text-[11px] leading-snug text-cyan-800/80">
-                                {{ __('You have no assessments yet. Create one to start collecting submissions.') }}
-                            </p>
-                        @endif
+                            @endif
 
-                        <div class="mt-3 flex items-center justify-between gap-3">
-                            <a href="{{ route('examiner.exams.index', $dashboardProctoringQueryBase) }}"
-                               class="inline-flex items-center gap-1.5 rounded-full bg-cyan-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition duration-150 ease-out hover:-translate-y-0.5 hover:bg-cyan-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-cyan-400/40 focus:ring-offset-2 focus:ring-offset-cyan-50">
-                                {{ __('View all') }}
-                                <i class="fa-solid fa-arrow-right text-[10px] transition group-hover:translate-x-0.5"></i>
-                            </a>
-                            <span class="hidden text-[10px] uppercase tracking-[0.14em] text-cyan-700/60 sm:inline">{{ __('Across all courses') }}</span>
+                            <div class="mt-2.5 flex items-center justify-between gap-3">
+                                <a href="{{ route('examiner.exams.index', $dashboardProctoringQueryBase) }}"
+                                   class="inline-flex items-center gap-1.5 rounded-full bg-cyan-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition duration-150 ease-out hover:-translate-y-0.5 hover:bg-cyan-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-cyan-400/40 focus:ring-offset-2 focus:ring-offset-cyan-50">
+                                    {{ __('View all') }}
+                                    <i class="fa-solid fa-arrow-right text-[10px] transition group-hover:translate-x-0.5"></i>
+                                </a>
+                                <span class="hidden text-[10px] uppercase tracking-[0.14em] text-cyan-700/60 sm:inline">{{ __('Across all courses') }}</span>
+                            </div>
                         </div>
                     </div>
                 </article>
@@ -140,71 +131,116 @@
                      DOM; icon badge floats top-right so accessibility
                      readers (and the inflated-grading regression tests) see
                      the label paired directly with its number. --}}
-                <article class="{{ $satelliteBase }} bg-emerald-50 border-emerald-100 hover:bg-emerald-100/70 hover:shadow-emerald-200/40">
-                    <p class="{{ $metricLabel }} text-emerald-700">{{ __('Open now') }}</p>
-                    <p class="{{ $metricValue }} text-emerald-900">{{ $activeAssessmentsCount }}</p>
-                    <span aria-hidden="true" class="{{ $satelliteIconBadge }} bg-emerald-100 text-emerald-700 ring-emerald-200/80 group-hover:bg-emerald-200/70">
-                        <i class="fa-solid fa-door-open text-[11px]"></i>
-                    </span>
-                    @if ($activeAssessmentsCount > 0)
-                        <p class="relative mt-1.5">
-                            <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-800 ring-1 ring-inset ring-emerald-200/80">
-                                <span class="relative flex h-1.5 w-1.5" aria-hidden="true">
-                                    <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75"></span>
-                                    <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                <article class="{{ $cardBase }} bg-emerald-50 border-emerald-100 hover:bg-emerald-100/70 hover:shadow-emerald-200/40">
+                    <div class="flex items-start gap-3">
+                        {{-- DONUT — active fraction of the published library. --}}
+                        <div class="relative shrink-0">
+                            <svg viewBox="0 0 36 36" class="h-[3.75rem] w-[3.75rem] -rotate-90 transition-transform duration-300 ease-out group-hover:rotate-[-84deg]" aria-hidden="true">
+                                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="currentColor" stroke-width="3" class="text-emerald-200/70"/>
+                                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"
+                                        stroke-dasharray="{{ $openRingPct }} 100"
+                                        class="text-emerald-600 transition-[stroke-dasharray] duration-500"/>
+                            </svg>
+                            <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                <span class="text-[0.85rem] font-bold leading-none tabular-nums text-emerald-900">{{ $openRingPct }}%</span>
+                            </div>
+                        </div>
+                        {{-- BODY --}}
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-700">{{ __('Open now') }}</p>
+                            <p class="mt-0.5 text-[1.25rem] font-bold leading-none tabular-nums text-emerald-900">{{ $activeAssessmentsCount }}</p>
+                            @if ($activeAssessmentsCount > 0)
+                                <span class="mt-1 inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-800 ring-1 ring-inset ring-emerald-200/80">
+                                    <span class="relative flex h-1.5 w-1.5" aria-hidden="true">
+                                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75"></span>
+                                        <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                    </span>
+                                    {{ __('Live now') }}
                                 </span>
-                                {{ __('Live now') }}
-                            </span>
-                        </p>
-                    @else
-                        <p class="relative mt-1.5 text-[11px] leading-snug text-emerald-800/75">{{ __('Nothing inside its window right now.') }}</p>
-                    @endif
-                    <p class="relative mt-1.5 text-[11px] leading-snug text-emerald-800/75">{{ __('Students can start or submit during the schedule window.') }}</p>
+                            @endif
+                            <p class="mt-1.5 text-[11px] leading-snug text-emerald-800/75">
+                                @if ($activeAssessmentsCount > 0)
+                                    {{ __('Students can start or submit during the schedule window.') }}
+                                @else
+                                    {{ __('Nothing inside its window right now.') }}
+                                @endif
+                            </p>
+                        </div>
+                    </div>
                 </article>
 
                 {{-- SATELLITE 2 — Submissions. Solid deep-indigo tone. --}}
-                <article class="{{ $satelliteBase }} bg-indigo-50 border-indigo-100 hover:bg-indigo-100/70 hover:shadow-indigo-200/40">
-                    <p class="{{ $metricLabel }} text-indigo-700">{{ __('Submissions') }}</p>
-                    <p class="{{ $metricValue }} text-indigo-900">{{ $submittedSessionsCount }}</p>
-                    <span aria-hidden="true" class="{{ $satelliteIconBadge }} bg-indigo-100 text-indigo-700 ring-indigo-200/80 group-hover:bg-indigo-200/70">
-                        <i class="fa-solid fa-paper-plane text-[11px]"></i>
-                    </span>
-                    <p class="relative mt-1.5 text-[11px] leading-snug text-indigo-800/75">{{ __('Total student attempts that finished.') }}</p>
-                    <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['tab' => 'active'])) }}"
-                       class="{{ $metricFootLink }} text-indigo-700 hover:text-indigo-900">
-                        {{ __('Browse active') }}
-                        <i class="fa-solid fa-arrow-right text-[10px] transition group-hover:translate-x-0.5"></i>
-                    </a>
+                <article class="{{ $cardBase }} bg-indigo-50 border-indigo-100 hover:bg-indigo-100/70 hover:shadow-indigo-200/40">
+                    <div class="flex items-start gap-3">
+                        {{-- DONUT — full ring once any submission lands. Center
+                             shows a checkmark when there is activity. --}}
+                        <div class="relative shrink-0">
+                            <svg viewBox="0 0 36 36" class="h-[3.75rem] w-[3.75rem] -rotate-90 transition-transform duration-300 ease-out group-hover:rotate-[-84deg]" aria-hidden="true">
+                                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="currentColor" stroke-width="3" class="text-indigo-200/70"/>
+                                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"
+                                        stroke-dasharray="{{ $submissionsRingPct }} 100"
+                                        class="text-indigo-600 transition-[stroke-dasharray] duration-500"/>
+                            </svg>
+                            <div class="pointer-events-none absolute inset-0 flex items-center justify-center text-indigo-700">
+                                <i class="fa-solid fa-paper-plane text-[14px]"></i>
+                            </div>
+                        </div>
+                        {{-- BODY --}}
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[10px] font-semibold uppercase tracking-[0.12em] text-indigo-700">{{ __('Submissions') }}</p>
+                            <p class="mt-0.5 text-[1.25rem] font-bold leading-none tabular-nums text-indigo-900">{{ $submittedSessionsCount }}</p>
+                            <p class="mt-1 text-[11px] leading-snug text-indigo-800/75">{{ __('Total student attempts that finished.') }}</p>
+                            <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['tab' => 'active'])) }}"
+                               class="{{ $cardFootLink }} mt-1.5 text-indigo-700 hover:text-indigo-900">
+                                {{ __('Browse active') }}
+                                <i class="fa-solid fa-arrow-right text-[10px] transition group-hover:translate-x-0.5"></i>
+                            </a>
+                        </div>
+                    </div>
                 </article>
 
                 {{-- SATELLITE 3 — Needs grading. Solid deep-amber tone, with
                      a held-for-review chip on the front. Spans the full row
                      on xl now that the hero only takes a single row. --}}
-                <article class="{{ $satelliteBase }} bg-amber-50 border-amber-100 hover:bg-amber-100/70 hover:shadow-amber-200/40 md:col-span-2 xl:col-span-4">
-                    <p class="{{ $metricLabel }} text-amber-700">{{ __('Needs grading') }}</p>
-                    <div class="relative mt-0.5 flex flex-wrap items-baseline gap-2.5">
-                        <p class="text-[1.5rem] font-bold leading-none tracking-tight tabular-nums text-amber-900 sm:text-[1.65rem]">{{ $pendingManualGradingCount }}</p>
-                        @if ($heldResultsCount > 0)
-                            <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-800 ring-1 ring-inset ring-amber-200/80">
-                                <i class="fa-solid fa-triangle-exclamation text-[10px]" aria-hidden="true"></i>
-                                {{ __(':count held for review', ['count' => $heldResultsCount]) }}
-                            </span>
-                        @endif
+                <article class="{{ $cardBase }} bg-amber-50 border-amber-100 hover:bg-amber-100/70 hover:shadow-amber-200/40 md:col-span-2 xl:col-span-4">
+                    <div class="flex items-start gap-3 sm:gap-4">
+                        {{-- DONUT — share of submissions still awaiting grading. --}}
+                        <div class="relative shrink-0">
+                            <svg viewBox="0 0 36 36" class="h-[3.75rem] w-[3.75rem] -rotate-90 transition-transform duration-300 ease-out group-hover:rotate-[-84deg] sm:h-[4.25rem] sm:w-[4.25rem]" aria-hidden="true">
+                                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="currentColor" stroke-width="3" class="text-amber-200/70"/>
+                                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"
+                                        stroke-dasharray="{{ $gradingRingPct }} 100"
+                                        class="text-amber-600 transition-[stroke-dasharray] duration-500"/>
+                            </svg>
+                            <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                <span class="text-[0.85rem] font-bold leading-none tabular-nums text-amber-900">{{ $gradingRingPct }}%</span>
+                            </div>
+                        </div>
+                        {{-- BODY --}}
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <p class="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-700">{{ __('Needs grading') }}</p>
+                                @if ($heldResultsCount > 0)
+                                    <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-800 ring-1 ring-inset ring-amber-200/80">
+                                        <i class="fa-solid fa-triangle-exclamation text-[10px]" aria-hidden="true"></i>
+                                        {{ __(':count held for review', ['count' => $heldResultsCount]) }}
+                                    </span>
+                                @endif
+                            </div>
+                            <p class="mt-0.5 text-[1.25rem] font-bold leading-none tabular-nums text-amber-900">{{ $pendingManualGradingCount }}</p>
+                            <p class="mt-1 text-[11px] leading-snug text-amber-800/75">
+                                @if ($pendingManualGradingCount > 0)
+                                    {{ __('Distinct submissions waiting on essay grading. Tap to open the queue and apply AI suggestions or grade manually.') }}
+                                @else
+                                    {{ __('You are caught up — no submissions are waiting on manual grading.') }}
+                                @endif
+                            </p>
+                            <a href="{{ route('examiner.grading.pending') }}" class="{{ $cardFootLink }} mt-1.5 text-amber-700 hover:text-amber-900">
+                                {{ __('Open grading queue') }}
+                                <i class="fa-solid fa-arrow-right text-[10px] transition group-hover:translate-x-0.5"></i>
+                            </a>
+                        </div>
                     </div>
-                    <span aria-hidden="true" class="{{ $satelliteIconBadge }} bg-amber-100 text-amber-700 ring-amber-200/80 group-hover:bg-amber-200/70">
-                        <i class="fa-solid fa-list-check text-[11px]"></i>
-                    </span>
-                    <p class="relative mt-1.5 text-[11px] leading-snug text-amber-800/75">
-                        @if ($pendingManualGradingCount > 0)
-                            {{ __('Distinct submissions waiting on essay grading. Tap to open the queue and apply AI suggestions or grade manually.') }}
-                        @else
-                            {{ __('You are caught up — no submissions are waiting on manual grading.') }}
-                        @endif
-                    </p>
-                    <a href="{{ route('examiner.grading.pending') }}" class="{{ $metricFootLink }} text-amber-700 hover:text-amber-900">
-                        {{ __('Open grading queue') }}
-                        <i class="fa-solid fa-arrow-right text-[10px] transition group-hover:translate-x-0.5"></i>
-                    </a>
                 </article>
             </div>
         </section>
