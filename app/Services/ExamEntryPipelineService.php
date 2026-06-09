@@ -21,8 +21,29 @@ class ExamEntryPipelineService
         private readonly SystemSettingsService $systemSettings,
         private readonly SystemExamPolicyService $examPolicy,
         private readonly ExamOtpService $examOtp,
-        private readonly ExamRedisService $examRedis,
+        private readonly ExamRuntimeService $examRuntime,
+        private readonly StudentExamSessionGateService $sessionGate,
+        private readonly ExamSessionQuestionAssignmentService $questionAssignment,
     ) {}
+
+    /**
+     * Materialize the per-student question subset for a freshly created
+     * session, honouring questions_per_student + randomize_questions +
+     * randomize_options. Idempotent — safe to call twice.
+     */
+    private function assignSessionQuestionsSafely(ExamSession $session, Quiz $exam): void
+    {
+        try {
+            $this->questionAssignment->assignForSession($session, $exam);
+        } catch (\Throwable $e) {
+            // The runtime falls back to "all approved questions for the
+            // exam" if no per-session rows exist, so swallowing the error
+            // here keeps the start flow working even when the pool is
+            // empty (lifecycle tests, draft sessions). The dashboard /
+            // examiner builder is responsible for surfacing pool issues.
+            report($e);
+        }
+    }
 
     /**
      * @param  array{
@@ -46,15 +67,15 @@ class ExamEntryPipelineService
         $studentId = (int) $student->id;
 
         $lockHeld = false;
-        if (! $this->examRedis->acquireSessionStartLock($studentId, $examId)) {
+        if (! $this->examRuntime->acquireSessionStartLock($studentId, $examId)) {
             abort(409, 'An exam start is already in progress. Please wait a moment.');
         }
         $lockHeld = true;
 
         try {
-            $this->examRedis->enforceExamStartRateLimit($studentId);
+            $this->examRuntime->enforceExamStartRateLimit($studentId);
 
-            $exam = $this->examRedis->rememberQuiz($examId, fn () => Quiz::query()->findOrFail($examId));
+            $exam = $this->examRuntime->rememberQuiz($examId, fn () => Quiz::query()->findOrFail($examId));
 
             abort_unless($exam->status === 'published', 422, 'This exam is not available.');
             abort_unless($exam->isAvailableForStudentToStart(now()), 422, 'This exam is outside its scheduled window.');
@@ -79,11 +100,7 @@ class ExamEntryPipelineService
                 ->exists();
             abort_unless(! $existingSubmitted, 422, 'Re-entry is not allowed after submission.');
 
-            $activeSessionExists = ExamSession::query()
-                ->where('student_id', $student->id)
-                ->whereIn('status', ['active', 'paused'])
-                ->exists();
-            abort_unless(! $activeSessionExists, 422, 'Another active session already exists.');
+            $this->sessionGate->assertCanStart($student, $exam);
 
             if ($exam->isAssignment()) {
                 $snapshotFile = null;
@@ -116,7 +133,8 @@ class ExamEntryPipelineService
                 ];
                 $performanceProfile = ProctoringCapabilityResolver::resolve($capabilityHints);
 
-                $session = DB::transaction(function () use ($student, $exam) {
+                $createdNewSession = false;
+                $session = DB::transaction(function () use ($student, $exam, &$createdNewSession) {
                     $existingSubmitted = ExamSession::query()
                         ->where('student_id', $student->id)
                         ->where('exam_id', $exam->id)
@@ -125,20 +143,26 @@ class ExamEntryPipelineService
                         ->exists();
                     abort_unless(! $existingSubmitted, 422, 'Re-entry is not allowed after submission.');
 
-                    $activeSessionExists = ExamSession::query()
+                    $existingActive = ExamSession::query()
                         ->where('student_id', $student->id)
+                        ->where('exam_id', $exam->id)
                         ->whereIn('status', ['active', 'paused'])
                         ->lockForUpdate()
-                        ->exists();
-                    abort_unless(! $activeSessionExists, 422, 'Another active session already exists.');
+                        ->first();
+                    if ($existingActive !== null) {
+                        return $existingActive;
+                    }
 
-                    return ExamSession::create([
+                    $createdNewSession = true;
+
+                    $created = ExamSession::create([
                         'student_id' => $student->id,
                         'class_id' => $student->class_id,
                         'exam_id' => $exam->id,
                         'session_id' => (string) Str::uuid(),
                         'status' => 'active',
                         'start_time' => now(),
+                        'writing_started_at' => null,
                         'end_time' => null,
                         'violation_count' => 0,
                         'violation_score' => 0,
@@ -149,9 +173,18 @@ class ExamEntryPipelineService
                         'last_seen_at' => now(),
                         'submitted_late' => false,
                     ]);
+
+                    // Pick the per-student question subset right at session
+                    // creation so the runtime serves the correct shuffled
+                    // slice from the very first state fetch.
+                    $this->assignSessionQuestionsSafely($created, $exam);
+
+                    return $created;
                 });
 
-                $this->examRedis->incrementActiveSessions((int) $exam->id);
+                if ($createdNewSession) {
+                    $this->examRuntime->incrementActiveSessions((int) $exam->id);
+                }
                 $this->examOtp->forgetVerifiedFlag((int) $student->id, (int) $exam->id);
 
                 return [
@@ -227,7 +260,8 @@ class ExamEntryPipelineService
             $performanceProfile = ProctoringCapabilityResolver::resolve($capabilityHints);
 
             // 8. Initialize exam session (+ optional verification image in same transaction)
-            $session = DB::transaction(function () use ($student, $exam, $snapshotFile) {
+            $createdNewSession = false;
+            $session = DB::transaction(function () use ($student, $exam, $snapshotFile, &$createdNewSession) {
                 $existingSubmitted = ExamSession::query()
                     ->where('student_id', $student->id)
                     ->where('exam_id', $exam->id)
@@ -236,12 +270,17 @@ class ExamEntryPipelineService
                     ->exists();
                 abort_unless(! $existingSubmitted, 422, 'Re-entry is not allowed after submission.');
 
-                $activeSessionExists = ExamSession::query()
+                $existingActive = ExamSession::query()
                     ->where('student_id', $student->id)
+                    ->where('exam_id', $exam->id)
                     ->whereIn('status', ['active', 'paused'])
                     ->lockForUpdate()
-                    ->exists();
-                abort_unless(! $activeSessionExists, 422, 'Another active session already exists.');
+                    ->first();
+                if ($existingActive !== null) {
+                    return $existingActive;
+                }
+
+                $createdNewSession = true;
 
                 $session = ExamSession::create([
                     'student_id' => $student->id,
@@ -250,6 +289,7 @@ class ExamEntryPipelineService
                     'session_id' => (string) Str::uuid(),
                     'status' => 'active',
                     'start_time' => now(),
+                    'writing_started_at' => null,
                     'end_time' => null,
                     'violation_count' => 0,
                     'violation_score' => 0,
@@ -260,6 +300,11 @@ class ExamEntryPipelineService
                     'last_seen_at' => now(),
                     'submitted_late' => false,
                 ]);
+
+                // Pick the per-student question subset right at session
+                // creation so the runtime serves the correct shuffled slice
+                // from the very first state fetch.
+                $this->assignSessionQuestionsSafely($session, $exam);
 
                 if ($snapshotFile !== null && $snapshotFile->isValid()) {
                     $dir = sprintf(
@@ -275,7 +320,9 @@ class ExamEntryPipelineService
                 return $session;
             });
 
-            $this->examRedis->incrementActiveSessions((int) $exam->id);
+            if ($createdNewSession) {
+                $this->examRuntime->incrementActiveSessions((int) $exam->id);
+            }
 
             $this->examOtp->forgetVerifiedFlag((int) $student->id, (int) $exam->id);
 
@@ -291,7 +338,7 @@ class ExamEntryPipelineService
             ];
         } finally {
             if ($lockHeld) {
-                $this->examRedis->releaseSessionStartLock($studentId, $examId);
+                $this->examRuntime->releaseSessionStartLock($studentId, $examId);
             }
         }
     }

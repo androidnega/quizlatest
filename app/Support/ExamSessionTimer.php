@@ -12,11 +12,37 @@ use Illuminate\Support\Carbon;
 final class ExamSessionTimer
 {
     /**
+     * Wall-clock anchor for the student writing timer (full duration from first take-page load).
+     */
+    public static function writingAnchor(ExamSession $session): ?Carbon
+    {
+        return $session->writing_started_at ?? $session->start_time;
+    }
+
+    /**
+     * Start the writing timer on first load of the take page (not at prepare / session create).
+     */
+    public static function ensureWritingTimerStarted(ExamSession $session, Quiz $exam): bool
+    {
+        if ((int) ($exam->duration_minutes ?? 0) <= 0 || $exam->isAssignment()) {
+            return false;
+        }
+
+        if ($session->writing_started_at !== null) {
+            return false;
+        }
+
+        $session->forceFill(['writing_started_at' => now()])->save();
+
+        return true;
+    }
+
+    /**
      * Seconds counting toward the exam timer (excludes completed + in-flight pause wall time).
      */
     public static function activeWritingSeconds(ExamSession $session, Carbon $now): int
     {
-        $start = $session->start_time;
+        $start = self::writingAnchor($session);
         if ($start === null) {
             return 0;
         }
@@ -38,7 +64,10 @@ final class ExamSessionTimer
             return 0;
         }
 
-        $budget = $durationMinutes * 60;
+        // Live-Ops Phase 5: examiner-granted extra time is added to the
+        // budget. ExaminerEmergencyController is the only writer of
+        // extra_seconds, and every write produces an audit-log entry.
+        $budget = ($durationMinutes * 60) + max(0, (int) ($session->extra_seconds ?? 0));
         $used = self::activeWritingSeconds($session, $now);
 
         return max(0, $budget - $used);

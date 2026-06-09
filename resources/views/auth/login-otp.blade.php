@@ -5,13 +5,13 @@
     :heading="__('Enter your one-time code')"
     :description="__('Check the SMS on your phone. The code expires in a few minutes.')"
 >
-    <form id="otp-form" method="POST" action="{{ url('/login/otp') }}" class="space-y-6">
+    <form id="otp-form" method="POST" action="{{ url('/login/otp') }}" class="space-y-5">
         @csrf
 
         <div>
             <x-input-label for="otp-digit-0" :value="__('One-time code')" />
             <input id="otp" name="otp" type="hidden" value="{{ old('otp', '') }}" required />
-            <div class="mt-2 flex items-center gap-2 sm:gap-3" id="otp-digits">
+            <div class="qs-auth-otp" id="otp-digits">
                 @for ($i = 0; $i < 6; $i++)
                     <input
                         id="otp-digit-{{ $i }}"
@@ -19,7 +19,7 @@
                         inputmode="numeric"
                         pattern="[0-9]*"
                         maxlength="1"
-                        class="h-12 w-11 rounded-lg border border-qs-soft bg-qs-bg text-center text-lg font-semibold text-qs-text focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:h-14 sm:w-12"
+                        class="qs-auth-otp-box"
                         autocomplete="one-time-code"
                         @if ($i === 0) autofocus @endif
                     />
@@ -28,11 +28,11 @@
             <x-input-error :messages="$errors->get('otp')" class="mt-2" />
         </div>
 
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <a href="{{ route('login', ['restart' => 1]) }}" class="qs-btn-secondary justify-center px-4 py-2.5 text-sm font-semibold sm:inline-flex sm:w-auto">
+        <div class="qs-auth-actions">
+            <a href="{{ route('login', ['restart' => 1]) }}" class="qs-btn-secondary justify-center">
                 {{ __('Back') }}
             </a>
-            <button type="submit" class="qs-btn-primary flex-1 justify-center py-2.5 text-sm font-semibold sm:flex-none sm:min-w-[9rem]">
+            <button type="submit" class="qs-btn-primary flex-1 justify-center sm:flex-none sm:min-w-[8rem]">
                 {{ __('Sign in') }}
             </button>
         </div>

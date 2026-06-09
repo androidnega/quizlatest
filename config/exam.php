@@ -26,4 +26,17 @@ return [
     */
     'disconnect_pause_threshold_seconds' => (int) env('EXAM_DISCONNECT_PAUSE_THRESHOLD', 120),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Maximum continuous paused-session duration (minutes)
+    |--------------------------------------------------------------------------
+    |
+    | A session that has been "paused" for longer than this is force-submitted
+    | by AutoSubmitStalePausedSessions (run from the schedule). Prevents a
+    | student from leaving a paused exam open indefinitely and returning days
+    | later. Default: 10 minutes. Set to 0 to disable the auto-submit.
+    |
+    */
+    'max_pause_minutes' => (int) env('EXAM_MAX_PAUSE_MINUTES', 10),
+
 ];

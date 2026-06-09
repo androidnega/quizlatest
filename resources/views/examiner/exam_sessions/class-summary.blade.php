@@ -22,7 +22,6 @@
                             <th>{{ __('Average score') }}</th>
                             <th>{{ __('Pending manual') }}</th>
                             <th>{{ __('Held') }}</th>
-                            <th class="text-right">{{ __('Action') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -34,9 +33,6 @@
                                 <td class="text-sm text-qs-text">{{ isset($stats->average_score) ? number_format((float) $stats->average_score, 2) : '—' }}</td>
                                 <td class="text-sm text-qs-text">{{ (int) ($stats->pending_manual_count ?? 0) }}</td>
                                 <td class="text-sm text-qs-text">{{ (int) ($stats->held_count ?? 0) }}</td>
-                                <td class="text-right">
-                                    <a href="{{ route('examiner.exams.classes.results', [$exam, $classroom]) }}" class="inline-flex min-h-[36px] items-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">{{ __('View class results') }}</a>
-                                </td>
                             </tr>
                         @endforeach
                     </tbody>

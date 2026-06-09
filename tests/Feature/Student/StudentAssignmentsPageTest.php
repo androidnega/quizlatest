@@ -20,6 +20,7 @@ class StudentAssignmentsPageTest extends TestCase
         $this->actingAs($student)
             ->get(route('student.assignments.index'))
             ->assertOk()
-            ->assertSeeText(__('Class assignments'), false);
+            ->assertSee('qs-std-page-head__title', false)
+            ->assertSee(__('Assignments'), false);
     }
 }

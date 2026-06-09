@@ -17,9 +17,13 @@ import {
 import { attachEssayAntiClipboard, ESSAY_CLIPBOARD_WARNING_MESSAGE } from './essayAntiClipboard';
 import { attachExamIntegritySurface } from './examIntegritySurface';
 import { mountAssignmentAnswerEditor } from './assignmentAnswerEditor';
+import { createExamPayloadHydrator } from './examRuntimePayloadHydrator';
 
 const DEBOUNCE_MS = 1600;
-const POLL_MS = 12000;
+// Audit P1.8: was 12s. The server clock is decremented locally between
+// polls (ExamSessionTimer is monotonic), so we only need /state every
+// 30s for drift correction. Cuts ~75% of /state traffic.
+const POLL_MS = 30000;
 const SAVE_RETRY = 3;
 const SUBMIT_RETRIES = 3;
 const SUBMIT_PERSIST_INTERVAL_MS = 12000;
@@ -283,7 +287,10 @@ async function main() {
         return;
     }
 
-    const effectivePollMs = enableLiveSockets ? POLL_MS : 8000;
+    // Audit P1.8: when websockets are disabled (cPanel default) we still
+    // poll, but no faster than the websocket-enabled cadence. The server
+    // returns a small payload and the client decrements the timer locally.
+    const effectivePollMs = enableLiveSockets ? POLL_MS : Math.max(POLL_MS, 30000);
 
     const els = {
         title: document.getElementById('exam-title'),
@@ -455,12 +462,22 @@ async function main() {
 
     function startHeartbeat() {
         stopHeartbeat();
+        // Audit P1.8: was 25 s. 60 s is plenty for "is the student still
+        // alive?" detection and cuts heartbeat traffic by 58%. The server
+        // also no longer broadcasts when BROADCAST_CONNECTION=log so this
+        // call is now a single in-place UPDATE.
         heartbeatHandle = window.setInterval(() => {
             if (serverDone || timerPaused) {
                 return;
             }
+            // Skip heartbeats while the tab is hidden — they resume on
+            // visibilitychange (no need for a "missed" indicator since the
+            // server does its own auto-expire on inactive sessions).
+            if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+                return;
+            }
             void axios.post(`/exam-sessions/${encodeURIComponent(sessionId)}/heartbeat`).catch(() => {});
-        }, 25000);
+        }, 60000);
     }
 
     function syncPauseOverlay(show) {
@@ -1135,9 +1152,16 @@ async function main() {
         });
         if (data?.status === 'noop' && data?.reason === 'stale_revision') {
             applyServerRevisionHint(questionId, Number(data.client_revision));
+            // Server has a higher revision than us; force the next
+            // hydrate to refetch /answers so the local map catches up.
+            payloadHydrator.invalidateAnswers();
             return 'stale';
         }
         applyServerRevisionHint(questionId, Number(data?.client_revision));
+        // Architecture Review Phase 1+4: a successful save invalidates
+        // the /answers ETag — the next hydrate will refetch with
+        // If-None-Match and pull only the diff body.
+        payloadHydrator.invalidateAnswers();
         return 'saved';
     }
 
@@ -1741,8 +1765,14 @@ async function main() {
         hideExamTabSwitchModal();
     }
 
+    // Architecture Review Phase 1+4: /state ships only volatile fields.
+    // The hydrator merges in the cached /exam-structure + /answers
+    // responses (with ETag/304 revalidation) so the rest of the
+    // controller continues to see a single combined payload shape.
+    const payloadHydrator = createExamPayloadHydrator(sessionId);
+
     async function fetchState() {
-        const { data } = await axios.get(`/exam-sessions/${encodeURIComponent(sessionId)}/state`);
+        const data = await payloadHydrator.hydrate();
         latestPayload = data;
         mergeRevisionsFromState(data);
         examStateEngine.syncFromBackend(data);

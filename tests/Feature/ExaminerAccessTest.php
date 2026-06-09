@@ -122,7 +122,7 @@ class ExaminerAccessTest extends TestCase
         $ctx = $this->seedScopedExamContext();
 
         $this->actingAs($ctx['examiner'])
-            ->get(route('examiner.dashboard'))
+            ->get(route('dashboard'))
             ->assertOk();
 
         $this->actingAs($ctx['examiner'])

@@ -331,17 +331,20 @@ class ProctoringOrchestratorService
         bool $flagged,
         Carbon $now,
     ): array {
-        $session = $examSession->fresh() ?? $examSession;
+        // Audit P1.6 / Phase 6: route binding produced a fresh row and the
+        // batch controller now passes the same model across events. Reading
+        // the same row again here would issue a useless SELECT per event.
+        $session = $examSession;
         $events = is_array($session->violation_events) ? $session->violation_events : [];
 
         // Debounce identical strikes; we only need a tick every ~10 s for UI.
         $cooldownSeconds = 8;
-        if ($this->isInCooldown($events, 'multiple_faces', $now, $cooldownSeconds)) {
+        if ($this->isInCooldown($session, 'multiple_faces', $now, $cooldownSeconds)) {
             return array_merge($this->emptyDecision($session), ['action' => 'debounced']);
         }
 
         $clientDurationMs = isset($metadata['duration_ms']) ? (int) $metadata['duration_ms'] : 0;
-        $serverDurationSeconds = $this->durationFromContinuousEvents($events, 'multiple_faces', $now);
+        $serverDurationSeconds = $this->durationFromContinuousEvents($session, 'multiple_faces', $now);
         $durationSeconds = max((int) round($clientDurationMs / 1000), $serverDurationSeconds);
 
         $thresholdSeconds = self::MULTIPLE_FACES_AUTO_SUBMIT_SECONDS;
@@ -392,18 +395,18 @@ class ProctoringOrchestratorService
             $examStatus = 'flagged_for_review';
         }
 
+        // Audit P1.6: ->update() refreshes attributes in-place; no need
+        // for another SELECT here.
         $session->update([
-            'violation_events' => $events,
             'violation_score' => $newScore,
             'violation_count' => (int) $session->violation_count + 1,
-            'last_event_time' => $now,
+            'last_violation_at' => $now,
             'risk_state' => $riskState,
             'exam_status' => $examStatus,
         ]);
 
-        $out = $session->fresh() ?? $session;
         $this->dispatchRealtimeNotifications(
-            $out,
+            $session,
             'multiple_faces',
             $previousRiskState,
             $riskState,
@@ -420,40 +423,54 @@ class ProctoringOrchestratorService
             'action' => $action,
             'auto_submit' => $autoSubmit,
             'client_message' => $clientMessage,
-            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'tab_switch_count' => (int) ($session->tab_switch_count ?? 0),
             'proctoring_overlay' => [
-                'active' => (bool) ($out->proctoring_blur_active ?? false),
-                'reason' => $out->proctoring_blur_reason,
+                'active' => (bool) ($session->proctoring_blur_active ?? false),
+                'reason' => $session->proctoring_blur_reason,
                 'message' => null,
             ],
         ];
     }
 
     /**
-     * Walk back through {@see ExamSession::$violation_events} and compute
-     * how long the named event type has been continuously firing without
-     * a gap longer than 15 seconds. Used as a server-side fallback when
-     * the client does not (or cannot) report duration_ms itself.
+     * Architecture Review Phase 3: cooldown / duration / continuous-streak
+     * computations are served from the relational `proctoring_events`
+     * table instead of the formerly-unbounded `exam_sessions.violation_events`
+     * JSON column. The composite index
+     * (user_id, quiz_id, event_type, created_at) makes this a single
+     * indexed seek per call.
      *
-     * @param  list<array<string, mixed>>  $events
+     * Computes the duration of the most recent continuous streak of the
+     * named event_type for this exam attempt. A "gap" longer than 15 s
+     * breaks the streak. Used as a server-side fallback when the client
+     * does not (or cannot) report duration_ms itself.
      */
-    private function durationFromContinuousEvents(array $events, string $eventType, Carbon $now): int
+    private function durationFromContinuousEvents(ExamSession $session, string $eventType, Carbon $now): int
     {
         $maxGapSeconds = 15;
+        $studentId = (int) $session->student_id;
+        $examId = (int) $session->exam_id;
+
+        // Pull the most recent N events of this type for this attempt
+        // and walk them in PHP. N=200 is far more than any plausible
+        // continuous-streak depth (the longest current threshold is the
+        // 30-second multiple_faces auto-submit, which at the maximum
+        // 1-event-per-second client cadence could reach ~30 entries).
+        $rows = ProctoringEvent::query()
+            ->where('user_id', $studentId)
+            ->where('quiz_id', $examId)
+            ->where('event_type', $eventType)
+            ->orderByDesc('id')
+            ->limit(200)
+            ->pluck('created_at');
+
         $oldestStreakStart = null;
         $lastSeen = null;
-
-        for ($i = count($events) - 1; $i >= 0; $i--) {
-            $event = $events[$i];
-            if (! is_array($event) || ($event['event_type'] ?? '') !== $eventType) {
-                continue;
-            }
-            $ts = $event['timestamp'] ?? null;
-            if ($ts === null) {
+        foreach ($rows as $createdAt) {
+            if ($createdAt === null) {
                 break;
             }
-            $time = $ts instanceof Carbon ? $ts : Carbon::parse((string) $ts);
-
+            $time = $createdAt instanceof Carbon ? $createdAt : Carbon::parse((string) $createdAt);
             if ($lastSeen !== null && abs($lastSeen->diffInSeconds($time)) > $maxGapSeconds) {
                 break;
             }
@@ -501,11 +518,12 @@ class ProctoringOrchestratorService
         bool $flagged,
         Carbon $now,
     ): array {
-        $session = $examSession->fresh() ?? $examSession;
+        // Audit P1.6 / Phase 6: skip the unnecessary fresh() reads.
+        $session = $examSession;
         $events = is_array($session->violation_events) ? $session->violation_events : [];
         $debounceSec = (int) data_get($settings, 'tab_switch_debounce_seconds', 3);
         $debounceSec = max(2, min(15, $debounceSec));
-        if ($this->isInCooldown($events, 'tab_switch', $now, $debounceSec)) {
+        if ($this->isInCooldown($session, 'tab_switch', $now, $debounceSec)) {
             return array_merge($this->emptyDecision($session), [
                 'action' => 'debounced',
                 'client_message' => null,
@@ -513,8 +531,8 @@ class ProctoringOrchestratorService
         }
 
         $previousRiskState = (string) $session->risk_state;
+        // increment() updates the attribute in-place; no need to re-fetch.
         $session->increment('tab_switch_count');
-        $session = $session->fresh() ?? $session;
         $strike = (int) ($session->tab_switch_count ?? 0);
 
         $action = $strike >= 3 ? 'autosubmit' : 'warn';
@@ -556,36 +574,34 @@ class ProctoringOrchestratorService
         );
 
         $session->update([
-            'violation_events' => $events,
-            'last_event_time' => $now,
+            'last_violation_at' => $now,
             'risk_state' => $riskState,
             'exam_status' => $examStatus,
             'violation_count' => (int) $session->violation_count + ($strike === 2 ? 1 : 0),
         ]);
 
-        $outSession = $session->fresh() ?? $session;
         $warnMessage = $strike < 3 ? $clientMessage : null;
         $this->dispatchRealtimeNotifications(
-            $outSession,
+            $session,
             'tab_switch',
             $previousRiskState,
             $riskState,
-            (int) ($outSession->violation_score ?? 0),
+            (int) ($session->violation_score ?? 0),
             $action,
             $warnMessage,
             $strike >= 3 ? $clientMessage : null,
         );
 
         return [
-            'score' => (int) ($outSession->violation_score ?? 0),
+            'score' => (int) ($session->violation_score ?? 0),
             'risk_state' => $riskState,
             'action' => $action,
             'auto_submit' => $action === 'autosubmit',
             'client_message' => $clientMessage,
             'tab_switch_count' => $strike,
             'proctoring_overlay' => [
-                'active' => (bool) ($outSession->proctoring_blur_active ?? false),
-                'reason' => $outSession->proctoring_blur_reason ?? null,
+                'active' => (bool) ($session->proctoring_blur_active ?? false),
+                'reason' => $session->proctoring_blur_reason ?? null,
                 'message' => null,
             ],
         ];
@@ -616,10 +632,11 @@ class ProctoringOrchestratorService
             return $this->emptyDecision($examSession);
         }
 
-        $session = $examSession->fresh() ?? $examSession;
+        // Audit P1.6 / Phase 6: route binding produced a fresh row.
+        $session = $examSession;
         $events = is_array($session->violation_events) ? $session->violation_events : [];
         $cooldownSeconds = max(20, (int) ($settings['cooldown_seconds'] ?? 45));
-        if ($this->isInCooldown($events, 'phone_detected', $now, $cooldownSeconds)) {
+        if ($this->isInCooldown($session, 'phone_detected', $now, $cooldownSeconds)) {
             return array_merge($this->emptyDecision($session), ['action' => 'debounced']);
         }
 
@@ -651,33 +668,31 @@ class ProctoringOrchestratorService
         );
 
         $session->update([
-            'violation_events' => $events,
-            'last_event_time' => $now,
+            'last_violation_at' => $now,
             'risk_state' => $riskState,
             'exam_status' => 'flagged_for_review',
             'violation_count' => (int) $session->violation_count + 1,
         ]);
 
-        $out = $session->fresh() ?? $session;
         $msg = 'A mobile device was detected. Your assessment has been submitted for review.';
         $this->dispatchRealtimeNotifications(
-            $out,
+            $session,
             'phone_detected',
             $prevRisk,
             $riskState,
-            (int) ($out->violation_score ?? 0),
+            (int) ($session->violation_score ?? 0),
             $action,
             null,
             $msg,
         );
 
         return [
-            'score' => (int) ($out->violation_score ?? 0),
+            'score' => (int) ($session->violation_score ?? 0),
             'risk_state' => $riskState,
             'action' => $action,
             'auto_submit' => true,
             'client_message' => $msg,
-            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'tab_switch_count' => (int) ($session->tab_switch_count ?? 0),
             'proctoring_overlay' => ['active' => false, 'reason' => null, 'message' => null],
         ];
     }
@@ -698,17 +713,18 @@ class ProctoringOrchestratorService
         Carbon $now,
         string $logEventType,
     ): array {
-        $session = $examSession->fresh() ?? $examSession;
+        // Audit P1.6 / Phase 6.
+        $session = $examSession;
         $events = is_array($session->violation_events) ? $session->violation_events : [];
         $cooldownSeconds = max(10, min(120, (int) ($settings['cooldown_seconds'] ?? 45)));
         $faceFamily = ['face_covered', 'face_obstructed', 'face_not_clear'];
-        if ($this->isInCooldownAny($events, $faceFamily, $now, min(20, $cooldownSeconds))) {
+        if ($this->isInCooldownAny($session, $faceFamily, $now, min(20, $cooldownSeconds))) {
             return array_merge($this->emptyDecision($session), ['action' => 'debounced']);
         }
 
         $prevRisk = (string) $session->risk_state;
+        // increment() updates the attribute in-place.
         $session->increment('face_covered_strike_count');
-        $session = $session->fresh() ?? $session;
         $strikes = (int) ($session->face_covered_strike_count ?? 0);
         $flagAfter = (int) data_get($settings, 'face_covered_flag_after_strikes', 6);
 
@@ -749,20 +765,18 @@ class ProctoringOrchestratorService
         );
 
         $session->update([
-            'violation_events' => $events,
-            'last_event_time' => $now,
+            'last_violation_at' => $now,
             'risk_state' => $riskState,
             'exam_status' => $examStatus,
             'proctoring_blur_active' => $blurActive ? true : (bool) ($session->proctoring_blur_active ?? false),
             'proctoring_blur_reason' => $blurActive ? 'face_obstruction' : $session->proctoring_blur_reason,
         ]);
 
-        $out = $session->fresh() ?? $session;
-        $this->dispatchRealtimeNotifications($out, $logEventType, $prevRisk, $riskState, (int) ($out->violation_score ?? 0), $action, $clientMessage, null);
+        $this->dispatchRealtimeNotifications($session, $logEventType, $prevRisk, $riskState, (int) ($session->violation_score ?? 0), $action, $clientMessage, null);
 
         $overlayMessage = null;
-        if (! empty($out->proctoring_blur_active)) {
-            $overlayMessage = match ((string) ($out->proctoring_blur_reason ?? '')) {
+        if (! empty($session->proctoring_blur_active)) {
+            $overlayMessage = match ((string) ($session->proctoring_blur_reason ?? '')) {
                 'face_obstruction' => 'Your face must stay clearly visible. Adjust your position, then tap continue when your face is clearly on camera.',
                 'external_display' => 'External display risk detected. Disconnect it to continue.',
                 default => 'Please resolve the issue to continue.',
@@ -770,15 +784,15 @@ class ProctoringOrchestratorService
         }
 
         return [
-            'score' => (int) ($out->violation_score ?? 0),
+            'score' => (int) ($session->violation_score ?? 0),
             'risk_state' => $riskState,
             'action' => $action,
             'auto_submit' => false,
             'client_message' => $clientMessage,
-            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'tab_switch_count' => (int) ($session->tab_switch_count ?? 0),
             'proctoring_overlay' => [
-                'active' => (bool) ($out->proctoring_blur_active ?? false),
-                'reason' => $out->proctoring_blur_reason,
+                'active' => (bool) ($session->proctoring_blur_active ?? false),
+                'reason' => $session->proctoring_blur_reason,
                 'message' => $overlayMessage,
             ],
         ];
@@ -799,7 +813,8 @@ class ProctoringOrchestratorService
     ): array {
         $metadata['detection_note'] = 'Browser-based logging only; screenshots cannot be fully detected or prevented.';
 
-        $session = $examSession->fresh() ?? $examSession;
+        // Audit P1.6 / Phase 6: route binding produced a fresh row.
+        $session = $examSession;
         $events = is_array($session->violation_events) ? $session->violation_events : [];
 
         // Screenshot attempts always auto-submit. The legacy
@@ -831,32 +846,30 @@ class ProctoringOrchestratorService
         );
 
         $session->update([
-            'violation_events' => $events,
-            'last_event_time' => $now,
+            'last_violation_at' => $now,
             'risk_state' => $riskState,
             'exam_status' => 'flagged_for_review',
         ]);
 
-        $out = $session->fresh() ?? $session;
         $msg = 'Screenshot attempts are not allowed. Your assessment has been submitted for review.';
         $this->dispatchRealtimeNotifications(
-            $out,
+            $session,
             'possible_screenshot_attempt',
             $prevRisk,
             $riskState,
-            (int) ($out->violation_score ?? 0),
+            (int) ($session->violation_score ?? 0),
             $action,
             $auto ? null : $msg,
             $auto ? $msg : null,
         );
 
         return [
-            'score' => (int) ($out->violation_score ?? 0),
+            'score' => (int) ($session->violation_score ?? 0),
             'risk_state' => $riskState,
             'action' => $action,
             'auto_submit' => $auto,
             'client_message' => $msg,
-            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'tab_switch_count' => (int) ($session->tab_switch_count ?? 0),
             'proctoring_overlay' => ['active' => false, 'reason' => null, 'message' => null],
         ];
     }
@@ -877,7 +890,8 @@ class ProctoringOrchestratorService
     ): array {
         $metadata['detection_note'] = 'Browser-based logging only; OS-level recorders cannot be fully detected or prevented.';
 
-        $session = $examSession->fresh() ?? $examSession;
+        // Audit P1.6 / Phase 6.
+        $session = $examSession;
         $events = is_array($session->violation_events) ? $session->violation_events : [];
         $prevRisk = (string) $session->risk_state;
 
@@ -901,32 +915,30 @@ class ProctoringOrchestratorService
         );
 
         $session->update([
-            'violation_events' => $events,
-            'last_event_time' => $now,
+            'last_violation_at' => $now,
             'risk_state' => 'locked',
             'exam_status' => 'flagged_for_review',
         ]);
 
-        $out = $session->fresh() ?? $session;
         $msg = 'Screen recording is not allowed. Your assessment has been submitted for review.';
         $this->dispatchRealtimeNotifications(
-            $out,
+            $session,
             'possible_screen_record_attempt',
             $prevRisk,
             'locked',
-            (int) ($out->violation_score ?? 0),
+            (int) ($session->violation_score ?? 0),
             'autosubmit',
             null,
             $msg,
         );
 
         return [
-            'score' => (int) ($out->violation_score ?? 0),
+            'score' => (int) ($session->violation_score ?? 0),
             'risk_state' => 'locked',
             'action' => 'autosubmit',
             'auto_submit' => true,
             'client_message' => $msg,
-            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'tab_switch_count' => (int) ($session->tab_switch_count ?? 0),
             'proctoring_overlay' => ['active' => false, 'reason' => null, 'message' => null],
         ];
     }
@@ -948,7 +960,8 @@ class ProctoringOrchestratorService
             return $this->emptyDecision($examSession);
         }
 
-        $session = $examSession->fresh() ?? $examSession;
+        // Audit P1.6 / Phase 6.
+        $session = $examSession;
         $events = is_array($session->violation_events) ? $session->violation_events : [];
         $prevRisk = (string) $session->risk_state;
 
@@ -973,33 +986,31 @@ class ProctoringOrchestratorService
 
         $msg = 'External display risk detected. Disconnect it to continue.';
         $session->update([
-            'violation_events' => $events,
-            'last_event_time' => $now,
+            'last_violation_at' => $now,
             'risk_state' => 'suspicious',
             'exam_status' => 'flagged_for_review',
             'proctoring_blur_active' => true,
             'proctoring_blur_reason' => 'external_display',
         ]);
 
-        $out = $session->fresh() ?? $session;
         $this->dispatchRealtimeNotifications(
-            $out,
+            $session,
             'external_display_risk',
             $prevRisk,
             'suspicious',
-            (int) ($out->violation_score ?? 0),
+            (int) ($session->violation_score ?? 0),
             'blur',
             $msg,
             null,
         );
 
         return [
-            'score' => (int) ($out->violation_score ?? 0),
+            'score' => (int) ($session->violation_score ?? 0),
             'risk_state' => 'suspicious',
             'action' => 'blur',
             'auto_submit' => false,
             'client_message' => $msg,
-            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'tab_switch_count' => (int) ($session->tab_switch_count ?? 0),
             'proctoring_overlay' => [
                 'active' => true,
                 'reason' => 'external_display',
@@ -1012,48 +1023,102 @@ class ProctoringOrchestratorService
      * @param  array<string, mixed>  $metadata
      * @return array<string, mixed>
      */
+    /**
+     * Maximum number of times a student may dismiss the proctoring blur
+     * overlay (e.g. via /proctoring-overlay/clear) before we treat further
+     * dismissals as evidence of evasion and auto-submit.
+     */
+    public const MAX_STUDENT_OVERLAY_DISMISSALS = 3;
+
     private function ingestOverlayResolved(ExamSession $examSession, array $metadata, Carbon $now): array
     {
-        $session = $examSession->fresh() ?? $examSession;
+        $session = $examSession;
         $events = is_array($session->violation_events) ? $session->violation_events : [];
         $reason = isset($metadata['resolved_reason']) ? (string) $metadata['resolved_reason'] : 'student_cleared';
+
+        // Red-team Phase 1 finding H1: a malicious student could spam
+        // /proctoring-overlay/clear (or POST a synthetic
+        // proctoring_overlay_resolved event) to dismiss the blur after a
+        // face-obstruction strike WITHOUT actually fixing the camera.
+        // We now cap dismissals: after MAX_STUDENT_OVERLAY_DISMISSALS the
+        // session escalates to autosubmit with reason
+        // "overlay_dismiss_abuse". The current overlay is NOT cleared in
+        // the abuse case so the student cannot continue answering.
+        // Architecture Review Phase 3: count past dismissals from
+        // proctoring_events instead of walking the JSON buffer. The
+        // composite (user_id, quiz_id, event_type, created_at) index
+        // makes this a single covered count.
+        $previousDismissals = (int) ProctoringEvent::query()
+            ->where('user_id', (int) $session->student_id)
+            ->where('quiz_id', (int) $session->exam_id)
+            ->where('event_type', 'proctoring_overlay_resolved')
+            ->count();
+        $newDismissalCount = $previousDismissals + 1;
+        $abuse = $newDismissalCount > self::MAX_STUDENT_OVERLAY_DISMISSALS;
+
+        $action = $abuse ? 'autosubmit' : 'log';
+        $riskState = $abuse ? 'locked' : (string) ($session->risk_state ?? 'normal');
 
         $events[] = [
             'event_type' => 'proctoring_overlay_resolved',
             'score' => 0,
             'timestamp' => $now->toISOString(),
             'cooldown_applied' => false,
-            'action' => 'log',
-            'payload' => ['resolved_reason' => $reason],
+            'action' => $action,
+            'payload' => [
+                'resolved_reason' => $reason,
+                'dismissal_count' => $newDismissalCount,
+                'abuse' => $abuse,
+            ],
         ];
 
         $this->persistProctoringEvent(
             $session,
             'proctoring_overlay_resolved',
-            $metadata,
-            1,
-            false,
-            'log',
-            (string) ($session->risk_state ?? 'normal'),
+            $metadata + ['dismissal_count' => $newDismissalCount, 'abuse' => $abuse],
+            $abuse ? 4 : 1,
+            $abuse,
+            $action,
+            $riskState,
             $now,
         );
+
+        if ($abuse) {
+            $session->update([
+                'last_violation_at' => $now,
+                'risk_state' => $riskState,
+                'exam_status' => 'flagged_for_review',
+                'violation_count' => (int) $session->violation_count + 1,
+            ]);
+
+            return [
+                'score' => (int) ($session->violation_score ?? 0),
+                'risk_state' => $riskState,
+                'action' => $action,
+                'auto_submit' => true,
+                'client_message' => 'You have dismissed the camera-check warning too many times. Your assessment has been submitted for review.',
+                'tab_switch_count' => (int) ($session->tab_switch_count ?? 0),
+                'proctoring_overlay' => [
+                    'active' => (bool) ($session->proctoring_blur_active ?? false),
+                    'reason' => $session->proctoring_blur_reason,
+                    'message' => null,
+                ],
+            ];
+        }
 
         $session->update([
             'proctoring_blur_active' => false,
             'proctoring_blur_reason' => null,
-            'violation_events' => $events,
-            'last_event_time' => $now,
+            'last_violation_at' => $now,
         ]);
 
-        $out = $session->fresh() ?? $session;
-
         return [
-            'score' => (int) ($out->violation_score ?? 0),
-            'risk_state' => (string) ($out->risk_state ?? 'normal'),
-            'action' => 'log',
+            'score' => (int) ($session->violation_score ?? 0),
+            'risk_state' => $riskState,
+            'action' => $action,
             'auto_submit' => false,
             'client_message' => null,
-            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'tab_switch_count' => (int) ($session->tab_switch_count ?? 0),
             'proctoring_overlay' => ['active' => false, 'reason' => null, 'message' => null],
         ];
     }
@@ -1076,12 +1141,12 @@ class ProctoringOrchestratorService
         $previousRiskState = (string) $examSession->risk_state;
 
         $cooldownSeconds = (int) ($settings['cooldown_seconds'] ?? 45);
-        $inCooldown = $this->isInCooldown($events, $eventType, $now, $cooldownSeconds);
+        $inCooldown = $this->isInCooldown($examSession, $eventType, $now, $cooldownSeconds);
 
-        $scoreDelta = $this->resolveScoreDelta($settings, $events, $eventType, $inCooldown);
+        $scoreDelta = $this->resolveScoreDelta($settings, [], $eventType, $inCooldown);
         $newScore = ((int) $examSession->violation_score) + $scoreDelta;
         $riskState = $this->resolveRiskState($settings, $newScore);
-        $action = $this->resolveAction($settings, $eventType, $events, $newScore, $inCooldown);
+        $action = $this->resolveAction($settings, $eventType, [], $newScore, $inCooldown);
 
         $events[] = [
             'event_type' => $eventType,
@@ -1105,17 +1170,16 @@ class ProctoringOrchestratorService
         $examSession->update([
             'violation_count' => (int) $examSession->violation_count + ($flagged ? 1 : 0),
             'violation_score' => $newScore,
-            'violation_events' => $events,
-            'last_event_time' => $now,
+            'last_violation_at' => $now,
             'risk_state' => $riskState,
             'exam_status' => $newScore >= (int) data_get($settings, 'suspicious_score', 50)
                 ? 'flagged_for_review'
                 : $examSession->exam_status,
         ]);
 
-        $out = $examSession->fresh();
+        // Audit P1.6: ->update() refreshed attributes in-place; skip the fresh().
         $this->dispatchRealtimeNotifications(
-            $out,
+            $examSession,
             $eventType,
             $previousRiskState,
             $riskState,
@@ -1132,10 +1196,10 @@ class ProctoringOrchestratorService
             'action' => $action,
             'auto_submit' => $action === 'autosubmit',
             'client_message' => null,
-            'tab_switch_count' => (int) ($out->tab_switch_count ?? 0),
+            'tab_switch_count' => (int) ($examSession->tab_switch_count ?? 0),
             'proctoring_overlay' => [
-                'active' => (bool) ($out->proctoring_blur_active ?? false),
-                'reason' => $out->proctoring_blur_reason,
+                'active' => (bool) ($examSession->proctoring_blur_active ?? false),
+                'reason' => $examSession->proctoring_blur_reason,
                 'message' => null,
             ],
         ];
@@ -1186,6 +1250,14 @@ class ProctoringOrchestratorService
         ?string $autoSubmitStudentMessage = null,
         ?int $previousViolationScore = null,
     ): void {
+        // Audit Phase 9 / P1.5: when the broadcaster is the "log" driver
+        // every broadcast() call writes a JSON line to laravel.log. On a
+        // 500-student exam that is ~1,200 wasted disk writes per minute.
+        // Skip the entire dispatcher when no real broadcaster is wired.
+        if ($this->shouldSkipBroadcast()) {
+            return;
+        }
+
         if ($riskState !== $previousRiskState) {
             broadcast(new ProctoringRiskUpdateEvent(
                 sessionId: $examSession->session_id,
@@ -1339,36 +1411,74 @@ class ProctoringOrchestratorService
         };
     }
 
-    private function isInCooldown(array $events, string $eventType, Carbon $now, int $cooldownSeconds): bool
+    /**
+     * Audit Phase 9: returns true when broadcasts would be no-ops anyway,
+     * so we skip the whole dispatcher (event creation, observers,
+     * connection serializing, log line writes).
+     */
+    private function shouldSkipBroadcast(): bool
     {
-        $lastSame = collect($events)->reverse()->first(fn ($event) => ($event['event_type'] ?? '') === $eventType);
-        if (! is_array($lastSame) || empty($lastSame['timestamp'])) {
+        $driver = (string) (config('broadcasting.default') ?? 'null');
+        if ($driver === 'null' || $driver === 'log') {
+            return true;
+        }
+
+        $name = config('broadcasting.connections.'.$driver.'.driver');
+        if ($name === 'null' || $name === 'log') {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Architecture Review Phase 3: cooldown is served by an indexed
+     * MAX(created_at) on proctoring_events for (user_id, quiz_id,
+     * event_type) — single key seek using the
+     * proctoring_events_user_quiz_type_created_idx composite.
+     */
+    private function isInCooldown(ExamSession $session, string $eventType, Carbon $now, int $cooldownSeconds): bool
+    {
+        $lastAt = ProctoringEvent::query()
+            ->where('user_id', (int) $session->student_id)
+            ->where('quiz_id', (int) $session->exam_id)
+            ->where('event_type', $eventType)
+            ->orderByDesc('id')
+            ->value('created_at');
+
+        if ($lastAt === null) {
             return false;
         }
 
-        $ts = $lastSame['timestamp'];
-        $lastAt = $ts instanceof Carbon ? $ts : Carbon::parse((string) $ts);
+        $lastCarbon = $lastAt instanceof Carbon ? $lastAt : Carbon::parse((string) $lastAt);
 
-        // Carbon 3 returns signed diffs by default, so use abs() to mean
+        // Carbon 3 returns signed diffs by default, so abs() means
         // "elapsed time" regardless of direction.
-        return abs($now->diffInSeconds($lastAt)) < $cooldownSeconds;
+        return abs($now->diffInSeconds($lastCarbon)) < $cooldownSeconds;
     }
 
     /**
      * @param  list<string>  $eventTypes
      */
-    private function isInCooldownAny(array $events, array $eventTypes, Carbon $now, int $cooldownSeconds): bool
+    private function isInCooldownAny(ExamSession $session, array $eventTypes, Carbon $now, int $cooldownSeconds): bool
     {
-        $last = collect($events)
-            ->reverse()
-            ->first(fn ($event) => in_array((string) ($event['event_type'] ?? ''), $eventTypes, true));
-        if (! is_array($last) || empty($last['timestamp'])) {
+        if ($eventTypes === []) {
             return false;
         }
 
-        $ts = $last['timestamp'];
-        $lastAt = $ts instanceof Carbon ? $ts : Carbon::parse((string) $ts);
+        $lastAt = ProctoringEvent::query()
+            ->where('user_id', (int) $session->student_id)
+            ->where('quiz_id', (int) $session->exam_id)
+            ->whereIn('event_type', $eventTypes)
+            ->orderByDesc('id')
+            ->value('created_at');
 
-        return abs($now->diffInSeconds($lastAt)) < $cooldownSeconds;
+        if ($lastAt === null) {
+            return false;
+        }
+
+        $lastCarbon = $lastAt instanceof Carbon ? $lastAt : Carbon::parse((string) $lastAt);
+
+        return abs($now->diffInSeconds($lastCarbon)) < $cooldownSeconds;
     }
 }

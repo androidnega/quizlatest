@@ -37,6 +37,7 @@ class Quiz extends Model
         'assignment_allows_files',
         'assignment_attachment_required',
         'assignment_disable_paste',
+        'assignment_allow_code',
         'assignment_allowed_extensions',
         'assignment_max_file_kb',
     ];
@@ -55,6 +56,7 @@ class Quiz extends Model
         'assignment_allows_files' => 'boolean',
         'assignment_attachment_required' => 'boolean',
         'assignment_disable_paste' => 'boolean',
+        'assignment_allow_code' => 'boolean',
         'assignment_allowed_extensions' => 'array',
         'assignment_max_file_kb' => 'integer',
     ];
@@ -70,15 +72,14 @@ class Quiz extends Model
 
     public function getRouteKeyName(): string
     {
-        return 'share_token';
+        // Use the numeric primary key in URLs. UUID share-tokens are still
+        // accepted by resolveRouteBinding() below so legacy bookmarks /
+        // emailed links keep resolving.
+        return 'id';
     }
 
     public function getRouteKey(): string
     {
-        if (filled($this->share_token)) {
-            return (string) $this->share_token;
-        }
-
         return (string) $this->getAttribute($this->getKeyName());
     }
 

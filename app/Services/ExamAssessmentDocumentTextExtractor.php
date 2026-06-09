@@ -8,7 +8,7 @@ use Smalot\PdfParser\Parser;
 use ZipArchive;
 
 /**
- * Pulls plain text from lecturer-uploaded outlines (PDF, TXT, DOCX) for AI question prompts.
+ * Pulls plain text from lecturer-uploaded outlines (PDF, TXT, DOCX, CSV) for AI question prompts.
  */
 final class ExamAssessmentDocumentTextExtractor
 {
@@ -22,8 +22,9 @@ final class ExamAssessmentDocumentTextExtractor
             'txt' => $this->fromTxt($file),
             'pdf' => $this->fromPdf($file),
             'docx' => $this->fromDocx($file),
+            'csv' => $this->fromCsv($file),
             default => throw ValidationException::withMessages([
-                'ai_outline_file' => [__('Unsupported file type. Use PDF, TXT, or DOCX.')],
+                'ai_outline_file' => [__('Unsupported file type. Use PDF, TXT, DOCX, or CSV.')],
             ]),
         };
 
@@ -107,6 +108,41 @@ final class ExamAssessmentDocumentTextExtractor
         $text = strip_tags($xml);
 
         return $this->scrubToUtf8($text);
+    }
+
+    private function fromCsv(UploadedFile $file): string
+    {
+        $path = $file->getRealPath();
+        if ($path === false || ! is_readable($path)) {
+            throw ValidationException::withMessages([
+                'ai_outline_file' => [__('Could not read the CSV file.')],
+            ]);
+        }
+
+        $handle = @fopen($path, 'r');
+        if ($handle === false) {
+            throw ValidationException::withMessages([
+                'ai_outline_file' => [__('Could not read the CSV file.')],
+            ]);
+        }
+
+        $lines = [];
+        try {
+            while (($row = fgetcsv($handle, 0, ',', '"', '\\')) !== false) {
+                foreach ($row as $cell) {
+                    $cell = trim((string) $cell);
+                    if ($cell !== '') {
+                        // Emit each cell on its own line so the topic suggester
+                        // can treat them as discrete candidates.
+                        $lines[] = $cell;
+                    }
+                }
+            }
+        } finally {
+            fclose($handle);
+        }
+
+        return $this->scrubToUtf8(implode("\n", $lines));
     }
 
     private function scrubToUtf8(string $raw): string

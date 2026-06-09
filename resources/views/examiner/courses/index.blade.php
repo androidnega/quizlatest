@@ -3,7 +3,7 @@
     <x-slot name="subtitle">{{ __('Everything you teach in one place.') }}</x-slot>
 
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <a href="{{ route('examiner.dashboard') }}" class="text-sm font-medium text-[var(--qs-primary)] underline-offset-2 hover:underline">
+        <a href="{{ route('dashboard') }}" class="text-sm font-medium text-[var(--qs-primary)] underline-offset-2 hover:underline">
             ← {{ __('Back to overview') }}
         </a>
     </div>

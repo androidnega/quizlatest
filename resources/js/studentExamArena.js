@@ -31,6 +31,7 @@ import {
 } from './examAnswerOfflineQueue';
 import { attachEssayAntiClipboard, ESSAY_CLIPBOARD_WARNING_MESSAGE } from './essayAntiClipboard';
 import { attachExamIntegritySurface } from './examIntegritySurface';
+import { createExamPayloadHydrator } from './examRuntimePayloadHydrator';
 
 const SAVE_DEBOUNCE_MS = 700;
 const SAVE_RETRY = 3;
@@ -570,6 +571,7 @@ async function main() {
                 const cur = questionRevision.get(questionId) ?? 0;
                 if (r > cur) questionRevision.set(questionId, r);
             }
+            payloadHydrator.invalidateAnswers();
             return 'stale';
         }
         const r = Number(data?.client_revision);
@@ -577,6 +579,10 @@ async function main() {
             const cur = questionRevision.get(questionId) ?? 0;
             if (r > cur) questionRevision.set(questionId, r);
         }
+        // Architecture Review Phase 1+4: a successful save advances the
+        // /answers ETag — invalidate so the next hydrate pulls the
+        // freshest map (almost always 304).
+        payloadHydrator.invalidateAnswers();
         return 'saved';
     }
     async function flushOfflineQueue() {
@@ -1291,8 +1297,14 @@ async function main() {
     });
 
     /* ---- Fetch state ---- */
+    // Architecture Review Phase 1+4: hydrator merges /state (volatile)
+    // + /exam-structure (cached, ETag-revalidated) + /answers (cached,
+    // ETag-revalidated) into a single combined payload of the same
+    // shape as the legacy /state response.
+    const payloadHydrator = createExamPayloadHydrator(sessionId);
+
     async function fetchState() {
-        const { data } = await axios.get(`/exam-sessions/${encodeURIComponent(sessionId)}/state`);
+        const data = await payloadHydrator.hydrate();
         latestPayload = data;
         examStateEngine.syncFromBackend(data);
 

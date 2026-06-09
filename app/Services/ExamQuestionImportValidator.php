@@ -39,7 +39,17 @@ final class ExamQuestionImportValidator
      * @param  list<string>|null  $existingQuestionTextsNormalized  Lowercased trimmed texts already in the pool (non-archived), for duplicate detection.
      * @return array{ok: true, sections: list<array{title: string, questions: list<array<string, mixed>>}>}|array{ok: false, errors: list<string>}
      */
-    public function validateJsonString(?string $json, ?array $allowedTypes = null, ?array $existingQuestionTextsNormalized = null): array
+    /**
+     * Validate an import-style JSON payload.
+     *
+     * When $lenient is true (used by the AI batch endpoint), per-question
+     * problems — duplicates against the existing-texts list, missing
+     * question_text, malformed shape — silently drop just that question
+     * instead of failing the entire section/batch. Structural problems
+     * (missing "sections", malformed root) still fail loudly because they
+     * indicate the AI returned something unusable.
+     */
+    public function validateJsonString(?string $json, ?array $allowedTypes = null, ?array $existingQuestionTextsNormalized = null, bool $lenient = false): array
     {
         if ($json === null || trim($json) === '') {
             return ['ok' => false, 'errors' => ['JSON body is empty.']];
@@ -63,10 +73,10 @@ final class ExamQuestionImportValidator
                 return ['ok' => false, 'errors' => $convErrors !== [] ? $convErrors : ['Could not convert external MCQ JSON.']];
             }
 
-            return $this->validateDecoded($wrapped, $allowedTypes, $existingQuestionTextsNormalized);
+            return $this->validateDecoded($wrapped, $allowedTypes, $existingQuestionTextsNormalized, $lenient);
         }
 
-        return $this->validateDecoded($decoded, $allowedTypes, $existingQuestionTextsNormalized);
+        return $this->validateDecoded($decoded, $allowedTypes, $existingQuestionTextsNormalized, $lenient);
     }
 
     /**
@@ -198,7 +208,7 @@ final class ExamQuestionImportValidator
      * @param  list<string>|null  $existingQuestionTextsNormalized
      * @return array{ok: true, sections: list<array{title: string, questions: list<array<string, mixed>>}>}|array{ok: false, errors: list<string>}
      */
-    public function validateDecoded(array $decoded, ?array $allowedTypes = null, ?array $existingQuestionTextsNormalized = null): array
+    public function validateDecoded(array $decoded, ?array $allowedTypes = null, ?array $existingQuestionTextsNormalized = null, bool $lenient = false): array
     {
         $errors = [];
 
@@ -252,14 +262,25 @@ final class ExamQuestionImportValidator
             foreach ($questionsRaw as $qi => $q) {
                 $qp = "{$prefix}.questions[".(is_int($qi) ? $qi : 'key').']';
                 if (! is_array($q)) {
-                    $errors[] = "{$qp}: question must be an object.";
-                    $normQuestions[] = null;
+                    if (! $lenient) {
+                        $errors[] = "{$qp}: question must be an object.";
+                        $normQuestions[] = null;
+                    }
 
                     continue;
                 }
 
+                // In lenient mode we silently drop questions that fail
+                // normalization (malformed shape, bad MCQ, etc.) by rolling
+                // back any per-question errors normalizeQuestion appended.
+                $errCountBefore = count($errors);
                 $nq = $this->normalizeQuestion($q, $qp, $allowedTypes, $errors);
                 if ($nq === null) {
+                    if ($lenient) {
+                        $errors = array_slice($errors, 0, $errCountBefore);
+
+                        continue;
+                    }
                     $normQuestions[] = null;
 
                     continue;
@@ -267,15 +288,19 @@ final class ExamQuestionImportValidator
 
                 $normKey = mb_strtolower(trim((string) $nq['question_text']));
                 if ($normKey === '') {
-                    $errors[] = "{$qp}.question_text: required non-empty string.";
-                    $normQuestions[] = null;
+                    if (! $lenient) {
+                        $errors[] = "{$qp}.question_text: required non-empty string.";
+                        $normQuestions[] = null;
+                    }
 
                     continue;
                 }
 
                 if (isset($seenInBatch[$normKey])) {
-                    $errors[] = "{$qp}: duplicate question_text in this import or already present in the pool for this assessment.";
-                    $normQuestions[] = null;
+                    if (! $lenient) {
+                        $errors[] = "{$qp}: duplicate question_text in this import or already present in the pool for this assessment.";
+                        $normQuestions[] = null;
+                    }
 
                     continue;
                 }
@@ -284,7 +309,7 @@ final class ExamQuestionImportValidator
                 $normQuestions[] = $nq;
             }
 
-            if (in_array(null, $normQuestions, true)) {
+            if (! $lenient && in_array(null, $normQuestions, true)) {
                 continue;
             }
 
@@ -295,7 +320,7 @@ final class ExamQuestionImportValidator
                 continue;
             }
 
-            if (count($cleanQuestions) !== count($questionsRaw)) {
+            if (! $lenient && count($cleanQuestions) !== count($questionsRaw)) {
                 $errors[] = "{$prefix}: one or more questions failed validation.";
 
                 continue;
@@ -416,6 +441,16 @@ final class ExamQuestionImportValidator
                 return null;
             }
 
+            // Collapse duplicate option strings (kept by AI providers a bit too
+            // often). Indices are remapped so the resolved correct answer
+            // still points at the right surviving option.
+            [$options, $indices] = $this->collapseDuplicateOptions($options, $indices);
+            if (count($options) < 2) {
+                $errors[] = "{$qp}.options: MCQ questions require at least two distinct options.";
+
+                return null;
+            }
+
             $row['options'] = $options;
             $row['correct_answer'] = array_values(array_unique($indices));
             sort($row['correct_answer']);
@@ -512,6 +547,48 @@ final class ExamQuestionImportValidator
     }
 
     /**
+     * Collapse identical MCQ option strings (case-insensitive, trimmed),
+     * preserving original order of first occurrence, and remap any correct
+     * indices to the surviving options. Models occasionally emit duplicates
+     * like ["Yes","Yes","No","Maybe"]; keeping them around would confuse
+     * students later and trip the "ambiguous correct_answer" check.
+     *
+     * @param  list<string>  $options
+     * @param  list<int>     $correctIndices
+     * @return array{0: list<string>, 1: list<int>}
+     */
+    private function collapseDuplicateOptions(array $options, array $correctIndices): array
+    {
+        $seen = [];
+        $newOptions = [];
+        $oldToNew = [];
+
+        foreach ($options as $i => $opt) {
+            $key = mb_strtolower(trim($opt));
+            if (array_key_exists($key, $seen)) {
+                $oldToNew[$i] = $seen[$key];
+
+                continue;
+            }
+            $newIdx = count($newOptions);
+            $seen[$key] = $newIdx;
+            $newOptions[] = $opt;
+            $oldToNew[$i] = $newIdx;
+        }
+
+        $newIndices = [];
+        foreach ($correctIndices as $idx) {
+            $mapped = $oldToNew[$idx] ?? $idx;
+            if (! in_array($mapped, $newIndices, true)) {
+                $newIndices[] = $mapped;
+            }
+        }
+        sort($newIndices);
+
+        return [array_values($newOptions), $newIndices];
+    }
+
+    /**
      * @param  list<string>  $options
      * @return list<int>|null
      */
@@ -539,15 +616,15 @@ final class ExamQuestionImportValidator
                     $matches[] = $i;
                 }
             }
-            if (count($matches) === 1) {
+            if ($matches !== []) {
+                // If several options share the exact same text (e.g. a model
+                // accidentally produced ["A","A","B","C"]) all matches refer
+                // to the same answer, so pick the first occurrence rather
+                // than failing the whole batch. We also dedupe identical
+                // option strings later so the saved question stays clean.
                 return [$matches[0]];
             }
-            if (count($matches) === 0) {
-                $errors[] = "{$path}: must match one of the option values exactly (or use a zero-based index).";
-
-                return null;
-            }
-            $errors[] = "{$path}: matches more than one option; disambiguate or use indices.";
+            $errors[] = "{$path}: must match one of the option values exactly (or use a zero-based index).";
 
             return null;
         }

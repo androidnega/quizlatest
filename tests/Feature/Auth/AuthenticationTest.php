@@ -370,17 +370,18 @@ class AuthenticationTest extends TestCase
             ->assertSee(__('Overview'), false);
     }
 
-    public function test_dashboard_redirects_examiner_to_examiner_dashboard_route(): void
+    public function test_legacy_examiner_workspace_url_redirects_to_dashboard(): void
     {
         $user = User::factory()->create([
             'role' => 'examiner',
             'email' => 'exam-dash@example.com',
             'is_active' => true,
+            'email_verified_at' => now(),
         ]);
 
         $this->actingAs($user)
-            ->get(route('dashboard'))
-            ->assertRedirect(route('examiner.dashboard', absolute: false));
+            ->get(route('examiner.dashboard'))
+            ->assertRedirect(route('dashboard', absolute: false));
     }
 
     public function test_legacy_admin_path_redirects_to_dashboard_admin(): void

@@ -14,11 +14,14 @@ return [
     | persist session data. Database storage is a great default choice.
     |
     | Supported: "file", "cookie", "database", "memcached",
-    |            "redis", "dynamodb", "array"
+    |            "dynamodb", "array"
     |
     */
 
-    'driver' => env('SESSION_DRIVER', 'database'),
+    // Audit P1.2: file driver is the recommended default for shared
+    // cPanel hosting; the database driver creates row-lock contention
+    // under concurrent exam load.
+    'driver' => env('SESSION_DRIVER', 'file'),
 
     /*
     |--------------------------------------------------------------------------
@@ -32,7 +35,8 @@ return [
     |
     */
 
-    'lifetime' => (int) env('SESSION_LIFETIME', 120),
+    // Audit P1.2 / Section 4.6: 240 minutes covers a 3-hour final exam.
+    'lifetime' => (int) env('SESSION_LIFETIME', 240),
 
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
 
@@ -47,7 +51,9 @@ return [
     |
     */
 
-    'encrypt' => env('SESSION_ENCRYPT', false),
+    // Audit Section 4.7: encryption is required when using the file driver
+    // because session payloads are written to disk in storage/framework/sessions.
+    'encrypt' => (bool) env('SESSION_ENCRYPT', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -67,9 +73,9 @@ return [
     | Session Database Connection
     |--------------------------------------------------------------------------
     |
-    | When using the "database" or "redis" session drivers, you may specify a
-    | connection that should be used to manage these sessions. This should
-    | correspond to a connection in your database configuration options.
+    | When using the "database" session driver, you may specify a connection
+    | that should be used to manage these sessions. This should correspond
+    | to a connection in your database configuration options.
     |
     */
 
@@ -97,7 +103,7 @@ return [
     | define the cache store which should be used to store the session data
     | between requests. This must match one of your defined cache stores.
     |
-    | Affects: "dynamodb", "memcached", "redis"
+    | Affects: "dynamodb", "memcached"
     |
     */
 

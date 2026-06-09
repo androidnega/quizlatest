@@ -218,7 +218,7 @@ class ExaminerQuizIsolationTest extends TestCase
         $ctx = $this->seedTwoExaminerContext();
 
         $this->actingAs($ctx['examinerA'])
-            ->get(route('examiner.dashboard'))
+            ->get(route('dashboard'))
             ->assertOk()
             ->assertDontSee('Exam B Ownership', false)
             ->assertSee(__('All assessments'), false)
@@ -280,7 +280,10 @@ class ExaminerQuizIsolationTest extends TestCase
             ->assertForbidden();
 
         $this->actingAs($ctx['examinerA'])
-            ->get(route('examiner.exam-sessions.show', $ctx['sessionB']))
+            ->get(route('examiner.exam-sessions.show', [
+                'exam' => $ctx['sessionB']->exam,
+                'examSession' => $ctx['sessionB'],
+            ]))
             ->assertForbidden();
 
         $this->actingAs($ctx['examinerA'])
@@ -293,10 +296,9 @@ class ExaminerQuizIsolationTest extends TestCase
         $ctx = $this->seedTwoExaminerContext();
 
         $this->actingAs($ctx['examinerA'])
-            ->get(route('examiner.dashboard'))
+            ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('Held results', false)
-            ->assertSee('Pending manual grading', false)
+            ->assertSee(__('Needs grading'), false)
             ->assertDontSee('Exam B Ownership', false);
     }
 

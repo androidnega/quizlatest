@@ -1,3 +1,6 @@
+import './preventViewportZoom';
+import './studentDashboardCountdown';
+import './studentShellFab';
 import './bootstrap';
 
 import Alpine from 'alpinejs';

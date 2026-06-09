@@ -16,7 +16,7 @@ use Illuminate\Validation\ValidationException;
 final class ExamLifecycleService
 {
     public function __construct(
-        private readonly ExamRedisService $examRedis,
+        private readonly ExamRuntimeService $examRuntime,
     ) {}
 
     /**
@@ -137,7 +137,7 @@ final class ExamLifecycleService
             'published_at' => now(),
         ]);
 
-        $this->examRedis->forgetExamConfig((int) $exam->id);
+        $this->examRuntime->forgetExamConfig((int) $exam->id);
     }
 
     public function unpublish(Quiz $exam): void
@@ -153,7 +153,7 @@ final class ExamLifecycleService
             'published_at' => null,
         ]);
 
-        $this->examRedis->forgetExamConfig((int) $exam->id);
+        $this->examRuntime->forgetExamConfig((int) $exam->id);
     }
 
     public function archive(Quiz $exam): void
@@ -174,7 +174,7 @@ final class ExamLifecycleService
             'status' => 'archived',
         ]);
 
-        $this->examRedis->forgetExamConfig((int) $exam->id);
+        $this->examRuntime->forgetExamConfig((int) $exam->id);
     }
 
     /**

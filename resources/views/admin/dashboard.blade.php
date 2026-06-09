@@ -245,8 +245,8 @@
                                 $sessionsTone = $activeSessions['value'] === null ? 'danger' : 'info';
                                 $sessionsPill = $activeSessions['value'] !== null ? number_format($activeSessions['value']) : __('N/A');
                                 $sessionsDetail = $activeSessions['value'] !== null
-                                    ? ($activeSessions['source'] === 'redis' ? __('Counter source: Redis.') : ($activeSessions['source'] === 'database_estimate' ? __('Counter source: database estimate.') : __('Counter source: unavailable.')))
-                                    : __('Live session counter could not be read from Redis or the database.');
+                                    ? __('Counter source: database.')
+                                    : __('Live session counter could not be read from the database.');
                             @endphp
                             <div class="qs-health-row qs-health-row--{{ $sessionsTone }} qs-health-row--live" data-health-key="active_sessions">
                                 <span class="qs-health-row__dot" aria-hidden="true"></span>
@@ -255,14 +255,6 @@
                                     <p class="qs-health-row__detail" data-health-detail>{{ $sessionsDetail }}</p>
                                 </div>
                                 <span class="qs-health-row__pill" data-health-pill>{{ $sessionsPill }}</span>
-                            </div>
-                            <div class="qs-health-row qs-health-row--{{ $redisUi['tone'] }} qs-health-row--live" data-health-key="redis">
-                                <span class="qs-health-row__dot" aria-hidden="true"></span>
-                                <div class="qs-health-row__main">
-                                    <p class="qs-health-row__label">{{ __('Redis') }}</p>
-                                    <p class="qs-health-row__detail" data-health-detail>{{ $redisUi['detail'] }}</p>
-                                </div>
-                                <span class="qs-health-row__pill" data-health-pill>{{ $redisUi['label'] }}</span>
                             </div>
                             <div class="qs-health-row qs-health-row--{{ $liveSocketUi['tone'] }} qs-health-row--live" data-health-key="live_updates">
                                 <span class="qs-health-row__dot" aria-hidden="true"></span>

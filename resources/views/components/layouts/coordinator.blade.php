@@ -2,7 +2,7 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full overflow-hidden">
     <head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        @include('layouts.partials.viewport')
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
         <title>{{ config('app.name', 'QuizSnap') }} — {{ __('Coordinator') }}</title>
@@ -19,6 +19,7 @@
             $coursesOnlyActive = request()->routeIs('coordinator.courses.*') && ! request()->routeIs('coordinator.courses.assign.*');
             $navItems = [
                 ['label' => __('Dashboard'), 'href' => route('dashboard'), 'active' => request()->routeIs('dashboard'), 'icon' => 'house'],
+                ['label' => __('Command Center'), 'href' => route('coordinator.command-center.index'), 'active' => request()->routeIs('coordinator.command-center.*'), 'icon' => 'gauge-high'],
                 ['label' => __('Reporting'), 'href' => route('coordinator.reporting.index'), 'active' => request()->routeIs('coordinator.reporting.*'), 'icon' => 'chart-line'],
                 ['label' => __('Students'), 'href' => route('coordinator.students.index'), 'active' => request()->routeIs('coordinator.students.*'), 'icon' => 'users'],
                 ['label' => __('Programs'), 'href' => route('coordinator.programs.index'), 'active' => request()->routeIs('coordinator.programs.*'), 'icon' => 'diagram-project'],

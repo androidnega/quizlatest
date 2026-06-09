@@ -9,6 +9,7 @@ class PracticeModuleSettings
 {
     public function __construct(
         private readonly SystemSettingsService $system,
+        private readonly AiIntegrationSettings $aiSettings,
     ) {}
 
     public function studentPracticeEnabled(): bool
@@ -59,12 +60,15 @@ class PracticeModuleSettings
 
     public function practiceAiProvider(): string
     {
-        return strtolower(trim($this->system->get('practice_ai_provider') ?? 'deepseek')) ?: 'deepseek';
+        // Delegates to the single AI integration so the provider is the
+        // same one the lecturer-grading + question-generation features use.
+        return $this->aiSettings->provider();
     }
 
     public function deepseekModel(): string
     {
-        return trim($this->system->get('deepseek_model') ?? 'deepseek-chat') ?: 'deepseek-chat';
+        // Same source of truth as the rest of the system.
+        return $this->aiSettings->modelName();
     }
 
     public function assertStudentPracticeOrAbort(): void
@@ -107,8 +111,7 @@ class PracticeModuleSettings
 
     public function deepseekConfigured(): bool
     {
-        $key = $this->system->get('deepseek_api_key');
-
-        return $key !== null && $key !== '';
+        // Same single integration that grading + question generation consume.
+        return $this->aiSettings->isConfigured();
     }
 }

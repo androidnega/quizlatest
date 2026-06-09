@@ -96,7 +96,8 @@ class ResultFinalizationService
      * Strict precedence:
      * 1. Any answer pending_manual → pending_manual
      * 2. Session exam_status held-like → held
-     * 3. graded
+     * 3. Violation score ≥ HOLD_VIOLATION_THRESHOLD (60) → held (policy rule)
+     * 4. graded
      */
     public function resolveStatus(ExamSession $examSession): string
     {
@@ -117,8 +118,17 @@ class ResultFinalizationService
             return 'held';
         }
 
+        // Policy: when proctoring violation score crosses the hold threshold (60),
+        // the result is held for review even if the student wasn't auto-submitted.
+        if ((int) $examSession->violation_score >= self::HOLD_VIOLATION_THRESHOLD) {
+            return 'held';
+        }
+
         return 'graded';
     }
+
+    /** Violation score at or above which results are automatically held. */
+    public const HOLD_VIOLATION_THRESHOLD = 60;
 
     private function sumAnswerPoints(ExamSession $examSession): float
     {

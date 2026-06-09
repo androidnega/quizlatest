@@ -45,7 +45,14 @@ class StudentExamController extends Controller
         $examScreenshotMitigation = ! $isAssignmentMode && $examPolicy->isExamScreenshotMitigationEnabled();
         $examScreenRecordMitigation = ! $isAssignmentMode && $examPolicy->isExamScreenRecordMitigationEnabled();
 
-        return view('student.exam.take', [
+        $assignmentAllowCode = $isAssignmentMode && (bool) ($exam?->assignment_allow_code ?? false);
+        $examPlayMode = $examPolicy->getStudentExamPlayModeForQuiz($exam);
+
+        $viewName = $examPlayMode === 'arena'
+            ? 'student.exam.arena-take'
+            : 'student.exam.take';
+
+        return view($viewName, [
             'examSession' => $examSession,
             'enableLiveSockets' => $gate->enableLiveSockets(),
             'allowPollingFallback' => $gate->allowPollingFallback(),
@@ -54,10 +61,33 @@ class StudentExamController extends Controller
             'assignmentClipboardBlock' => $assignmentClipboardBlock,
             'assignmentAllowsFiles' => $isAssignmentMode && (bool) ($exam?->assignment_allows_files ?? false),
             'assignmentAttachmentRequired' => $isAssignmentMode && (bool) ($exam?->assignment_attachment_required ?? false),
+            'assignmentAllowsText' => $isAssignmentMode && (bool) ($exam?->assignment_allows_text ?? true),
+            'assignmentAllowCode' => $assignmentAllowCode,
             'examClipboardLock' => $examClipboardLock,
             'examScreenshotMitigation' => $examScreenshotMitigation,
             'examScreenRecordMitigation' => $examScreenRecordMitigation,
+            'examPlayMode' => $examPlayMode,
             'documentTitle' => $isAssignmentMode ? __('Assignment') : __('Exam'),
+        ]);
+    }
+
+    public function submitted(Request $request, ExamSession $examSession): View|RedirectResponse
+    {
+        abort_unless($request->user()?->role === 'student', 403);
+        abort_unless((int) $examSession->student_id === (int) $request->user()->id, 403);
+
+        if ($examSession->status !== 'submitted') {
+            return redirect()->route('student.exam.take', $examSession);
+        }
+
+        $examSession->loadMissing(['exam.course']);
+        $exam = $examSession->exam;
+        $isAssignment = $exam?->isAssignment() ?? false;
+
+        return view('student.exam.submitted', [
+            'examSession' => $examSession,
+            'quiz' => $exam,
+            'isAssignment' => $isAssignment,
         ]);
     }
 }

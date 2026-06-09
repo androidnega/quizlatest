@@ -23,3 +23,72 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
+
+# ----------------------------------------------------------------------
+# Architecture Review Phase 2: browser caching + on-the-wire compression.
+# Vite outputs content-hashed filenames into public/build/assets, so the
+# bundled JS/CSS/fonts are content-addressable and SAFE to cache for one
+# year. The hash changes on every rebuild, which is the cache-buster.
+# ----------------------------------------------------------------------
+
+<IfModule mod_expires.c>
+    ExpiresActive On
+
+    # Hashed Vite build assets are immutable for their lifetime.
+    <FilesMatch "^.+\.(?:js|mjs|css|woff2?|ttf|otf|eot|svg|jpg|jpeg|png|webp|avif|gif|ico)$">
+        ExpiresDefault "access plus 1 year"
+    </FilesMatch>
+
+    # Plain HTML responses must always revalidate (Laravel renders them).
+    <FilesMatch "\.(?:html|htm)$">
+        ExpiresDefault "access plus 0 seconds"
+    </FilesMatch>
+</IfModule>
+
+<IfModule mod_headers.c>
+    # Static, hashed assets — immutable means browsers never even send a
+    # conditional request for them after the first download.
+    <FilesMatch "^.+\.(?:js|mjs|css|woff2?|ttf|otf|eot)$">
+        Header set Cache-Control "public, immutable, max-age=31536000"
+        Header unset Pragma
+    </FilesMatch>
+
+    # Images are hashed too but we leave a soft "max-age" so that any
+    # /images/* asset NOT under /build/assets still gets a long cache.
+    <FilesMatch "^.+\.(?:svg|jpg|jpeg|png|webp|avif|gif|ico)$">
+        Header set Cache-Control "public, max-age=31536000"
+    </FilesMatch>
+
+    # Fingerprinted favicon (root) is rare and inexpensive to refetch.
+    <FilesMatch "^favicon\.ico$">
+        Header set Cache-Control "public, max-age=86400"
+    </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+    # Compress text-like responses so /state, /answers, /exam-structure,
+    # rendered HTML, JS, and CSS all ship gzipped to the browser. Apache
+    # negotiates content-encoding automatically based on the client's
+    # Accept-Encoding header.
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml
+    AddOutputFilterByType DEFLATE text/css text/javascript
+    AddOutputFilterByType DEFLATE application/json application/ld+json
+    AddOutputFilterByType DEFLATE application/javascript application/x-javascript
+    AddOutputFilterByType DEFLATE application/xml application/xml+rss
+    AddOutputFilterByType DEFLATE application/wasm
+    AddOutputFilterByType DEFLATE image/svg+xml image/x-icon
+    AddOutputFilterByType DEFLATE font/ttf font/otf application/font-woff application/x-font-ttf
+
+    # Already-compressed formats — skip to save CPU.
+    SetEnvIfNoCase Request_URI \.(?:gif|jpe?g|png|webp|avif|woff2|zip|gz|br)$ no-gzip dont-vary
+</IfModule>
+
+# Static assets (everything in /build/assets) never set cookies — the
+# browser does not need to send the session cookie back when fetching
+# them. mod_headers can strip the Set-Cookie response header on those
+# paths, which sometimes dramatically improves CDN cacheability.
+<IfModule mod_headers.c>
+    <FilesMatch "^.+\.(?:js|mjs|css|woff2?|ttf|otf|eot|svg|jpg|jpeg|png|webp|avif|gif|ico)$">
+        Header unset Set-Cookie
+    </FilesMatch>
+</IfModule>

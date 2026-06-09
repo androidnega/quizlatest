@@ -2,7 +2,7 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full overflow-hidden">
     <head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        @include('layouts.partials.viewport')
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
         <title>{{ config('app.name', 'QuizSnap') }} — {{ __('Examiner') }}</title>
@@ -17,7 +17,7 @@
             $coursesActive = request()->routeIs('examiner.courses.*');
             $gradingActive = request()->routeIs('examiner.grading.*');
             $navItems = [
-                ['label' => __('Dashboard'), 'href' => route('examiner.dashboard'), 'active' => request()->routeIs('examiner.dashboard'), 'icon' => 'house'],
+                ['label' => __('Dashboard'), 'href' => route('dashboard'), 'active' => request()->routeIs('dashboard'), 'icon' => 'house'],
                 ['label' => __('Courses'), 'href' => route('examiner.courses.index'), 'active' => $coursesActive, 'icon' => 'book'],
                 ['label' => __('Classes'), 'href' => route('examiner.teaching-classes.index'), 'active' => request()->routeIs('examiner.teaching-classes.*'), 'icon' => 'user-group'],
                 ['label' => __('Exams'), 'href' => route('examiner.exams.index'), 'active' => $examsActive, 'icon' => 'file-lines'],

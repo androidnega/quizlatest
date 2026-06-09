@@ -3,11 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Models\User;
+use App\Services\OptimizedImageService;
+use App\Services\SensitiveStorageService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use RuntimeException;
 
 class ProfileController extends Controller
 {
@@ -40,6 +46,12 @@ class ProfileController extends Controller
 
         if ($user->role === 'student') {
             $user->fill($request->only(['phone']));
+            $this->syncStudentProfilePhoto(
+                $request,
+                $user,
+                app(SensitiveStorageService::class),
+                app(OptimizedImageService::class),
+            );
         } else {
             $user->fill($request->validated());
         }
@@ -72,5 +84,45 @@ class ProfileController extends Controller
         $request->session()->regenerateToken();
 
         return Redirect::to('/');
+    }
+
+    private function syncStudentProfilePhoto(
+        Request $request,
+        User $user,
+        SensitiveStorageService $storage,
+        OptimizedImageService $images,
+    ): void {
+        if ($request->boolean('remove_profile_photo') && filled($user->face_image_path)) {
+            $storage->deleteFromAnywhere((string) $user->face_image_path);
+            $user->face_image_path = null;
+
+            return;
+        }
+
+        if (! $request->hasFile('profile_photo')) {
+            return;
+        }
+
+        $file = $request->file('profile_photo');
+        if ($file === null) {
+            return;
+        }
+
+        $relativePath = 'proctoring/face-templates/'.$user->id.'/profile.jpg';
+
+        if (filled($user->face_image_path) && $user->face_image_path !== $relativePath) {
+            $storage->deleteFromAnywhere((string) $user->face_image_path);
+        }
+
+        try {
+            $binary = $images->encodeSquarePortraitJpeg($file, 512, 250 * 1024);
+        } catch (RuntimeException $exception) {
+            throw ValidationException::withMessages([
+                'profile_photo' => $exception->getMessage(),
+            ]);
+        }
+
+        Storage::disk('local')->put($relativePath, $binary);
+        $user->face_image_path = $relativePath;
     }
 }

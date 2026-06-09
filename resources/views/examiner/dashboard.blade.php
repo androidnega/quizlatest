@@ -16,7 +16,7 @@
         // -100 hairline border, darker matching text) from the previous
         // style, hover lifts and slightly saturates the surface, and the
         // ring colour matches each card's tone.
-        $cardBase = 'group relative isolate flex h-full flex-col overflow-hidden rounded-2xl border p-3 shadow-sm transition-[transform,box-shadow,background-color] duration-300 ease-out will-change-transform hover:-translate-y-1 hover:shadow-md sm:p-3.5';
+        $cardBase = 'group relative isolate flex h-full flex-col overflow-hidden rounded-2xl border p-3 shadow-sm transition-[transform,box-shadow,background-color,border-color] duration-300 ease-out will-change-transform hover:-translate-y-1 hover:shadow-lg sm:p-3.5';
         $cardFootLink = 'inline-flex items-center gap-1.5 text-[11px] font-semibold underline-offset-2 transition hover:underline';
 
         // Hero math: percent breakdown for the donut (published share of
@@ -58,7 +58,7 @@
                      watermark numeral — one flat color so the card reads
                      as a single tone with maximum calm. Internal density
                      trimmed so the card sits short. --}}
-                <article class="{{ $cardBase }} bg-cyan-50 border-cyan-100 hover:bg-cyan-100/70 hover:shadow-cyan-200/40 md:col-span-2 xl:col-span-2">
+                <article class="{{ $cardBase }} bg-cyan-50 border-cyan-100 hover:bg-cyan-200 hover:border-cyan-300 hover:shadow-cyan-300/60 md:col-span-2 xl:col-span-2">
                     <div class="flex items-start gap-3 sm:gap-4">
                         {{-- DONUT — published share of the total library; ring %
                              reads in the center. --}}
@@ -131,7 +131,7 @@
                      DOM; icon badge floats top-right so accessibility
                      readers (and the inflated-grading regression tests) see
                      the label paired directly with its number. --}}
-                <article class="{{ $cardBase }} bg-emerald-50 border-emerald-100 hover:bg-emerald-100/70 hover:shadow-emerald-200/40">
+                <article class="{{ $cardBase }} bg-emerald-50 border-emerald-100 hover:bg-emerald-200 hover:border-emerald-300 hover:shadow-emerald-300/60">
                     <div class="flex items-start gap-3">
                         {{-- DONUT — active fraction of the published library. --}}
                         <div class="relative shrink-0">
@@ -170,7 +170,7 @@
                 </article>
 
                 {{-- SATELLITE 2 — Submissions. Solid deep-indigo tone. --}}
-                <article class="{{ $cardBase }} bg-indigo-50 border-indigo-100 hover:bg-indigo-100/70 hover:shadow-indigo-200/40">
+                <article class="{{ $cardBase }} bg-indigo-50 border-indigo-100 hover:bg-indigo-200 hover:border-indigo-300 hover:shadow-indigo-300/60">
                     <div class="flex items-start gap-3">
                         {{-- DONUT — full ring once any submission lands. Center
                              shows a checkmark when there is activity. --}}
@@ -202,7 +202,7 @@
                 {{-- SATELLITE 3 — Needs grading. Solid deep-amber tone, with
                      a held-for-review chip on the front. Spans the full row
                      on xl now that the hero only takes a single row. --}}
-                <article class="{{ $cardBase }} bg-amber-50 border-amber-100 hover:bg-amber-100/70 hover:shadow-amber-200/40 md:col-span-2 xl:col-span-4">
+                <article class="{{ $cardBase }} bg-amber-50 border-amber-100 hover:bg-amber-200 hover:border-amber-300 hover:shadow-amber-300/60 md:col-span-2 xl:col-span-4">
                     <div class="flex items-start gap-3 sm:gap-4">
                         {{-- DONUT — share of submissions still awaiting grading. --}}
                         <div class="relative shrink-0">
@@ -261,9 +261,8 @@
                         $integrityCardBase = 'group relative flex flex-col overflow-hidden rounded-2xl border border-slate-800/70 bg-slate-950 p-4 text-slate-100 shadow-lg shadow-slate-900/10 transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-xl';
                     @endphp
                     @if ($proctoringFlaggedSessionsCount > 0)
-                        <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['proctoring_focus' => 'flagged'])) }}" class="{{ $integrityCardBase }}">
-                            <span aria-hidden="true" class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-rose-400 via-rose-500 to-pink-500"></span>
-                            <span aria-hidden="true" class="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-rose-500/20 blur-3xl"></span>
+                        <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['proctoring_focus' => 'flagged'])) }}" class="{{ $integrityCardBase }} hover:border-rose-500/60">
+                            <span aria-hidden="true" class="absolute inset-x-0 top-0 h-0.5 bg-rose-500"></span>
                             <div class="relative flex items-start justify-between gap-3">
                                 <span aria-hidden="true" class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-rose-300 ring-1 ring-inset ring-white/10">
                                     <i class="fa-solid fa-flag"></i>
@@ -279,9 +278,8 @@
                         </a>
                     @endif
                     @if ($autoSubmittedSessionsCount > 0)
-                        <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['proctoring_focus' => 'auto_submitted'])) }}" class="{{ $integrityCardBase }}">
-                            <span aria-hidden="true" class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-400"></span>
-                            <span aria-hidden="true" class="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-amber-500/20 blur-3xl"></span>
+                        <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['proctoring_focus' => 'auto_submitted'])) }}" class="{{ $integrityCardBase }} hover:border-amber-500/60">
+                            <span aria-hidden="true" class="absolute inset-x-0 top-0 h-0.5 bg-amber-500"></span>
                             <div class="relative flex items-start justify-between gap-3">
                                 <span aria-hidden="true" class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-amber-300 ring-1 ring-inset ring-white/10">
                                     <i class="fa-solid fa-robot"></i>
@@ -297,9 +295,8 @@
                         </a>
                     @endif
                     @if ($heldResultsCount > 0)
-                        <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['proctoring_focus' => 'held_results'])) }}" class="{{ $integrityCardBase }}">
-                            <span aria-hidden="true" class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-violet-400 via-fuchsia-400 to-purple-500"></span>
-                            <span aria-hidden="true" class="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-violet-500/20 blur-3xl"></span>
+                        <a href="{{ route('examiner.exams.index', array_merge($dashboardProctoringQueryBase, ['proctoring_focus' => 'held_results'])) }}" class="{{ $integrityCardBase }} hover:border-violet-500/60">
+                            <span aria-hidden="true" class="absolute inset-x-0 top-0 h-0.5 bg-violet-500"></span>
                             <div class="relative flex items-start justify-between gap-3">
                                 <span aria-hidden="true" class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-violet-300 ring-1 ring-inset ring-white/10">
                                     <i class="fa-solid fa-pause-circle"></i>
@@ -318,12 +315,11 @@
             </section>
         @endif
 
-        {{-- Quick actions — modern row with a gradient primary CTA (animated
-             sparkle hint) and tinted secondary chips. Each chip uses the
-             same accent palette as its matching satellite card above and
-             separates label from count with a thin divider for a refined,
-             Linear-style feel. --}}
-        <section class="rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-white to-slate-50/70 p-4 shadow-sm sm:p-5" aria-labelledby="examiner-quick-actions-heading">
+        {{-- Quick actions — solid primary CTA + tinted secondary chips.
+             Each chip uses the same accent palette as its matching satellite
+             card above and separates label from count with a thin divider
+             for a refined, Linear-style feel. --}}
+        <section class="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm sm:p-5" aria-labelledby="examiner-quick-actions-heading">
             <div class="mb-3 flex items-center justify-between gap-3">
                 <h2 id="examiner-quick-actions-heading" class="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">{{ __('Quick actions') }}</h2>
                 <span class="hidden text-[11px] text-slate-500 sm:inline">{{ __('Jump straight to the most-used surfaces.') }}</span>
@@ -333,10 +329,10 @@
                 // markup stays compact and palettes never drift between the
                 // satellite cards above and the quick action chips below.
                 $chipPalettes = [
-                    'cyan'    => 'group relative inline-flex min-h-[44px] max-w-full min-w-0 items-center gap-2.5 rounded-full border border-cyan-200/70 bg-gradient-to-br from-cyan-50/80 via-white to-white px-4 text-sm font-semibold text-cyan-900 shadow-[0_1px_0_rgba(255,255,255,0.6)_inset] transition duration-200 ease-out hover:-translate-y-0.5 hover:border-cyan-300 hover:shadow-md hover:shadow-cyan-200/30 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 focus:ring-offset-2',
-                    'emerald' => 'group relative inline-flex min-h-[44px] max-w-full min-w-0 items-center gap-2.5 rounded-full border border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 via-white to-white px-4 text-sm font-semibold text-emerald-900 shadow-[0_1px_0_rgba(255,255,255,0.6)_inset] transition duration-200 ease-out hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md hover:shadow-emerald-200/30 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 focus:ring-offset-2',
-                    'violet'  => 'group relative inline-flex min-h-[44px] max-w-full min-w-0 items-center gap-2.5 rounded-full border border-violet-200/70 bg-gradient-to-br from-violet-50/80 via-white to-white px-4 text-sm font-semibold text-violet-900 shadow-[0_1px_0_rgba(255,255,255,0.6)_inset] transition duration-200 ease-out hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-md hover:shadow-violet-200/30 focus:outline-none focus:ring-2 focus:ring-violet-400/30 focus:ring-offset-2',
-                    'amber'   => 'group relative inline-flex min-h-[44px] max-w-full min-w-0 items-center gap-2.5 rounded-full border border-amber-200/70 bg-gradient-to-br from-amber-50/80 via-white to-white px-4 text-sm font-semibold text-amber-900 shadow-[0_1px_0_rgba(255,255,255,0.6)_inset] transition duration-200 ease-out hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md hover:shadow-amber-200/30 focus:outline-none focus:ring-2 focus:ring-amber-400/30 focus:ring-offset-2',
+                    'cyan'    => 'group relative inline-flex min-h-[44px] max-w-full min-w-0 items-center gap-2.5 rounded-full border border-cyan-200 bg-cyan-50 px-4 text-sm font-semibold text-cyan-900 transition duration-200 ease-out hover:-translate-y-0.5 hover:border-cyan-400 hover:bg-cyan-200 hover:shadow-md hover:shadow-cyan-300/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/40 focus:ring-offset-2',
+                    'emerald' => 'group relative inline-flex min-h-[44px] max-w-full min-w-0 items-center gap-2.5 rounded-full border border-emerald-200 bg-emerald-50 px-4 text-sm font-semibold text-emerald-900 transition duration-200 ease-out hover:-translate-y-0.5 hover:border-emerald-400 hover:bg-emerald-200 hover:shadow-md hover:shadow-emerald-300/50 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 focus:ring-offset-2',
+                    'violet'  => 'group relative inline-flex min-h-[44px] max-w-full min-w-0 items-center gap-2.5 rounded-full border border-violet-200 bg-violet-50 px-4 text-sm font-semibold text-violet-900 transition duration-200 ease-out hover:-translate-y-0.5 hover:border-violet-400 hover:bg-violet-200 hover:shadow-md hover:shadow-violet-300/50 focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:ring-offset-2',
+                    'amber'   => 'group relative inline-flex min-h-[44px] max-w-full min-w-0 items-center gap-2.5 rounded-full border border-amber-200 bg-amber-50 px-4 text-sm font-semibold text-amber-900 transition duration-200 ease-out hover:-translate-y-0.5 hover:border-amber-400 hover:bg-amber-200 hover:shadow-md hover:shadow-amber-300/50 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:ring-offset-2',
                 ];
                 $chipIcon = [
                     'cyan'    => 'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-white text-cyan-600 ring-1 ring-inset ring-cyan-200/80 shadow-sm transition group-hover:scale-105',
@@ -358,18 +354,14 @@
                 ];
             @endphp
             <div class="flex min-w-0 flex-wrap items-center gap-2.5">
-                {{-- PRIMARY — gradient cyan→teal→emerald with a soft sparkle
-                     that pulses gently. Sits above the chips visually thanks
-                     to the colored shadow halo. --}}
+                {{-- PRIMARY — solid teal CTA. Sits above the chips visually
+                     thanks to a tinted shadow halo that deepens on hover. --}}
                 <a href="{{ route('examiner.exams.create') }}"
-                   class="group relative inline-flex min-h-[44px] items-center gap-2.5 overflow-hidden rounded-full bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 px-5 text-sm font-semibold text-white shadow-lg shadow-teal-500/25 transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-xl hover:shadow-teal-500/40 focus:outline-none focus:ring-2 focus:ring-teal-400/50 focus:ring-offset-2">
-                    {{-- Soft moving highlight on hover --}}
-                    <span aria-hidden="true" class="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 group-hover:translate-x-full"></span>
-                    <span class="relative inline-flex h-7 w-7 items-center justify-center rounded-xl bg-white/15 ring-1 ring-inset ring-white/30 backdrop-blur-sm transition group-hover:rotate-90">
+                   class="group relative inline-flex min-h-[44px] items-center gap-2.5 rounded-full bg-teal-600 px-5 text-sm font-semibold text-white shadow-md shadow-teal-600/30 transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-teal-700 hover:shadow-lg hover:shadow-teal-700/50 focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:ring-offset-2">
+                    <span class="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-white/15 ring-1 ring-inset ring-white/30 transition group-hover:rotate-90">
                         <i class="fa-solid fa-plus text-[12px]" aria-hidden="true"></i>
                     </span>
-                    <span class="relative min-w-0 truncate">{{ __('Create assessment') }}</span>
-                    <span aria-hidden="true" class="relative -ml-0.5 inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-white/80"></span>
+                    <span class="min-w-0 truncate">{{ __('Create assessment') }}</span>
                 </a>
 
                 <a href="{{ route('examiner.exams.index') }}" class="{{ $chipPalettes['cyan'] }}">

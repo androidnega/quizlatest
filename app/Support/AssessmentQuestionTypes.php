@@ -14,6 +14,30 @@ final class AssessmentQuestionTypes
     public const ALL = ['mcq', 'true_false', 'fill_blank', 'essay'];
 
     /**
+     * Auto-gradable types — the only types eligible for AI bulk generation.
+     * Essay is excluded because it is manually graded and the user wants AI
+     * generation focused on objective question types only.
+     *
+     * @var list<string>
+     */
+    public const AUTO_GRADED = ['mcq', 'true_false', 'fill_blank'];
+
+    /**
+     * Returns the subset of $allowed that is eligible for AI generation
+     * (i.e. auto-gradable types only — never essay).
+     *
+     * @param  list<string>  $allowed
+     * @return list<string>
+     */
+    public static function aiEligibleSubset(array $allowed): array
+    {
+        $subset = array_values(array_intersect($allowed, self::AUTO_GRADED));
+        sort($subset);
+
+        return $subset;
+    }
+
+    /**
      * Legacy rows: null means all types are allowed.
      * An explicit empty JSON array means no types are configured (publish must block).
      *
@@ -76,7 +100,7 @@ final class AssessmentQuestionTypes
 
         $reqList = array_keys($req);
         if ($reqList === []) {
-            $reqList = ['mcq'];
+            $reqList = $allowed;
         }
 
         $intersection = array_values(array_intersect($reqList, $allowed));

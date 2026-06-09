@@ -6,7 +6,7 @@
 >
     <x-auth-session-status class="mb-4" :status="session('status')" />
 
-    <form method="POST" action="{{ url('/student/forgot-password') }}" class="space-y-6">
+    <form method="POST" action="{{ url('/student/forgot-password') }}" class="space-y-4">
         @csrf
 
         <div>
@@ -15,12 +15,12 @@
             <x-input-error :messages="$errors->get('identifier')" class="mt-2" />
         </div>
 
-        <button type="submit" class="qs-btn-primary w-full justify-center py-2.5 text-sm font-semibold">
+        <button type="submit" class="qs-btn-primary w-full justify-center">
             {{ __('Send code') }}
         </button>
     </form>
 
-    <p class="mt-8 text-center text-sm text-qs-muted">
-        <a href="{{ route('login') }}" class="qs-link font-medium text-qs-text">{{ __('Back to sign-in') }}</a>
+    <p class="qs-auth-help">
+        <a href="{{ route('login') }}" class="qs-link">{{ __('Back to sign-in') }}</a>
     </p>
 </x-guest-layout>

@@ -11,9 +11,8 @@ use App\Models\Quiz;
 use App\Models\Result;
 use App\Models\University;
 use App\Models\User;
-use App\Services\ExamRedisService;
 use App\Services\ExamRuntimeInfraGate;
-use App\Services\RedisHealthService;
+use App\Services\ExamRuntimeService;
 use App\Services\SystemExamPolicyService;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\View\View;
@@ -25,8 +24,7 @@ use Illuminate\Support\Number;
 class DashboardController extends Controller
 {
     public function __construct(
-        private readonly ExamRedisService $examRedis,
-        private readonly RedisHealthService $redisHealth,
+        private readonly ExamRuntimeService $examRuntime,
         private readonly SystemExamPolicyService $examPolicy,
         private readonly ExamRuntimeInfraGate $infraGate,
     ) {}
@@ -35,14 +33,6 @@ class DashboardController extends Controller
     {
         $publicBytes = $this->estimatePublicDiskUsageBytes();
         $privateBytes = $this->estimatePrivateDiskUsageBytes();
-
-        $redisPing = $this->redisHealth->isAvailable();
-        $redisAdminOn = $this->infraGate->redisRuntimeEnabledByAdmin();
-        $redisFallback = $this->infraGate->allowRedisFallback();
-
-        $redisMode = ! $redisAdminOn
-            ? 'disabled_by_admin'
-            : ($redisPing ? 'connected' : ($redisFallback ? 'fallback_active' : 'unavailable'));
 
         $liveAdminOn = $this->infraGate->enableLiveSockets();
         $reverbConfigured = $this->infraGate->reverbEnvConfigured();
@@ -102,10 +92,9 @@ class DashboardController extends Controller
             ];
         }
 
-        $redisUi = $this->redisUiState($redisMode);
         $liveSocketUi = $this->liveSocketUiState($liveSocketsMode, $liveSocketsClientHint);
 
-        $platformChecksTotal = 5;
+        $platformChecksTotal = 4;
         $platformChecksPassed = 0;
         if ($dbConnected) {
             $platformChecksPassed++;
@@ -114,9 +103,6 @@ class DashboardController extends Controller
             $platformChecksPassed++;
         }
         if ($privateWritable) {
-            $platformChecksPassed++;
-        }
-        if ($redisUi['tone'] !== 'danger') {
             $platformChecksPassed++;
         }
         if ($liveSocketUi['tone'] !== 'danger') {
@@ -159,12 +145,7 @@ class DashboardController extends Controller
             'draftExamCount' => max(0, $quizTotal - $publishedExamCount),
             'sessionStatusCounts' => $sessionStatusCounts,
             'gradedOrPublishedResults' => $gradedOrPublishedResults,
-            'activeSessions' => $this->examRedis->activeSessionCountSnapshot(),
-            'redisPing' => $redisPing,
-            'redisMode' => $redisMode,
-            'redisUi' => $redisUi,
-            'redisAdminOn' => $redisAdminOn,
-            'redisFallback' => $redisFallback,
+            'activeSessions' => $this->examRuntime->activeSessionCountSnapshot(),
             'liveSocketsMode' => $liveSocketsMode,
             'liveSocketsClientHint' => $liveSocketsClientHint,
             'liveSocketUi' => $liveSocketUi,
@@ -189,14 +170,6 @@ class DashboardController extends Controller
     {
         $publicBytes = $this->estimatePublicDiskUsageBytes();
         $privateBytes = $this->estimatePrivateDiskUsageBytes();
-
-        $redisPing = $this->redisHealth->isAvailable();
-        $redisAdminOn = $this->infraGate->redisRuntimeEnabledByAdmin();
-        $redisFallback = $this->infraGate->allowRedisFallback();
-
-        $redisMode = ! $redisAdminOn
-            ? 'disabled_by_admin'
-            : ($redisPing ? 'connected' : ($redisFallback ? 'fallback_active' : 'unavailable'));
 
         $liveAdminOn = $this->infraGate->enableLiveSockets();
         $reverbConfigured = $this->infraGate->reverbEnvConfigured();
@@ -233,13 +206,12 @@ class DashboardController extends Controller
             //
         }
 
-        $activeSessions = $this->examRedis->activeSessionCountSnapshot();
-        $redisUi = $this->redisUiState($redisMode);
+        $activeSessions = $this->examRuntime->activeSessionCountSnapshot();
         $liveSocketUi = $this->liveSocketUiState($liveSocketsMode, $liveSocketsClientHint);
 
         $sessionsDetail = $activeSessions['value'] !== null
-            ? ($activeSessions['source'] === 'redis' ? __('Counter source: Redis.') : ($activeSessions['source'] === 'database_estimate' ? __('Counter source: database estimate.') : __('Counter source: unavailable.')))
-            : __('Live session counter could not be read from Redis or the database.');
+            ? (string) __('Counter source: database.')
+            : (string) __('Live session counter could not be read from the database.');
 
         return response()->json([
             'active_sessions' => [
@@ -247,7 +219,6 @@ class DashboardController extends Controller
                 'pill' => $activeSessions['value'] !== null ? number_format((int) $activeSessions['value']) : (string) __('N/A'),
                 'detail' => $sessionsDetail,
             ],
-            'redis' => $redisUi,
             'live_updates' => $liveSocketUi,
             'vite' => [
                 'label' => $viteOk ? (string) __('Ready') : (string) __('Incomplete'),
@@ -280,37 +251,6 @@ class DashboardController extends Controller
                 'tone' => 'muted',
             ],
         ]);
-    }
-
-    /**
-     * Human-friendly Redis row: fallback is operational, not a hard failure.
-     *
-     * @return array{label: string, detail: string, tone: 'ok'|'warn'|'muted'|'danger'}
-     */
-    private function redisUiState(string $redisMode): array
-    {
-        return match ($redisMode) {
-            'connected' => [
-                'label' => __('Connected'),
-                'detail' => __('TCP ping to Redis succeeded.'),
-                'tone' => 'ok',
-            ],
-            'fallback_active' => [
-                'label' => __('Active'),
-                'detail' => __('Running without Redis: counters and cache use your database and app cache. No action required unless you intend to use Redis.'),
-                'tone' => 'ok',
-            ],
-            'disabled_by_admin' => [
-                'label' => __('Disabled'),
-                'detail' => __('Redis runtime is turned off in system settings.'),
-                'tone' => 'muted',
-            ],
-            default => [
-                'label' => __('Unavailable'),
-                'detail' => __('Redis did not respond and fallback is disabled. Enable fallback or restore Redis.'),
-                'tone' => 'danger',
-            ],
-        };
     }
 
     /**

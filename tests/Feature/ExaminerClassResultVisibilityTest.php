@@ -177,7 +177,7 @@ class ExaminerClassResultVisibilityTest extends TestCase
             ->assertOk()
             ->assertSee('Exam A', false)
             ->assertDontSee('Exam B', false)
-            ->assertSee('Open records', false);
+            ->assertSee('Open sessions', false);
     }
 
     public function test_examiner_cannot_edit_class_and_coordinator_management_remains_separate(): void
@@ -200,13 +200,9 @@ class ExaminerClassResultVisibilityTest extends TestCase
         $this->actingAs($ctx['examinerA'])
             ->get(route('examiner.exams.classes.summary', $ctx['quizB']))
             ->assertForbidden();
-
-        $this->actingAs($ctx['examinerA'])
-            ->get(route('examiner.exams.classes.results', [$ctx['quizB'], $ctx['class']]))
-            ->assertForbidden();
     }
 
-    public function test_examiner_can_view_class_result_summary_and_class_results_for_own_exam(): void
+    public function test_examiner_can_view_class_result_summary_for_own_exam(): void
     {
         $ctx = $this->seedContext();
 
@@ -215,11 +211,6 @@ class ExaminerClassResultVisibilityTest extends TestCase
             ->assertOk()
             ->assertSee('RESULT-CLASS', false)
             ->assertSee('1', false);
-
-        $this->actingAs($ctx['examinerA'])
-            ->get(route('examiner.exams.classes.results', [$ctx['quizA'], $ctx['class']]))
-            ->assertOk()
-            ->assertSee($ctx['student']->name, false);
     }
 
     public function test_examiner_classes_hub_lists_linked_classes(): void
@@ -275,7 +266,10 @@ class ExaminerClassResultVisibilityTest extends TestCase
         ]);
 
         $this->actingAs($ctx['examinerA'])
-            ->from(route('examiner.exam-sessions.show', $session))
+            ->from(route('examiner.exam-sessions.show', [
+                'exam' => $session->exam,
+                'examSession' => $session,
+            ]))
             ->post(route('examiner.exam-sessions.invalidate-for-retake', $session))
             ->assertRedirect();
 

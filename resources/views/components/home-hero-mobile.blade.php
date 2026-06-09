@@ -1,5 +1,5 @@
 @php
-    $mobileHeroImage = asset('images/home/quizsnap-hero-mobile.jpg');
+    $mobileHeroImage = asset('images/home/quizsnap-homepage-hero-mobile-assessments-banner.jpg');
 @endphp
 
 <div

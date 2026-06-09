@@ -9,6 +9,7 @@ use App\Models\ExamSession;
 use App\Models\Quiz;
 use App\Models\User;
 use App\Services\ProctoringGlobalControlService;
+use App\Services\StudentExamSessionGateService;
 use App\Services\SystemExamPolicyService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -19,6 +20,7 @@ class StudentExamEntryController extends Controller
     public function __construct(
         private readonly SystemExamPolicyService $examPolicy,
         private readonly ProctoringGlobalControlService $globalControl,
+        private readonly StudentExamSessionGateService $sessionGate,
     ) {}
 
     public function instructions(Quiz $quiz): View|RedirectResponse
@@ -53,18 +55,19 @@ class StudentExamEntryController extends Controller
 
         $this->assertEligibleForExamPage($user, $quiz);
 
-        $active = ExamSession::query()
-            ->where('student_id', $user->id)
-            ->whereIn('status', ['active', 'paused'])
-            ->first();
+        if ($redirect = $this->redirectIfAlreadySubmitted($user, $quiz)) {
+            return $redirect;
+        }
 
-        if ($active !== null) {
-            if ((int) $active->exam_id === (int) $quiz->id) {
-                return redirect()->route('student.exam.take', $active);
+        $blocking = $this->sessionGate->blockingSessionFor($user, $quiz);
+
+        if ($blocking !== null) {
+            if ((int) $blocking->exam_id === (int) $quiz->id) {
+                return redirect()->route('student.exam.take', $blocking);
             }
 
             return redirect()->route('dashboard')
-                ->withErrors(['exam' => __('You already have an exam in progress. Finish or submit it before starting another.')]);
+                ->withErrors(['exam' => __('You already have a timed assessment in progress. Finish or submit it before starting another.')]);
         }
 
         $quiz->load(['course:id,code,title']);
@@ -122,11 +125,23 @@ class StudentExamEntryController extends Controller
             );
         }
 
-        $alreadySubmitted = ExamSession::query()
+    }
+
+    private function redirectIfAlreadySubmitted(User $user, Quiz $quiz): ?RedirectResponse
+    {
+        $session = ExamSession::query()
             ->where('student_id', $user->id)
             ->where('exam_id', $quiz->id)
             ->where('status', 'submitted')
-            ->exists();
-        abort_unless(! $alreadySubmitted, 403);
+            ->orderByDesc('id')
+            ->first();
+
+        if ($session === null) {
+            return null;
+        }
+
+        return redirect()
+            ->route('student.results.show', $session)
+            ->with('status', __('You have already submitted this assessment.'));
     }
 }

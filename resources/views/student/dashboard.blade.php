@@ -1,10 +1,7 @@
 <x-layouts.student>
-    <x-slot name="title">{{ __('Dashboard') }}</x-slot>
-    <x-slot name="subtitle">{{ __('Shortcuts to what matters most for your classes — help and profile stay in the side menu.') }}</x-slot>
-
     @php
         $parts = \Illuminate\Support\Str::of((string) ($user->name ?? ''))->trim()->explode(' ')->filter();
-        $firstName = $parts->first() ?: $user->name;
+        $lastName = $parts->count() > 1 ? $parts->last() : ($parts->first() ?: $user->name);
         $sessionExam = $activeSession?->exam;
         $examSessionPaused = $activeSession !== null && $activeSession->status === 'paused';
         $dashboardCourseNewMaterials = $dashboard_course_new_materials ?? [];
@@ -12,314 +9,293 @@
         $dashboardPolicyNotice = $dashboard_policy_notice ?? null;
         $dashboardNotices = $dashboard_notices ?? [];
         $dashboardNewAssessments = $dashboard_new_assessments ?? [];
-        $materialsNav = ! empty($studentCourseMaterialsNavEnabled);
-        $navCard = 'flex min-h-[72px] flex-col justify-center rounded-lg border p-3.5 text-left transition-colors hover:border-slate-200/90 hover:bg-white/80 sm:min-h-0 sm:p-4';
-        $studentNavCards = [
-            [
-                'href' => route('student.work.index'),
-                'icon' => 'fa-clipboard-list',
-                'title' => __('Your work'),
-                'sub' => __('Assessments & deadlines'),
-                'tone' => 'border-emerald-100/90 bg-emerald-50/70',
-                'iconWrap' => 'bg-emerald-100/80 text-emerald-700',
-            ],
-            [
-                'href' => route('student.assignments.index'),
-                'icon' => 'fa-file-pen',
-                'title' => __('Assignments'),
-                'sub' => __('Coursework to hand in'),
-                'tone' => 'border-violet-100/90 bg-violet-50/70',
-                'iconWrap' => 'bg-violet-100/80 text-violet-700',
-            ],
-            [
-                'href' => route('student.results.index'),
-                'icon' => 'fa-square-poll-vertical',
-                'title' => __('Results'),
-                'sub' => __('Scores when released'),
-                'tone' => 'border-rose-100/90 bg-rose-50/70',
-                'iconWrap' => 'bg-rose-100/80 text-rose-700',
-            ],
-            [
-                'href' => route('student.notifications.index'),
-                'icon' => 'fa-bell',
-                'title' => __('Notifications'),
-                'sub' => __('Due dates & reminders'),
-                'tone' => 'border-amber-100/90 bg-amber-50/70',
-                'iconWrap' => 'bg-amber-100/80 text-amber-800',
-            ],
-        ];
-        if ($practiceEnabled) {
-            $studentNavCards[] = [
-                'href' => route('student.practice.revision'),
-                'icon' => 'fa-book-open-reader',
-                'title' => __('Revision'),
-                'sub' => __('Practice & check understanding'),
-                'tone' => 'border-teal-100/90 bg-teal-50/70',
-                'iconWrap' => 'bg-teal-100/80 text-teal-700',
-            ];
-            $studentNavCards[] = [
-                'href' => route('student.practice.materials.index'),
-                'icon' => 'fa-folder-open',
-                'title' => __('Materials'),
-                'sub' => __('Files from your courses'),
-                'tone' => 'border-sky-100/90 bg-sky-50/70',
-                'iconWrap' => 'bg-sky-100/80 text-sky-700',
-            ];
-        } elseif ($materialsNav) {
-            $studentNavCards[] = [
-                'href' => route('student.practice.materials.index'),
-                'icon' => 'fa-folder-open',
-                'title' => __('Materials'),
-                'sub' => __('Files from your courses'),
-                'tone' => 'border-sky-100/90 bg-sky-50/70',
-                'iconWrap' => 'bg-sky-100/80 text-sky-700',
-            ];
-        }
+        $materialsHubEnabled = ! empty($studentMaterialsBrowseEnabled);
+        $materialsHref = route('student.practice.materials.index');
+        $statOpen = (int) ($dashboard_stat_open_assessments ?? count($dashboardNewAssessments));
+        $statDue = (int) ($dashboard_stat_assignments_due ?? 0);
+        $statPending = (int) ($dashboard_stat_pending_results ?? 0);
+        $statNotices = (int) ($dashboard_stat_notice_count ?? ($studentNoticeCount ?? count($dashboardNotices)));
+        $nextAction = $dashboard_next_action ?? null;
+        $user->loadMissing(['classroom.academicYearStruct', 'level']);
+        $groupLabel = $user->classroom
+            ? trim($user->classroom->name.' '.(string) ($user->classroom->section ?? ''))
+            : null;
+        $levelLabel = $user->level?->name ?? $user->level?->code;
+        $mobileProfileSubline = collect([$groupLabel, $levelLabel])->filter()->implode(' · ');
+        $semesterLabel = $user->classroom?->academicYearStruct?->name
+            ?? ($user->classroom?->academic_year ? (string) $user->classroom->academic_year : null);
+        $initials = \Illuminate\Support\Str::of((string) $user->name)->trim()->explode(' ')->filter()->take(2)->map(fn ($w) => \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr($w, 0, 1)))->implode('');
+        $newList = array_slice($dashboardNewAssessments, 0, 4);
+        $cardSection = 'rounded-xl border border-slate-200/90 bg-white p-4 sm:p-5';
+        $feedPanel = 'qs-std-dash-panel flex h-full flex-col '.$cardSection;
+
+        // Super-admin gated experimental theme — when on, the mobile
+        // dashboard renders the "wallet" variant instead of the standard
+        // mobile hero + stats + feed. Desktop/tablet (>=lg) is unchanged.
+        $useMobileWallet = app(\App\Services\SystemSettingsService::class)
+            ->getBool('student_dashboard_mobile_wallet', false);
     @endphp
 
-    <div class="w-full min-w-0 space-y-4 pb-8 text-slate-950">
-        {{-- Greeting --}}
-        <div class="rounded-xl border border-slate-200 bg-white px-4 py-4 sm:px-6 sm:py-5">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-                <div class="min-w-0">
-                    <p class="text-[11px] font-medium uppercase tracking-wide text-slate-500">{{ __('Dashboard') }}</p>
-                    <h1 class="mt-0.5 text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">{{ __('Hi, :name', ['name' => $firstName]) }}</h1>
-                    <p class="mt-1.5 text-sm text-slate-600">{{ __('Use the bell (top right) for notifications — then jump to your classes below.') }}</p>
-                </div>
-                <a
-                    href="{{ route('profile.edit') }}"
-                    class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 md:hidden"
-                    aria-label="{{ __('Profile') }}"
-                >
-                    <i class="fa-solid fa-user text-lg" aria-hidden="true"></i>
-                </a>
-            </div>
-        </div>
+    @if ($useMobileWallet)
+        @include('student.partials.dashboard-mobile-wallet', [
+            'user' => $user,
+            'lastName' => $lastName,
+            'initials' => $initials,
+            'mobileProfileSubline' => $mobileProfileSubline,
+            'semesterLabel' => $semesterLabel,
+            'statOpen' => $statOpen,
+            'statDue' => $statDue,
+            'statPending' => $statPending,
+            'statNotices' => $statNotices,
+            'newList' => $newList,
+            'activeSession' => $activeSession,
+            'sessionExam' => $sessionExam,
+            'headerNoticeCount' => $studentNoticeCount ?? 0,
+        ])
+    @endif
 
+    <div @class([
+        'qs-std-page-wrap pt-2 lg:pt-6',
+        'hidden lg:block' => $useMobileWallet,
+    ])>
         @if ($errors->has('exam'))
-            <div class="flex items-start gap-3 rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm text-rose-900">
-                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-600" aria-hidden="true">
-                    <i class="fa-solid fa-circle-exclamation"></i>
-                </span>
-                <span class="min-w-0 pt-0.5">{{ $errors->first('exam') }}</span>
+            <div class="mb-4 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                <i class="fa-solid fa-circle-exclamation mt-0.5 shrink-0" aria-hidden="true"></i>
+                <span class="min-w-0">{{ $errors->first('exam') }}</span>
             </div>
         @endif
 
         @if ($examSessionPaused && $sessionExam)
-            <div class="rounded-xl border border-amber-200 bg-white px-4 py-3 text-sm text-amber-950">
-                <div class="flex gap-3">
-                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700" aria-hidden="true">
-                        <i class="fa-solid fa-pause"></i>
-                    </span>
-                    <div class="min-w-0 flex-1">
-                        <p class="font-semibold">{{ __('Timer paused') }}</p>
-                        <p class="mt-1 text-xs text-amber-900/90">{{ __('Open the assessment and tap Resume to continue.') }}</p>
-                        <a href="{{ route('student.exam.take', $activeSession) }}" class="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-amber-800 px-4 text-xs font-semibold text-white hover:bg-amber-900 sm:w-auto">
-                            {{ __('Resume') }}
-                        </a>
+            <div class="mb-4 {{ $cardSection }}">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('In progress') }}</p>
+                        <p class="mt-1 font-semibold text-slate-900">{{ __('Timer paused') }}</p>
+                        <p class="mt-1 text-sm text-slate-600">{{ __('Open the assessment and tap Resume to continue.') }}</p>
+                        <p class="mt-1 truncate text-sm font-medium text-slate-800">{{ $sessionExam->title }}</p>
                     </div>
+                    <a href="{{ route('student.exam.take', $activeSession) }}" class="qs-btn-primary inline-flex min-h-[40px] shrink-0 items-center justify-center rounded-lg px-4 text-sm font-semibold">
+                        {{ __('Resume') }}
+                    </a>
                 </div>
             </div>
         @endif
 
         @if (! $classYearOk)
-            <div class="rounded-xl border border-amber-200 bg-white px-4 py-3 text-sm text-amber-900">
+            <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                 <p class="font-semibold">{{ __('Class year') }}</p>
-                <p class="mt-1 text-xs leading-relaxed text-amber-900/90">{{ __('Your class may not match the active year. Ask your coordinator if lists look empty.') }}</p>
+                <p class="mt-1 text-xs leading-relaxed">{{ __('Your class may not match the active year. Ask your coordinator if lists look empty.') }}</p>
             </div>
         @endif
 
         @if ($user->class_id === null)
-            <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800">
-                <p class="leading-relaxed text-slate-700">
-                    <i class="fa-solid fa-circle-info me-1.5 text-slate-400" aria-hidden="true"></i>
+            <div class="mb-4 rounded-xl border border-slate-200/90 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                <p>
+                    <i class="fa-solid fa-circle-info me-1.5 text-slate-500" aria-hidden="true"></i>
                     {{ __('student_ui.class_group_not_assigned') }}
                 </p>
             </div>
         @endif
 
-        <section class="rounded-xl border border-slate-200/90 bg-slate-50/40 p-4 sm:p-5" aria-labelledby="dash-nav-heading">
-            <div class="flex flex-wrap items-end justify-between gap-2">
-                <div>
-                    <h2 id="dash-nav-heading" class="text-sm font-semibold text-slate-900">{{ __('Essentials') }}</h2>
-                    <p class="mt-0.5 text-xs text-slate-500">{{ __('Work, assignments, results, and alerts — plus study tools when your school enables them.') }}</p>
-                </div>
-            </div>
-            <div class="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
-                @foreach ($studentNavCards as $card)
-                    <a href="{{ $card['href'] }}" class="{{ $navCard }} {{ $card['tone'] }}">
-                        <span class="flex h-8 w-8 items-center justify-center rounded-md {{ $card['iconWrap'] }}" aria-hidden="true">
-                            <i class="fa-solid {{ $card['icon'] }} text-[13px]"></i>
-                        </span>
-                        <span class="mt-2 text-sm font-medium text-slate-900">{{ $card['title'] }}</span>
-                        <span class="mt-0.5 text-xs text-slate-600">{{ $card['sub'] }}</span>
-                    </a>
-                @endforeach
-            </div>
+        <div class="qs-std-profile-bleed qs-std-hero-bleed">
+            @include('student.partials.dashboard-mobile-profile-card', [
+                'user' => $user,
+                'lastName' => $lastName,
+                'initials' => $initials,
+                'mobileProfileSubline' => $mobileProfileSubline,
+                'semesterLabel' => $semesterLabel,
+            ])
+        </div>
+
+        @include('student.partials.dashboard-header', [
+            'lastName' => $lastName,
+            'groupLabel' => $groupLabel,
+            'levelLabel' => $levelLabel,
+            'semesterLabel' => $semesterLabel,
+        ])
+
+        @if ($nextAction)
+            @include('student.partials.dashboard-mobile-next-action', ['nextAction' => $nextAction])
+        @endif
+
+        @php
+            // Pick the soonest upcoming/open item that has a real ISO target
+            // so the desktop hero countdown card can drive its timer from the
+            // same digest data that powers the mobile wallet + feed rows.
+            $heroCountdownItem = null;
+            foreach ($newList as $candidate) {
+                if (! empty($candidate['countdown_ends_at'])) {
+                    $heroCountdownItem = $candidate;
+                    break;
+                }
+            }
+
+            // When NO countdown is pending but there IS a startable quiz,
+            // surface THAT item in the hero card with a Start button — the
+            // desktop ticket stays actionable just like the mobile hero.
+            $heroStartableItem = null;
+            if ($heroCountdownItem === null) {
+                foreach ($newList as $candidate) {
+                    $cta = trim((string) ($candidate['cta_label'] ?? ''));
+                    if ($cta === '') {
+                        continue;
+                    }
+                    if (stripos($cta, 'instruction') !== false) {
+                        continue;
+                    }
+                    $heroStartableItem = $candidate;
+                    break;
+                }
+            }
+        @endphp
+
+        <section class="qs-stat-grid qs-stat-grid--dash mb-6 lg:mb-8" aria-labelledby="dash-stats-heading">
+            <h2 id="dash-stats-heading" class="sr-only">{{ __('Overview') }}</h2>
+            @include('student.partials.dashboard-stat-card', [
+                'label' => __('Open assessments'),
+                'value' => number_format($statOpen),
+                'icon' => 'fa-clipboard-list',
+                'tone' => 'assessments',
+                'href' => route('student.work.index'),
+                'linkLabel' => __('View worklist'),
+            ])
+            @include('student.partials.dashboard-stat-card', [
+                'label' => __('Assignments due'),
+                'value' => number_format($statDue),
+                'icon' => 'fa-file-pen',
+                'tone' => 'assignments',
+                'href' => route('student.assignments.index'),
+                'linkLabel' => __('View assignments'),
+            ])
+            @include('student.partials.dashboard-stat-card', [
+                'label' => __('Pending results'),
+                'value' => number_format($statPending),
+                'icon' => 'fa-chart-simple',
+                'tone' => 'results',
+                'href' => route('student.results.index'),
+                'linkLabel' => __('View results'),
+            ])
+            @include('student.partials.dashboard-stat-card', [
+                'label' => __('New notices'),
+                'value' => number_format($statNotices),
+                'icon' => 'fa-bell',
+                'tone' => 'notices',
+                'href' => route('student.notifications.index'),
+                'linkLabel' => __('View all'),
+            ])
         </section>
 
-        @if ($dashboardNewAssessments !== [])
-            <section class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="dash-new-assess-heading">
-                <div class="flex flex-wrap items-end justify-between gap-2">
-                    <div>
-                        <h2 id="dash-new-assess-heading" class="text-sm font-semibold text-slate-900">{{ __('New for you') }}</h2>
-                        <p class="mt-0.5 text-xs text-slate-500">{{ __('Published in the last week — open instructions when you are ready to start.') }}</p>
-                    </div>
+        {{-- The hero countdown sits BELOW the stat cards on desktop so the
+             metrics are the first thing the student reads. The card is
+             responsive but the include itself targets desktop (hidden on
+             <lg via its own CSS). --}}
+        @include('student.partials.dashboard-desktop-countdown', [
+            'countdownItem' => $heroCountdownItem,
+            'startableItem' => $heroStartableItem,
+            'activeSession' => $activeSession,
+        ])
+
+        {{-- "Open & new assessments" feed: kept for the classic mobile
+             experience (when the wallet is off, this is the only worklist
+             surface students get on phones). On desktop it is intentionally
+             hidden — the new countdown card + stat cards above already
+             surface the next item, and the dedicated /work page owns the
+             full worklist. --}}
+        <section class="mb-6 {{ $feedPanel }} lg:hidden" aria-labelledby="dash-new-heading">
+                <div class="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <h2 id="dash-new-heading" class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('Open & new assessments') }}</h2>
+                    <a href="{{ route('student.work.index') }}" class="shrink-0 text-sm font-medium text-sky-700 underline-offset-2 hover:underline">{{ __('Worklist') }}</a>
                 </div>
-                <ul class="mt-3 grid gap-2.5 sm:grid-cols-2">
-                    @foreach ($dashboardNewAssessments as $qa)
-                        <li>
-                            <a
-                                href="{{ $qa['href'] }}"
-                                class="flex h-full flex-col rounded-lg border border-slate-200 bg-slate-50/80 p-3.5 text-left transition-colors hover:border-slate-300 hover:bg-white sm:p-4"
-                            >
-                                <div class="flex items-start justify-between gap-2">
-                                    <span class="inline-flex shrink-0 rounded-md bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-800">{{ __('New') }}</span>
-                                    <span class="text-[11px] text-slate-500">{{ $qa['published_at'] }}</span>
-                                </div>
-                                <p class="mt-2 text-sm font-medium leading-snug text-slate-900">{{ $qa['title'] }}</p>
-                                @if (($qa['course_line'] ?? '') !== '')
-                                    <p class="mt-1 truncate text-xs text-slate-600">{{ $qa['course_line'] }}</p>
-                                @endif
-                                <div class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
-                                    <span class="rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700 ring-1 ring-slate-200/80">{{ $qa['type_label'] }}</span>
-                                    <span class="text-xs font-medium text-indigo-700">{{ __('Instructions') }} →</span>
-                                </div>
-                            </a>
-                        </li>
-                    @endforeach
-                </ul>
-            </section>
-        @endif
-
-        <a
-            href="{{ route('student.work.index') }}"
-            class="flex items-center gap-4 rounded-xl border border-slate-200/90 bg-slate-50/50 p-4 transition-colors hover:border-slate-300 hover:bg-slate-50 sm:p-5"
-        >
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-emerald-100/80 text-emerald-700" aria-hidden="true">
-                <i class="fa-solid fa-clipboard-list text-base"></i>
-            </span>
-            <div class="min-w-0 flex-1">
-                <p class="text-sm font-medium text-slate-900">{{ __('Full assessment list') }}</p>
-                <p class="mt-0.5 text-xs leading-relaxed text-slate-600">{{ __('Same “Your work” page as the card — every open, due, or finished item in one place.') }}</p>
-            </div>
-            <span class="shrink-0 text-xs font-medium text-slate-600">{{ __('Open') }} →</span>
-        </a>
-
-        @if (! empty($dashboardCourseNewMaterials))
-            <div class="rounded-xl border border-sky-200 bg-white px-4 py-3 text-sm text-sky-950">
-                <p class="text-xs font-semibold uppercase tracking-wide text-sky-800/80">{{ __('New since last visit') }}</p>
-                <ul class="mt-2 space-y-1.5 text-sm">
-                    @foreach ($dashboardCourseNewMaterials as $row)
-                        @php $n = (int) $row['count']; @endphp
-                        <li>
-                            @if ($n === 1)
-                                {{ __('1 new file in :course', ['course' => $row['name']]) }}
-                            @else
-                                {{ __(':count new files in :course', ['count' => number_format($n), 'course' => $row['name']]) }}
-                            @endif
-                        </li>
-                    @endforeach
-                </ul>
-                @if ($practiceEnabled)
-                    <a href="{{ route('student.practice.materials.index') }}" class="mt-3 inline-flex min-h-[44px] items-center text-xs font-semibold text-sky-800 underline-offset-2 hover:underline">
-                        {{ __('Materials') }} →
-                    </a>
-                @endif
-            </div>
-        @endif
-
-        @if ($dashboardTip !== '')
-            @php
-                $dashboardTipDismissKey = 'qs_student_dash_tip_v1_' . hash('sha256', $dashboardTip . '|' . app()->getLocale());
-            @endphp
-            <div
-                x-data="{
-                    key: @js($dashboardTipDismissKey),
-                    dismissed: false,
-                }"
-                x-init="dismissed = (() => { try { return localStorage.getItem(key) === '1'; } catch (e) { return false; } })()"
-                x-show="!dismissed"
-                x-transition.opacity.duration.150ms
-                class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"
-                role="region"
-                aria-label="{{ __('Tip') }}"
-            >
-                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700" aria-hidden="true">
-                    <i class="fa-solid fa-lightbulb text-sm"></i>
-                </span>
-                <p class="min-w-0 flex-1 leading-relaxed">{{ $dashboardTip }}</p>
-                <button
-                    type="button"
-                    class="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                    @click="dismissed = true; try { localStorage.setItem(key, '1'); } catch (e) {}"
-                    aria-label="{{ __('Dismiss tip') }}"
-                >
-                    <i class="fa-solid fa-xmark text-base" aria-hidden="true"></i>
-                </button>
-            </div>
-        @endif
-
-        @if ($dashboardNotices !== [])
-            <section
-                class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5"
-                aria-labelledby="dash-notices-heading"
-            >
-                <div class="flex flex-wrap items-end justify-between gap-2">
-                    <h2 id="dash-notices-heading" class="text-sm font-semibold text-slate-900">{{ __('Updates for you') }}</h2>
-                    <a href="{{ route('student.notifications.index') }}" class="text-xs font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline">{{ __('View all') }}</a>
-                </div>
-                <ul class="mt-3 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-100">
-                    @foreach (array_slice($dashboardNotices, 0, 4) as $n)
-                        <li>
-                            <a
-                                href="{{ $n['href'] ?? route('student.notifications.index') }}"
-                                class="flex min-h-[52px] flex-col gap-0.5 bg-white px-3 py-3 text-left first:rounded-t-lg last:rounded-b-lg transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between sm:px-4"
-                            >
-                                <span>
-                                    <span class="text-sm font-semibold text-slate-900">{{ $n['title'] }}</span>
-                                    <span class="mt-0.5 block text-xs text-slate-600">{{ $n['body'] }}</span>
-                                </span>
-                                <span class="mt-1 shrink-0 text-[11px] font-medium text-slate-400 sm:mt-0">
-                                    {{ \Illuminate\Support\Carbon::parse($n['at'])->timezone(config('app.timezone'))->format('M j, H:i') }}
-                                </span>
-                            </a>
-                        </li>
-                    @endforeach
-                </ul>
-            </section>
-        @endif
-
-    </div>
-
-    @if (is_array($dashboardPolicyNotice) && ($dashboardPolicyNotice['message'] ?? '') !== '')
-        <div
-            class="pointer-events-none fixed bottom-4 left-0 right-0 z-50 flex justify-center px-4 sm:justify-end sm:px-6"
-            role="status"
-        >
-            <div
-                class="pointer-events-auto w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white"
-            >
-                <p class="font-medium leading-snug">{{ $dashboardPolicyNotice['message'] }}</p>
-                <div class="mt-3 flex flex-wrap items-center gap-3">
-                    @if (($dashboardPolicyNotice['faq_url'] ?? '') !== '')
-                        <a
-                            href="{{ $dashboardPolicyNotice['faq_url'] }}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="text-xs font-semibold text-teal-200 underline-offset-2 hover:underline"
-                        >
-                            {{ __('Read FAQ') }}
-                        </a>
+                <div class="qs-std-dash-panel__body">
+                    @if ($newList === [])
+                        <p class="flex flex-1 items-center justify-center py-6 text-center text-sm text-slate-600">{{ __('No new assessments right now.') }}</p>
+                    @else
+                        <ul class="qs-std-feed-grid mt-3">
+                            @foreach ($newList as $qa)
+                                @php
+                                    $qaTypeLabel = (string) ($qa['type_label'] ?? '');
+                                    $qaTypeKey = strtolower($qaTypeLabel);
+                                    [$qaIcon, $qaTone] = match (true) {
+                                        str_contains($qaTypeKey, 'assignment') => ['fa-file-pen', 'assignments'],
+                                        str_contains($qaTypeKey, 'mid') => ['fa-flask', 'results'],
+                                        str_contains($qaTypeKey, 'exam') => ['fa-shield-halved', 'assessments'],
+                                        str_contains($qaTypeKey, 'quiz') => ['fa-clipboard-question', 'assessments'],
+                                        default => ['fa-clipboard-list', 'assessments'],
+                                    };
+                                @endphp
+                                @include('student.partials.dashboard-feed-row', [
+                                    'href' => $qa['href'],
+                                    'title' => $qa['title'],
+                                    'subtitle' => ($qa['course_line'] ?? '') !== '' ? $qa['course_line'] : null,
+                                    'meta' => $qa['published_at'] ?? null,
+                                    'action' => $qa['cta_label'] ?? null,
+                                    'countdownEndsAt' => $qa['countdown_ends_at'] ?? null,
+                                    'countdownPrefix' => $qa['countdown_prefix'] ?? null,
+                                    'countdownExpiredCta' => $qa['countdown_expired_cta'] ?? null,
+                                    'countdownExpiredState' => $qa['countdown_expired_state'] ?? null,
+                                    'icon' => $qaIcon,
+                                    'tone' => $qaTone,
+                                    'tag' => $qaTypeLabel !== '' ? $qaTypeLabel : null,
+                                ])
+                            @endforeach
+                        </ul>
                     @endif
-                    <form method="post" action="{{ route('student.dashboard.policy-notice.dismiss') }}" class="inline">
-                        @csrf
-                        <button type="submit" class="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20">
-                            {{ __('Dismiss') }}
-                        </button>
-                    </form>
                 </div>
-            </div>
+        </section>
+
+        @if ($dashboardCourseNewMaterials !== [])
+            <section class="mb-6 {{ $cardSection }}" aria-label="{{ __('New course materials') }}">
+                <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ __('New course materials') }}</h2>
+                <ul class="qs-std-feed-grid mt-3">
+                    @foreach (array_slice($dashboardCourseNewMaterials, 0, 3) as $row)
+                        @include('student.partials.dashboard-feed-row', [
+                            'href' => $materialsHubEnabled ? $materialsHref : null,
+                            'title' => trans_choice(':count new file in :course|:count new files in :course', (int) $row['count'], ['count' => (int) $row['count'], 'course' => $row['name']]),
+                            'action' => $materialsHubEnabled ? __('Open materials') : null,
+                            'icon' => 'fa-folder-open',
+                            'tone' => 'materials',
+                        ])
+                    @endforeach
+                </ul>
+            </section>
+        @endif
+
+        <div class="space-y-4 pb-6">
+            @if (is_array($dashboardPolicyNotice) && ($dashboardPolicyNotice['message'] ?? '') !== '')
+                <section class="rounded-xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-amber-800">{{ __('Institution notice') }}</p>
+                    <p class="mt-2 text-sm leading-relaxed text-amber-950">{{ $dashboardPolicyNotice['message'] }}</p>
+                    <div class="mt-3 flex flex-wrap gap-3">
+                        @if (($dashboardPolicyNotice['faq_url'] ?? '') !== '')
+                            <a href="{{ $dashboardPolicyNotice['faq_url'] }}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-amber-900 underline-offset-2 hover:underline">{{ __('Read FAQ') }}</a>
+                        @endif
+                        <form method="post" action="{{ route('student.dashboard.policy-notice.dismiss') }}" class="inline">
+                            @csrf
+                            <button type="submit" class="text-sm font-medium text-amber-900 underline-offset-2 hover:underline">{{ __('Dismiss') }}</button>
+                        </form>
+                    </div>
+                </section>
+            @endif
+
+            @if ($dashboardTip !== '')
+                @php
+                    $dashboardTipDismissKey = 'qs_student_dash_tip_v1_' . hash('sha256', $dashboardTip . '|' . app()->getLocale());
+                @endphp
+                <div
+                    x-data="{ key: @js($dashboardTipDismissKey), dismissed: false }"
+                    x-init="dismissed = (() => { try { return localStorage.getItem(key) === '1'; } catch (e) { return false; } })()"
+                    x-show="!dismissed"
+                    class="flex items-start gap-3 rounded-xl border border-slate-200/90 bg-slate-50 p-4"
+                    role="region"
+                    aria-label="{{ __('Tip') }}"
+                >
+                    <i class="fa-solid fa-lightbulb mt-0.5 text-amber-600" aria-hidden="true"></i>
+                    <p class="min-w-0 flex-1 text-sm text-slate-700">{{ $dashboardTip }}</p>
+                    <button type="button" class="shrink-0 text-slate-500 hover:text-slate-800" @click="dismissed = true; try { localStorage.setItem(key, '1'); } catch (e) {}" aria-label="{{ __('Dismiss tip') }}">
+                        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                    </button>
+                </div>
+            @endif
         </div>
-    @endif
+    </div>
 </x-layouts.student>

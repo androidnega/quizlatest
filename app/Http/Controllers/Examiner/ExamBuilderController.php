@@ -22,7 +22,7 @@ use App\Services\ExamAiQuestionGenerator;
 use App\Services\ExamAssessmentDocumentTextExtractor;
 use App\Services\ExamLifecycleService;
 use App\Services\ExamQuestionImportValidator;
-use App\Services\ExamRedisService;
+use App\Services\ExamRuntimeService;
 use App\Services\OutlineTopicSuggester;
 use App\Services\ProctoringOrchestratorService;
 use App\Services\SystemExamPolicyService;
@@ -46,7 +46,7 @@ class ExamBuilderController extends Controller
 {
     private function bumpExamConfigCache(Quiz $exam): void
     {
-        app(ExamRedisService::class)->forgetExamConfig((int) $exam->id);
+        app(ExamRuntimeService::class)->forgetExamConfig((int) $exam->id);
     }
 
     private function assertExamDraftForContentMutations(Quiz $exam): void

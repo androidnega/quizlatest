@@ -39,8 +39,8 @@ class StudentDashboardNewAssessmentsTest extends AssignmentCourseworkFlowTest
         $this->actingAs($ctx['student'])
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee(__('New for you'), false)
+            ->assertSee(__('Open & new assessments'))
             ->assertSee('Fresh Surface Quiz Marker', false)
-            ->assertSee(__('Instructions'), false);
+            ->assertSee(__('Start quiz'), false);
     }
 }

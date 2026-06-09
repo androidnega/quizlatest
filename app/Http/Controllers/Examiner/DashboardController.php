@@ -114,12 +114,21 @@ class DashboardController extends Controller
             })
             ->count();
 
+        // Count of SUBMISSIONS (distinct exam sessions) waiting on essay grading,
+        // not individual essay-answer rows. A single submission with multiple
+        // essay sub-questions used to be counted N times here, which made the
+        // pill on the dashboard appear inflated (e.g. "17" for one assignment
+        // with several students each answering several essay parts).
+        //
+        // We also restrict to assessment_type=assignment so this matches the
+        // grading queue (which is assignment-only — see ManualGradingController::pendingEssayQuery).
         $pendingManualGradingCount = ExamSessionAnswer::query()
             ->where('evaluation_status', 'pending_manual')
             ->whereHas('question', fn ($q) => $q->where('type', 'essay'))
             ->whereHas('examSession.exam', function ($q) use ($manageableCourseIds, $yearFilter, $user) {
-                $q->whereIn('course_id', $manageableCourseIds);
-                $q->where('created_by', $user->id);
+                $q->where('assessment_type', 'assignment')
+                    ->whereIn('course_id', $manageableCourseIds)
+                    ->where('created_by', $user->id);
                 if ($yearFilter > 0) {
                     $q->where(function ($q2) use ($yearFilter) {
                         $q2->whereNull('academic_year_id')
@@ -127,7 +136,8 @@ class DashboardController extends Controller
                     });
                 }
             })
-            ->count();
+            ->distinct('exam_session_id')
+            ->count('exam_session_id');
 
         $quizIds = Quiz::query()
             ->where('created_by', $user->id)

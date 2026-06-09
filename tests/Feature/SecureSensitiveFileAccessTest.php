@@ -205,7 +205,10 @@ class SecureSensitiveFileAccessTest extends TestCase
         $ctx['session']->update(['verification_image_path' => $rel]);
 
         $this->actingAs($ctx['examiner']);
-        $this->get(route('examiner.exam-sessions.show', $ctx['session']))
+        $this->get(route('examiner.exam-sessions.show', [
+            'exam' => $ctx['session']->exam,
+            'examSession' => $ctx['session'],
+        ]))
             ->assertOk()
             ->assertDontSee($rel, false);
     }

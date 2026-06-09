@@ -18,7 +18,10 @@ return [
     |
     */
 
-    'default' => env('LOG_CHANNEL', 'stack'),
+    // Audit P1.4: daily rotation by default; the legacy "single" channel
+    // produces a single unbounded file that becomes a hot lock and grows
+    // indefinitely on shared hosting.
+    'default' => env('LOG_CHANNEL', 'daily'),
 
     /*
     |--------------------------------------------------------------------------
@@ -54,22 +57,49 @@ return [
 
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', (string) env('LOG_STACK', 'single')),
+            'channels' => explode(',', (string) env('LOG_STACK', 'daily')),
             'ignore_exceptions' => false,
         ],
 
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
+            'level' => env('LOG_LEVEL', 'warning'),
             'replace_placeholders' => true,
         ],
 
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
-            'days' => env('LOG_DAILY_DAYS', 14),
+            'level' => env('LOG_LEVEL', 'warning'),
+            'days' => (int) env('LOG_DAILY_DAYS', 7),
+            'replace_placeholders' => true,
+        ],
+
+        // Audit Section 8.3: per-domain channels keep exam/proctor/AI noise
+        // out of the main laravel.log and let us prune them on different
+        // schedules.
+        'exam' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/exam.log'),
+            'level' => env('EXAM_LOG_LEVEL', 'info'),
+            'days' => (int) env('EXAM_LOG_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'proctor' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/proctor.log'),
+            'level' => env('PROCTOR_LOG_LEVEL', 'warning'),
+            'days' => (int) env('PROCTOR_LOG_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
+        'ai' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/ai.log'),
+            'level' => env('AI_LOG_LEVEL', 'info'),
+            'days' => (int) env('AI_LOG_DAYS', 14),
             'replace_placeholders' => true,
         ],
 

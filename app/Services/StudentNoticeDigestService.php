@@ -4,9 +4,10 @@ namespace App\Services;
 
 use App\Models\ExamSession;
 use App\Models\Quiz;
+use App\Support\AssignmentDueCountdown;
 use App\Models\Result;
 use App\Models\User;
-use Carbon\Carbon;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -15,10 +16,13 @@ use Illuminate\Support\Facades\DB;
  */
 final class StudentNoticeDigestService
 {
+    public function __construct(
+        private readonly StudentAssignmentCatalogService $assignmentCatalog,
+    ) {}
     /**
-     * @return list<array{id: string, title: string, body: string, href: ?string, at: string}>
+     * @return list<array{id: string, title: string, body: string, href: ?string, at: string, is_unread: bool}>
      */
-    public function noticesFor(User $user, int $limit = 20): array
+    public function noticesFor(User $user, int $limit = 20, ?string $seenAt = null): array
     {
         if ($user->role !== 'student') {
             return [];
@@ -50,34 +54,59 @@ final class StudentNoticeDigestService
                 ->limit(30)
                 ->get(['id', 'title', 'assessment_type', 'published_at', 'due_at', 'start_time', 'end_time']);
 
+            // Audit Phase 10 / P1: previously each foreach iteration ran
+            // its own SELECT to look up the latest submitted ExamSession
+            // for the (student, exam) pair. With 30 published exams that
+            // was 60 round trips per noticesFor() call (which itself is
+            // memoized but still). Now we fetch once with whereIn().
+            $publishedIds = $published->pluck('id')->all();
+            $submittedSessionsByExamId = collect();
+            if ($publishedIds !== []) {
+                $submittedSessionsByExamId = ExamSession::query()
+                    ->where('student_id', $user->id)
+                    ->whereIn('exam_id', $publishedIds)
+                    ->where('status', 'submitted')
+                    ->orderByDesc('id')
+                    ->get(['id', 'session_id', 'exam_id'])
+                    ->unique('exam_id')
+                    ->keyBy('exam_id');
+            }
+
             foreach ($published as $exam) {
                 $pubAt = $exam->published_at;
                 if ($pubAt !== null && $pubAt->greaterThanOrEqualTo($now->copy()->subDays(7))) {
+                    $submittedSession = $submittedSessionsByExamId->get($exam->id);
+
                     $out[] = [
                         'id' => 'newpub:'.$exam->id,
-                        'title' => __('New assessment published'),
+                        'title' => $submittedSession !== null
+                            ? __('Assessment submitted')
+                            : __('New assessment published'),
                         'body' => (string) $exam->title,
-                        'href' => route('student.exam.instructions', $exam),
+                        'href' => $this->assignmentCatalog->studentEntryHref($exam, $submittedSession),
                         'at' => $pubAt->toIso8601String(),
                     ];
                 }
             }
 
             foreach ($published as $exam) {
-                $alreadySubmitted = ExamSession::query()
-                    ->where('student_id', $user->id)
-                    ->where('exam_id', $exam->id)
-                    ->where('status', 'submitted')
-                    ->exists();
+                $alreadySubmitted = $submittedSessionsByExamId->has($exam->id);
 
-                if ($exam->assessment_type === 'assignment' && $exam->due_at !== null && ! $alreadySubmitted) {
-                    if ($now->lt($exam->due_at) && $now->greaterThanOrEqualTo($exam->due_at->copy()->subHours(48))) {
+                if ($exam->assessment_type === 'assignment' && ! $alreadySubmitted && $exam->isAvailableForStudentToStart($now)) {
+                    $dueAt = $exam->due_at;
+                    $showDue = $dueAt !== null
+                        && $now->lessThanOrEqualTo($dueAt->copy()->addDays(7));
+                    if ($showDue) {
                         $out[] = [
                             'id' => 'due:'.$exam->id,
-                            'title' => __('Assignment due soon'),
-                            'body' => $exam->title.' · '.__('Due :d', ['d' => $exam->due_at->timezone($tz)->format('M j, H:i')]),
+                            'title' => $dueAt !== null && $now->greaterThan($dueAt)
+                                ? __('Assignment overdue — still open')
+                                : __('Assignment due soon'),
+                            'body' => $exam->title.($dueAt !== null
+                                ? ' · '.__('Due :d', ['d' => $dueAt->timezone($tz)->format('M j, H:i')])
+                                : ''),
                             'href' => route('student.exam.prepare', $exam),
-                            'at' => $now->toIso8601String(),
+                            'at' => ($dueAt ?? $now)->toIso8601String(),
                         ];
                     }
                 }
@@ -95,6 +124,9 @@ final class StudentNoticeDigestService
             }
         }
 
+        // Audit Phase 10 / P1: held + pending used to run a per-row SELECT
+        // for the related ExamSession. Batch into a single query for both
+        // status sets.
         $held = Result::query()
             ->where('user_id', $user->id)
             ->where('status', 'held')
@@ -102,22 +134,6 @@ final class StudentNoticeDigestService
             ->orderByDesc('id')
             ->limit(5)
             ->get();
-
-        foreach ($held as $r) {
-            $session = ExamSession::query()
-                ->where('student_id', $user->id)
-                ->where('exam_id', $r->quiz_id)
-                ->where('status', 'submitted')
-                ->orderByDesc('id')
-                ->first(['id', 'session_id']);
-            $out[] = [
-                'id' => 'held:'.$r->id,
-                'title' => __('Held for review'),
-                'body' => __('Your work on :title is under review before a result can be released.', ['title' => $r->quiz?->title ?? __('this assessment')]),
-                'href' => $session ? route('student.results.show', $session) : route('student.results.index'),
-                'at' => ($r->submitted_at ?? $r->updated_at ?? $now)->toIso8601String(),
-            ];
-        }
 
         $pending = Result::query()
             ->where('user_id', $user->id)
@@ -127,13 +143,32 @@ final class StudentNoticeDigestService
             ->limit(5)
             ->get();
 
-        foreach ($pending as $r) {
-            $session = ExamSession::query()
+        $reviewExamIds = $held->pluck('quiz_id')->merge($pending->pluck('quiz_id'))->unique()->all();
+        $reviewSessionsByExamId = collect();
+        if ($reviewExamIds !== []) {
+            $reviewSessionsByExamId = ExamSession::query()
                 ->where('student_id', $user->id)
-                ->where('exam_id', $r->quiz_id)
+                ->whereIn('exam_id', $reviewExamIds)
                 ->where('status', 'submitted')
                 ->orderByDesc('id')
-                ->first(['id', 'session_id']);
+                ->get(['id', 'session_id', 'exam_id'])
+                ->unique('exam_id')
+                ->keyBy('exam_id');
+        }
+
+        foreach ($held as $r) {
+            $session = $reviewSessionsByExamId->get($r->quiz_id);
+            $out[] = [
+                'id' => 'held:'.$r->id,
+                'title' => __('Held for review'),
+                'body' => __('Your work on :title is under review before a result can be released.', ['title' => $r->quiz?->title ?? __('this assessment')]),
+                'href' => $session ? route('student.results.show', $session) : route('student.results.index'),
+                'at' => ($r->submitted_at ?? $r->updated_at ?? $now)->toIso8601String(),
+            ];
+        }
+
+        foreach ($pending as $r) {
+            $session = $reviewSessionsByExamId->get($r->quiz_id);
             $out[] = [
                 'id' => 'pend:'.$r->id,
                 'title' => __('Awaiting grading'),
@@ -186,6 +221,7 @@ final class StudentNoticeDigestService
                 continue;
             }
             $seen[$k] = true;
+            $row['is_unread'] = $this->isUnread((string) ($row['at'] ?? ''), $seenAt);
             $dedup[] = $row;
             if (count($dedup) >= $limit) {
                 break;
@@ -195,19 +231,43 @@ final class StudentNoticeDigestService
         return $dedup;
     }
 
+    private function isUnread(string $at, ?string $seenAt): bool
+    {
+        if ($seenAt === null || $seenAt === '') {
+            return true;
+        }
+        if ($at === '') {
+            return false;
+        }
+
+        return strcmp($at, $seenAt) > 0;
+    }
+
     /**
-     * Published assessments in the student’s class courses from the last N days (for dashboard spotlight).
+     * Open or newly published assessments for the dashboard spotlight.
      *
-     * @return list<array{quiz_id: int, title: string, course_line: string, type_label: string, href: string, published_at: string}>
+     * @return list<array{
+     *     quiz_id: int,
+     *     title: string,
+     *     course_line: string,
+     *     type_label: string,
+     *     href: string,
+     *     published_at: string,
+     *     cta_label: string,
+     *     countdown_ends_at: ?string,
+     *     countdown_prefix: ?string,
+     *     countdown_expired_cta: ?string,
+     *     countdown_expired_state: ?string,
+     * }>
      */
-    public function recentlyPublishedAssessments(User $user, int $withinDays = 7, int $limit = 8): array
+    public function dashboardOpenAssessments(User $user, int $newWithinDays = 7, int $limit = 8): array
     {
         if ($user->role !== 'student' || $user->class_id === null) {
             return [];
         }
 
         $now = Carbon::now();
-        $since = $now->copy()->subDays(max(1, $withinDays));
+        $newSince = $now->copy()->subDays(max(1, $newWithinDays));
 
         $courseIds = DB::table('class_course')
             ->where('class_id', $user->class_id)
@@ -227,17 +287,37 @@ final class StudentNoticeDigestService
                         $q2->where('classes.id', (int) $user->class_id);
                     });
             })
-            ->whereNotNull('published_at')
-            ->where('published_at', '>=', $since)
             ->with(['course:id,code,title'])
             ->orderByDesc('published_at')
-            ->limit(max(1, $limit))
             ->get();
+
+        $submittedSessionsByExamId = ExamSession::query()
+            ->where('student_id', $user->id)
+            ->whereIn('exam_id', $quizzes->pluck('id'))
+            ->where('status', 'submitted')
+            ->orderByDesc('id')
+            ->get(['id', 'session_id', 'exam_id'])
+            ->unique('exam_id')
+            ->keyBy('exam_id');
 
         $tz = (string) config('app.timezone');
         $out = [];
 
         foreach ($quizzes as $exam) {
+            $submittedSession = $submittedSessionsByExamId->get($exam->id);
+            if ($submittedSession !== null) {
+                continue;
+            }
+
+            $pub = $exam->published_at;
+            $isNew = $pub !== null && $pub->greaterThanOrEqualTo($newSince);
+            $canStart = $exam->isAvailableForStudentToStart($now);
+            $upcoming = $exam->start_time !== null && $now->lt($exam->start_time);
+
+            if (! $isNew && ! $canStart && ! $upcoming) {
+                continue;
+            }
+
             $typeLabel = match ($exam->assessment_type) {
                 'assignment' => __('Assignment'),
                 'quiz' => __('Quiz'),
@@ -251,24 +331,138 @@ final class StudentNoticeDigestService
                 $exam->course?->title,
             ])));
 
-            $pub = $exam->published_at;
+            $countdown = $this->resolveDashboardCountdown($exam, $now);
+
+            // The "Start" CTA label per assessment type — shared by both the
+            // live cta_label (when the quiz is already open) and the
+            // post-expiry CTA (when the "Opens in" countdown completes and the
+            // window has just become startable in the browser).
+            $startLabel = match ((string) ($exam->assessment_type ?? 'exam')) {
+                'quiz' => __('Start quiz'),
+                'mid' => __('Start mid-semester'),
+                'exam' => __('Start exam'),
+                'assignment' => __('Open assignment'),
+                default => __('Start'),
+            };
+
+            $ctaLabel = match (true) {
+                $exam->isAssignment() => __('Open assignment'),
+                $canStart => $startLabel,
+                $upcoming => null,
+                default => __('Instructions'),
+            };
+
+            // When the live countdown hits 00:00:00 in the browser, the timer
+            // surface swaps from the clock to this CTA without a page reload.
+            // Driven by the prefix:
+            //   - "Opens in" → the window has just opened, so promote to "Start"
+            //   - "Closes in" → the window has just closed, so signal "Closed"
+            //   - "Due in"   → the assignment hit its due moment → "Submit now"
+            $prefixKey = strtolower((string) ($countdown['prefix'] ?? ''));
+            [$expiredCta, $expiredState] = match (true) {
+                $prefixKey === '' => [null, null],
+                str_contains($prefixKey, 'open') => [$startLabel, 'ready'],
+                str_contains($prefixKey, 'close') => [__('Closed'), 'closed'],
+                str_contains($prefixKey, 'due') => [__('Submit now'), 'overdue'],
+                default => [$startLabel, 'ready'],
+            };
+
             $out[] = [
                 'quiz_id' => (int) $exam->id,
                 'title' => (string) $exam->title,
                 'course_line' => $courseLine,
                 'type_label' => $typeLabel,
-                'href' => route('student.exam.instructions', $exam),
+                'href' => $this->assignmentCatalog->studentEntryHref($exam, null),
                 'published_at' => $pub !== null
                     ? $pub->timezone($tz)->format('M j, Y')
                     : '',
+                'published_at_sort' => $pub?->toIso8601String() ?? '',
+                'cta_label' => $ctaLabel,
+                'countdown_ends_at' => $countdown['ends_at'] ?? null,
+                'countdown_prefix' => $countdown['prefix'] ?? null,
+                'countdown_expired_cta' => $expiredCta,
+                'countdown_expired_state' => $expiredState,
             ];
         }
 
-        return $out;
+        usort($out, static function (array $a, array $b): int {
+            $aEnd = $a['countdown_ends_at'] ?? null;
+            $bEnd = $b['countdown_ends_at'] ?? null;
+            if ($aEnd !== null && $bEnd !== null) {
+                return strcmp($aEnd, $bEnd);
+            }
+            if ($aEnd !== null) {
+                return -1;
+            }
+            if ($bEnd !== null) {
+                return 1;
+            }
+
+            return strcmp((string) ($b['published_at_sort'] ?? ''), (string) ($a['published_at_sort'] ?? ''));
+        });
+
+        return array_slice(array_map(static function (array $row): array {
+            unset($row['published_at_sort']);
+
+            return $row;
+        }, $out), 0, max(1, $limit));
     }
 
-    public function noticeCount(User $user): int
+    public function openAssessmentsCount(User $user): int
     {
-        return count($this->noticesFor($user, 50));
+        return count($this->dashboardOpenAssessments($user, 7, 50));
+    }
+
+    /**
+     * @return array{ends_at: string, prefix: string}|null
+     */
+    private function resolveDashboardCountdown(Quiz $exam, Carbon $now): ?array
+    {
+        if ($exam->isAssignment()) {
+            return AssignmentDueCountdown::resolve($exam, $now);
+        }
+
+        $opensWindow = $now->copy()->addDays(AssignmentDueCountdown::WINDOW_DAYS);
+        $closesWindow = $now->copy()->addDay();
+
+        if ($exam->start_time !== null && $now->lt($exam->start_time)) {
+            $start = $exam->start_time->copy();
+            if ($start->lessThanOrEqualTo($opensWindow)) {
+                return [
+                    'ends_at' => $start->toIso8601String(),
+                    'prefix' => __('Opens in'),
+                ];
+            }
+        }
+
+        if ($exam->end_time !== null && $exam->isAvailableForStudentToStart($now)) {
+            $end = $exam->end_time->copy();
+            if ($end->greaterThan($now) && $end->lessThanOrEqualTo($closesWindow)) {
+                return [
+                    'ends_at' => $end->toIso8601String(),
+                    'prefix' => __('Closes in'),
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<array{quiz_id: int, title: string, course_line: string, type_label: string, href: string, published_at: string, cta_label: string}>
+     */
+    public function recentlyPublishedAssessments(User $user, int $withinDays = 7, int $limit = 8): array
+    {
+        return $this->dashboardOpenAssessments($user, $withinDays, $limit);
+    }
+
+    public function noticeCount(User $user, ?string $seenAt = null): int
+    {
+        $notices = $this->noticesFor($user, 50, $seenAt);
+        if ($seenAt === null || $seenAt === '') {
+            return count($notices);
+        }
+
+        return count(array_filter($notices, static fn (array $n): bool => (bool) ($n['is_unread'] ?? false)));
     }
 }

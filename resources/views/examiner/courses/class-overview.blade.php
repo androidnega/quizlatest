@@ -40,7 +40,7 @@
                                 <td class="text-sm text-qs-text">{{ (int) ($row->pending_manual_count ?? 0) }}</td>
                                 <td class="text-sm text-qs-text">{{ (int) ($row->held_count ?? 0) }}</td>
                                 <td class="text-right">
-                                    <a href="{{ route('examiner.exams.classes.results', [$exam, $classroom]) }}" class="inline-flex min-h-[36px] items-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">{{ __('Open records') }}</a>
+                                    <a href="{{ route('examiner.quizzes.workspace', ['exam' => $exam, 'tab' => 'sessions']) }}" class="inline-flex min-h-[36px] items-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">{{ __('Open sessions') }}</a>
                                 </td>
                             </tr>
                         @endforeach

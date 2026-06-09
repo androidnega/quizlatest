@@ -10,13 +10,16 @@ use App\Models\PracticeQuiz;
 use App\Models\Quiz;
 use App\Models\Result;
 use App\Models\User;
+use App\Support\AssignmentDueCountdown;
 use App\Services\PracticeModuleSettings;
 use App\Services\StudentDashboardDigestService;
+use App\Services\StudentExamSessionGateService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -34,7 +37,7 @@ class DashboardController extends Controller
         }
 
         if ($user->role === 'examiner') {
-            return redirect()->route('examiner.dashboard');
+            return app(Examiner\DashboardController::class)->index(request());
         }
 
         if ($user->role !== 'student') {
@@ -91,19 +94,25 @@ class DashboardController extends Controller
 
         $user->loadMissing(['program.department', 'level', 'classroom.academicYearStruct', 'university']);
 
-        $activeYearId = AcademicYear::activeForUniversity((int) $user->university_id)?->id;
+        // Audit P2.2: AcademicYear::activeForUniversity is invariant for
+        // 5+ minutes and is queried by every page in the student shell.
+        $activeYearId = Cache::remember(
+            "academic_year_active:university:{$user->university_id}",
+            300,
+            fn () => AcademicYear::activeForUniversity((int) $user->university_id)?->id,
+        );
 
         $classYearOk = true;
         if ($user->class_id !== null && $activeYearId !== null) {
-            $cid = Classroom::query()->whereKey($user->class_id)->value('academic_year_id');
+            $cid = Cache::remember(
+                "class:{$user->class_id}:academic_year",
+                300,
+                fn () => Classroom::query()->whereKey($user->class_id)->value('academic_year_id'),
+            );
             $classYearOk = $cid === null || (int) $cid === (int) $activeYearId;
         }
 
-        $activeSession = ExamSession::query()
-            ->where('student_id', $user->id)
-            ->whereIn('status', ['active', 'paused'])
-            ->with(['exam.course:id,code,title'])
-            ->first();
+        $activeSession = app(StudentExamSessionGateService::class)->timedActiveSession($user);
 
         if (! $buildAssessmentWorklist) {
             $practiceEnabled = $practiceSettings->studentPracticeEnabled();
@@ -258,6 +267,7 @@ class DashboardController extends Controller
             if ($row === null) {
                 continue;
             }
+            $row = $this->enrichWorklistRowWithCountdown($row, $exam, $now, $session);
             $key = $row['section'];
             unset($row['section']);
             $sections[$key][] = $row;
@@ -439,9 +449,12 @@ class DashboardController extends Controller
 
                 $scoreLine = null;
                 if ($result && (float) ($exam->total_marks ?? 0) > 0) {
+                    $fmtMark = static fn ($v): string => is_numeric($v)
+                        ? rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.')
+                        : (string) $v;
                     $scoreLine = __('Score: :s / :m', [
-                        's' => is_numeric($result->score) ? number_format((float) $result->score, 1) : (string) $result->score,
-                        'm' => number_format((float) $exam->total_marks, 1),
+                        's' => $fmtMark($result->score),
+                        'm' => $fmtMark($exam->total_marks),
                     ]);
                 }
 
@@ -569,5 +582,39 @@ class DashboardController extends Controller
             'secondary_href' => route('student.exam.instructions', $exam),
             'is_assignment' => false,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function enrichWorklistRowWithCountdown(
+        array $row,
+        Quiz $exam,
+        Carbon $now,
+        ?ExamSession $session,
+    ): array {
+        if (! $exam->isAssignment()) {
+            return $row;
+        }
+
+        $countdown = AssignmentDueCountdown::resolve($exam, $now, $session);
+        if ($countdown === null) {
+            return $row;
+        }
+
+        $row['countdown_ends_at'] = $countdown['ends_at'];
+        $row['countdown_prefix'] = $countdown['prefix'];
+
+        // Mirror the digest mapping so the worklist row also flips to a
+        // dynamic Start CTA when the timer hits zero in-browser.
+        $prefixKey = strtolower((string) $countdown['prefix']);
+        [$row['countdown_expired_cta'], $row['countdown_expired_state']] = match (true) {
+            str_contains($prefixKey, 'close') => [__('Closed'), 'closed'],
+            str_contains($prefixKey, 'due') => [__('Submit now'), 'overdue'],
+            default => [__('Start'), 'ready'],
+        };
+
+        return $row;
     }
 }

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
-use App\Models\AcademicYear;
 use App\Models\ExamSession;
 use App\Models\Result;
 use App\Support\StudentExamResultBreakdown;
@@ -18,34 +17,10 @@ class StudentResultController extends Controller
     {
         $user = auth()->user();
 
-        $activeYearId = AcademicYear::activeForUniversity((int) $user->university_id)?->id;
-        $showAllYears = request()->boolean('all_years');
-
-        if ($showAllYears) {
-            $yearFilter = 0;
-        } elseif (request()->filled('academic_year_id')) {
-            $yearFilter = (int) request('academic_year_id');
-        } else {
-            $yearFilter = $activeYearId !== null ? (int) $activeYearId : 0;
-        }
-
-        $academicYears = AcademicYear::query()
-            ->where('university_id', $user->university_id)
-            ->orderByDesc('start_date')
-            ->get(['id', 'name', 'is_active']);
-
         $sessions = ExamSession::query()
             ->where('student_id', $user->id)
             ->where('status', 'submitted')
-            ->with(['exam:id,title,total_marks,academic_year_id,course_id', 'exam.course:id,code,title'])
-            ->when($yearFilter > 0, function ($q) use ($yearFilter) {
-                $q->whereHas('exam', function ($eq) use ($yearFilter) {
-                    $eq->where(function ($q2) use ($yearFilter) {
-                        $q2->whereNull('academic_year_id')
-                            ->orWhere('academic_year_id', $yearFilter);
-                    });
-                });
-            })
+            ->with(['exam:id,title,total_marks,course_id,assessment_type,grades_released_at', 'exam.course:id,code,title'])
             ->orderByDesc('end_time')
             ->orderByDesc('id')
             ->get();
@@ -61,24 +36,8 @@ class StudentResultController extends Controller
             $session->setRelation('result', $resultsByQuiz->get($session->exam_id));
         });
 
-        $resultsShowingAllYears = $yearFilter === 0;
-        $resultsFocusedYearId = $yearFilter > 0 ? $yearFilter : null;
-        $resultsFilterLabel = $resultsShowingAllYears
-            ? __('All academic years')
-            : ($academicYears->firstWhere('id', $yearFilter)?->name ?? __('Academic year'));
-        $defaultsToActiveYear = ! $showAllYears
-            && ! request()->filled('academic_year_id')
-            && $activeYearId !== null
-            && $yearFilter === (int) $activeYearId;
-
         return view('student.results.index', [
             'sessions' => $sessions,
-            'academicYears' => $academicYears,
-            'activeAcademicYearId' => $activeYearId,
-            'resultsShowingAllYears' => $resultsShowingAllYears,
-            'resultsFocusedYearId' => $resultsFocusedYearId,
-            'resultsFilterLabel' => $resultsFilterLabel,
-            'defaultsToActiveYear' => $defaultsToActiveYear,
         ]);
     }
 

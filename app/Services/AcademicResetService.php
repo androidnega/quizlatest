@@ -381,38 +381,41 @@ final class AcademicResetService
      */
     private function runContinual(array $frozenStudentIds, array $frozenClassIds, bool $promoteClassRows, int $universityId): void
     {
-        $students = User::query()
+        // Audit Phase 12 / Section 3.3: stream students via cursor() and
+        // pre-build the entire Level ladder once instead of running 2
+        // SELECTs per student (was an N+1 against the `levels` table).
+        $levels = Level::query()
+            ->where('university_id', $universityId)
+            ->orderBy('sort_order')
+            ->get(['id', 'sort_order']);
+
+        $levelById = $levels->keyBy('id');
+
+        $nextLevelIdFor = static function (?int $levelId) use ($levelById, $levels): ?int {
+            if ($levelId === null) {
+                return null;
+            }
+            $current = $levelById->get($levelId);
+            if ($current === null) {
+                return null;
+            }
+            $next = $levels->first(fn ($l) => (int) $l->sort_order > (int) $current->sort_order);
+            return $next?->id;
+        };
+
+        User::query()
             ->whereIn('id', $frozenStudentIds)
             ->where('role', 'student')
-            ->get();
-
-        foreach ($students as $student) {
-            $levelId = $student->level_id;
-            if ($levelId === null) {
-                continue;
-            }
-            $current = Level::query()->where('id', $levelId)->where('university_id', $universityId)->first();
-            if ($current === null) {
-                continue;
-            }
-            $next = Level::query()
-                ->where('university_id', $universityId)
-                ->where('sort_order', '>', $current->sort_order)
-                ->orderBy('sort_order')
-                ->first();
-
-            if ($next !== null) {
-                $student->update([
-                    'level_id' => $next->id,
-                    'class_id' => null,
-                ]);
-            } else {
-                $student->update([
-                    'class_id' => null,
-                    'is_active' => false,
-                ]);
-            }
-        }
+            ->select(['id', 'level_id', 'class_id'])
+            ->cursor()
+            ->each(function (User $student) use ($nextLevelIdFor): void {
+                $nextId = $nextLevelIdFor($student->level_id);
+                if ($nextId !== null) {
+                    $student->update(['level_id' => $nextId, 'class_id' => null]);
+                } else {
+                    $student->update(['class_id' => null, 'is_active' => false]);
+                }
+            });
 
         if ($promoteClassRows && $frozenClassIds !== []) {
             foreach ($frozenClassIds as $cid) {

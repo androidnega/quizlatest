@@ -44,6 +44,33 @@ final class SystemExamPolicyService
     }
 
     /**
+     * Presentation mode for the student exam runtime.
+     * - 'classic' = the existing list-of-questions layout (default; unchanged behaviour).
+     * - 'arena'   = the gamified Kahoot-style flow (single colored card, step rail, feedback sweep).
+     *
+     * Assignments always render in classic regardless of this setting — coursework
+     * needs the essay editor and file upload slot that don't fit the arena card.
+     */
+    public function getStudentExamPlayMode(): string
+    {
+        $raw = strtolower(trim((string) ($this->settings->get('student_exam_play_mode') ?? '')));
+        if ($raw === 'arena') {
+            return 'arena';
+        }
+
+        return 'classic';
+    }
+
+    public function getStudentExamPlayModeForQuiz(?Quiz $quiz): string
+    {
+        if ($quiz !== null && $quiz->isAssignment()) {
+            return 'classic';
+        }
+
+        return $this->getStudentExamPlayMode();
+    }
+
+    /**
      * When proctoring is enabled, require one exam-start verification photo (not identity matching).
      */
     public function isExamStartSnapshotRequired(): bool

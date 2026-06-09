@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Modern Proctored Quiz</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+  />
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: "Inter", sans-serif;
+    }
+
+    .sound-wave span {
+      animation: wave 1s infinite ease-in-out;
+    }
+
+    .sound-wave span:nth-child(2) { animation-delay: .08s; }
+    .sound-wave span:nth-child(3) { animation-delay: .16s; }
+    .sound-wave span:nth-child(4) { animation-delay: .24s; }
+    .sound-wave span:nth-child(5) { animation-delay: .32s; }
+    .sound-wave span:nth-child(6) { animation-delay: .40s; }
+    .sound-wave span:nth-child(7) { animation-delay: .48s; }
+
+    @keyframes wave {
+      0%, 100% {
+        height: 8px;
+        opacity: .45;
+      }
+      50% {
+        height: 30px;
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-[#f6f7f9] text-slate-900">
+
+  <!-- App Header -->
+  <header class="sticky top-0 z-50 border-b border-slate-200 bg-white">
+    <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+
+      <div class="flex items-center gap-3">
+        <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+
+        <div>
+          <h1 class="text-sm font-extrabold text-slate-900 sm:text-base">
+            Proctored Quiz
+          </h1>
+          <p class="text-xs font-medium text-slate-500">
+            Mathematics · Level 200
+          </p>
+        </div>
+      </div>
+
+      <div class="hidden items-center gap-2 md:flex">
+        <span class="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600">
+          <i class="fa-regular fa-clock mr-1"></i>
+          22:48 left
+        </span>
+
+        <span class="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700">
+          <i class="fa-solid fa-circle text-[7px] mr-1"></i>
+          Recording
+        </span>
+      </div>
+
+      <button class="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700">
+        Submit
+      </button>
+
+    </div>
+  </header>
+
+  <!-- Question Progress Rail -->
+  <section class="sticky top-[65px] z-40 border-b border-slate-200 bg-[#f6f7f9]/95 backdrop-blur">
+    <div class="mx-auto max-w-7xl px-4 py-4">
+
+      <div class="mb-3 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+            Question navigation
+          </p>
+        </div>
+
+        <div class="flex items-center gap-3 text-xs font-bold text-slate-500">
+          <span>8 answered</span>
+          <span class="h-1 w-1 rounded-full bg-slate-300"></span>
+          <span>1 flagged</span>
+          <span class="h-1 w-1 rounded-full bg-slate-300"></span>
+          <span>11 left</span>
+        </div>
+      </div>
+
+      <div class="flex gap-2 overflow-x-auto pb-1">
+        <button class="h-8 min-w-8 rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-700">1</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-700">2</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-700">3</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-700">4</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-700">5</button>
+
+        <button class="h-8 min-w-8 rounded-full bg-slate-900 text-xs font-bold text-white">6</button>
+
+        <button class="relative h-8 min-w-8 rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-700">
+          7
+          <span class="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-amber-500"></span>
+        </button>
+
+        <button class="h-8 min-w-8 rounded-full border border-slate-300 bg-white text-xs font-bold text-slate-700">8</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-200 bg-slate-100 text-xs font-bold text-slate-400">9</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-200 bg-slate-100 text-xs font-bold text-slate-400">10</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-200 bg-slate-100 text-xs font-bold text-slate-400">11</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-200 bg-slate-100 text-xs font-bold text-slate-400">12</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-200 bg-slate-100 text-xs font-bold text-slate-400">13</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-200 bg-slate-100 text-xs font-bold text-slate-400">14</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-200 bg-slate-100 text-xs font-bold text-slate-400">15</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-200 bg-slate-100 text-xs font-bold text-slate-400">16</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-200 bg-slate-100 text-xs font-bold text-slate-400">17</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-200 bg-slate-100 text-xs font-bold text-slate-400">18</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-200 bg-slate-100 text-xs font-bold text-slate-400">19</button>
+        <button class="h-8 min-w-8 rounded-full border border-slate-200 bg-slate-100 text-xs font-bold text-slate-400">20</button>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Main Layout -->
+  <main class="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-6 lg:grid-cols-[260px_1fr_300px]">
+
+    <!-- Left Exam Info -->
+    <aside class="hidden lg:block">
+      <div class="sticky top-[160px] space-y-4">
+
+        <div class="rounded-3xl border border-slate-200 bg-white p-5">
+          <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
+            Current
+          </p>
+
+          <h2 class="mt-2 text-3xl font-extrabold text-slate-900">
+            Q6
+          </h2>
+
+          <p class="mt-1 text-sm font-semibold text-slate-500">
+            Multiple choice
+          </p>
+
+          <div class="mt-5 h-2 rounded-full bg-slate-100">
+            <div class="h-2 w-[40%] rounded-full bg-slate-900"></div>
+          </div>
+
+          <p class="mt-3 text-xs font-semibold text-slate-500">
+            40% of quiz completed
+          </p>
+        </div>
+
+        <div class="rounded-3xl border border-slate-200 bg-white p-5">
+          <p class="text-sm font-extrabold text-slate-900">
+            Rules
+          </p>
+
+          <div class="mt-4 space-y-3 text-sm font-medium text-slate-500">
+            <p class="flex gap-2">
+              <i class="fa-solid fa-circle-check mt-1 text-emerald-600"></i>
+              Keep your face visible.
+            </p>
+            <p class="flex gap-2">
+              <i class="fa-solid fa-circle-check mt-1 text-emerald-600"></i>
+              Do not leave fullscreen.
+            </p>
+            <p class="flex gap-2">
+              <i class="fa-solid fa-circle-check mt-1 text-emerald-600"></i>
+              Avoid background noise.
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- Center Question -->
+    <section class="min-w-0">
+
+      <div class="rounded-[2rem] border border-slate-200 bg-white">
+
+        <div class="border-b border-slate-100 px-5 py-5 sm:px-8 sm:py-7">
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+
+            <div>
+              <p class="text-xs font-extrabold uppercase tracking-[0.2em] text-slate-400">
+                Question 6 of 20
+              </p>
+
+              <h2 class="mt-4 max-w-3xl text-2xl font-extrabold leading-snug text-slate-950 sm:text-3xl">
+                GH¢8,400 salary has 15% deduction. How much is deducted?
+              </h2>
+            </div>
+
+            <button class="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50">
+              <i class="fa-regular fa-flag mr-2"></i>
+              Flag
+            </button>
+
+          </div>
+        </div>
+
+        <div class="px-5 py-6 sm:px-8 sm:py-8">
+
+          <div class="space-y-3">
+
+            <label class="block cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 hover:border-slate-400">
+              <input type="radio" name="answer" class="peer sr-only" />
+
+              <div class="flex items-center gap-4">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-300 text-sm font-extrabold text-slate-600 peer-checked:border-slate-900 peer-checked:bg-slate-900 peer-checked:text-white">
+                  A
+                </div>
+
+                <div class="flex-1">
+                  <p class="text-base font-bold text-slate-900">
+                    GH¢1,000
+                  </p>
+                </div>
+
+                <i class="fa-regular fa-circle text-slate-300 peer-checked:hidden"></i>
+                <i class="fa-solid fa-circle-check hidden text-slate-900 peer-checked:block"></i>
+              </div>
+            </label>
+
+            <label class="block cursor-pointer rounded-2xl border-2 border-slate-900 bg-slate-50 p-4">
+              <input type="radio" name="answer" class="peer sr-only" checked />
+
+              <div class="flex items-center gap-4">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-extrabold text-white">
+                  B
+                </div>
+
+                <div class="flex-1">
+                  <p class="text-base font-bold text-slate-900">
+                    GH¢1,260
+                  </p>
+                  <p class="mt-1 text-xs font-semibold text-slate-500">
+                    Selected
+                  </p>
+                </div>
+
+                <i class="fa-solid fa-circle-check text-slate-900"></i>
+              </div>
+            </label>
+
+            <label class="block cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 hover:border-slate-400">
+              <input type="radio" name="answer" class="peer sr-only" />
+
+              <div class="flex items-center gap-4">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-300 text-sm font-extrabold text-slate-600">
+                  C
+                </div>
+
+                <div class="flex-1">
+                  <p class="text-base font-bold text-slate-900">
+                    GH¢1,400
+                  </p>
+                </div>
+
+                <i class="fa-regular fa-circle text-slate-300"></i>
+              </div>
+            </label>
+
+            <label class="block cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 hover:border-slate-400">
+              <input type="radio" name="answer" class="peer sr-only" />
+
+              <div class="flex items-center gap-4">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-300 text-sm font-extrabold text-slate-600">
+                  D
+                </div>
+
+                <div class="flex-1">
+                  <p class="text-base font-bold text-slate-900">
+                    GH¢1,200
+                  </p>
+                </div>
+
+                <i class="fa-regular fa-circle text-slate-300"></i>
+              </div>
+            </label>
+
+          </div>
+
+          <div class="mt-8 flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
+
+            <button class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-extrabold text-slate-600 hover:bg-slate-50">
+              <i class="fa-solid fa-arrow-left mr-2"></i>
+              Previous
+            </button>
+
+            <div class="flex flex-col gap-3 sm:flex-row">
+              <button class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-extrabold text-slate-600 hover:bg-slate-50">
+                Save
+              </button>
+
+              <button class="rounded-2xl bg-slate-900 px-6 py-3 text-sm font-extrabold text-white hover:bg-slate-800">
+                Next Question
+                <i class="fa-solid fa-arrow-right ml-2"></i>
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Sample scroll area -->
+      <div class="mt-6 rounded-[2rem] border border-slate-200 bg-white p-6">
+        <h3 class="text-base font-extrabold text-slate-900">
+          Question Attachment Area
+        </h3>
+        <p class="mt-2 text-sm leading-6 text-slate-500">
+          Use this area for a passage, image, table, calculation sheet, or case study. It is included so the page can scroll while the proctoring cards remain sticky.
+        </p>
+
+        <div class="mt-5 grid gap-4 sm:grid-cols-2">
+          <div class="rounded-2xl bg-slate-50 p-5">
+            <p class="text-sm font-bold text-slate-700">Formula Hint</p>
+            <p class="mt-2 text-sm text-slate-500">Percentage deduction = salary × rate</p>
+          </div>
+
+          <div class="rounded-2xl bg-slate-50 p-5">
+            <p class="text-sm font-bold text-slate-700">Answer Format</p>
+            <p class="mt-2 text-sm text-slate-500">Choose the closest amount in Ghana cedis.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="h-[450px]"></div>
+
+    </section>
+
+    <!-- Right Proctoring -->
+    <aside>
+      <div class="sticky top-[160px] space-y-4">
+
+        <!-- Camera Card -->
+        <div class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white">
+          <div class="border-b border-slate-100 px-4 py-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-extrabold text-slate-900">
+                  Live Camera
+                </h3>
+                <p class="text-xs font-medium text-slate-500">
+                  Face and eye tracking
+                </p>
+              </div>
+
+              <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                Live
+              </span>
+            </div>
+          </div>
+
+          <div class="p-4">
+            <div class="relative aspect-[4/3] overflow-hidden rounded-3xl bg-slate-950">
+              <video id="proctorVideo" autoplay muted playsinline class="hidden h-full w-full object-cover"></video>
+
+              <div class="absolute inset-0 flex items-center justify-center">
+                <div class="text-center text-white">
+                  <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/10">
+                    <i class="fa-solid fa-user text-2xl"></i>
+                  </div>
+                  <p class="mt-3 text-sm font-bold">Camera Preview</p>
+                  <p class="mt-1 text-xs text-white/50">Webcam feed appears here</p>
+                </div>
+              </div>
+
+              <!-- Face guide -->
+              <div class="absolute left-1/2 top-[45%] h-28 w-24 -translate-x-1/2 -translate-y-1/2 rounded-[45%] border border-emerald-400"></div>
+
+              <!-- Eye dots -->
+              <span class="absolute left-[42%] top-[38%] h-2 w-2 rounded-full bg-cyan-300"></span>
+              <span class="absolute left-[55%] top-[38%] h-2 w-2 rounded-full bg-cyan-300"></span>
+
+              <div class="absolute bottom-3 left-3 right-3 rounded-2xl bg-black/55 px-3 py-2 text-xs font-bold text-white backdrop-blur">
+                <div class="flex items-center justify-between">
+                  <span>
+                    <i class="fa-solid fa-eye mr-1 text-cyan-300"></i>
+                    Eyes on screen
+                  </span>
+                  <span class="text-emerald-300">Normal</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-2 gap-3">
+              <div class="rounded-2xl bg-slate-50 p-3">
+                <p class="text-xs font-bold text-slate-500">Face</p>
+                <p class="mt-1 text-sm font-extrabold text-slate-900">Detected</p>
+              </div>
+
+              <div class="rounded-2xl bg-slate-50 p-3">
+                <p class="text-xs font-bold text-slate-500">Look away</p>
+                <p class="mt-1 text-sm font-extrabold text-slate-900">0</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Microphone Card -->
+        <div class="rounded-[2rem] border border-slate-200 bg-white p-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-extrabold text-slate-900">
+                Microphone
+              </h3>
+              <p class="text-xs font-medium text-slate-500">
+                Sound monitor
+              </p>
+            </div>
+
+            <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+              <i class="fa-solid fa-microphone"></i>
+            </div>
+          </div>
+
+          <div class="sound-wave mt-5 flex h-12 items-end justify-center gap-2 rounded-2xl bg-slate-50 p-3">
+            <span class="w-2 rounded-full bg-slate-900"></span>
+            <span class="w-2 rounded-full bg-slate-900"></span>
+            <span class="w-2 rounded-full bg-slate-900"></span>
+            <span class="w-2 rounded-full bg-slate-900"></span>
+            <span class="w-2 rounded-full bg-slate-900"></span>
+            <span class="w-2 rounded-full bg-slate-900"></span>
+            <span class="w-2 rounded-full bg-slate-900"></span>
+          </div>
+
+          <div class="mt-4">
+            <div class="mb-2 flex items-center justify-between text-xs font-bold">
+              <span class="text-slate-500">Noise level</span>
+              <span class="text-emerald-700">Normal</span>
+            </div>
+
+            <div class="h-2 rounded-full bg-slate-100">
+              <div class="h-2 w-[32%] rounded-full bg-slate-900"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alert Card -->
+        <div class="rounded-[2rem] border border-amber-200 bg-amber-50 p-5">
+          <h3 class="text-sm font-extrabold text-amber-900">
+            Eye Tracking Notice
+          </h3>
+          <p class="mt-2 text-xs font-medium leading-5 text-amber-800">
+            The system can mark repeated looking away as a suspicious activity for review.
+          </p>
+        </div>
+
+      </div>
+    </aside>
+
+  </main>
+
+</body>
+</html>

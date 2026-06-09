@@ -4,7 +4,7 @@
     :heading="__('Enter the code from SMS')"
     :description="__('Use the 6-digit code we sent to your phone. It expires in a few minutes.')"
 >
-    <form method="POST" action="{{ url('/student/forgot-password/otp') }}" class="space-y-6">
+    <form method="POST" action="{{ url('/student/forgot-password/otp') }}" class="space-y-4">
         @csrf
 
         <div>
@@ -25,12 +25,12 @@
             <x-input-error :messages="$errors->get('otp')" class="mt-2" />
         </div>
 
-        <button type="submit" class="qs-btn-primary w-full justify-center py-2.5 text-sm font-semibold">
+        <button type="submit" class="qs-btn-primary w-full justify-center">
             {{ __('Continue') }}
         </button>
     </form>
 
-    <p class="mt-8 text-center text-sm text-qs-muted">
-        <a href="{{ route('student.password-reset.request') }}" class="qs-link font-medium text-qs-text">{{ __('Start over') }}</a>
+    <p class="qs-auth-help">
+        <a href="{{ route('student.password-reset.request') }}" class="qs-link">{{ __('Start over') }}</a>
     </p>
 </x-guest-layout>

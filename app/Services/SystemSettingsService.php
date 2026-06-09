@@ -119,7 +119,7 @@ class SystemSettingsService
             'require_exam_start_snapshot', 'require_camera_monitoring',
             'phone_detection_enabled', 'fullscreen_required', 'auto_submit_enabled', 'enable_ai',
             'exam_clipboard_lock', 'exam_screenshot_mitigation', 'exam_screen_record_mitigation',
-            'enable_redis_runtime', 'allow_redis_fallback', 'enable_live_sockets', 'allow_polling_fallback' => '1',
+            'enable_live_sockets', 'allow_polling_fallback' => '1',
             'face_verification_threshold' => '60',
             'enable_student_practice_quizzes', 'enable_course_material_uploads', 'enable_ai_summary',
             'enable_ai_practice_quiz_generation', 'allow_examiner_practice_overview' => '0',

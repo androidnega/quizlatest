@@ -101,6 +101,15 @@ class ProctoringGlobalControlService
     /** @param  array<string, mixed>  $snapshot */
     public function broadcastSnapshot(array $snapshot): void
     {
+        // Audit Phase 9 / P1.5: when broadcasting is the "log" or "null"
+        // driver (the shared-hosting default) iterating every active session
+        // to fire useless events would write thousands of log lines per
+        // governance toggle.
+        $driver = (string) (config('broadcasting.default') ?? 'null');
+        if ($driver === 'null' || $driver === 'log') {
+            return;
+        }
+
         ExamSession::query()
             ->whereIn('status', ['active', 'paused'])
             ->cursor()

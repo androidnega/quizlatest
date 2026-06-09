@@ -29,16 +29,6 @@
         ]));
         $isActiveTab = ($examsTab ?? 'active') === 'active';
         $pf = $proctoringFocus ?? null;
-        $sessionsTabQuery = ['tab' => 'sessions'];
-        if (is_string($pf)) {
-            if (in_array($pf, ['flagged', 'auto_submitted', 'phone_detected', 'tab_switch_limit'], true)) {
-                $sessionsTabQuery['integrity'] = $pf;
-            } elseif ($pf === 'held_results') {
-                $sessionsTabQuery['status'] = 'held';
-            } elseif ($pf === 'assignments_grading') {
-                $sessionsTabQuery['status'] = 'pending_manual';
-            }
-        }
         $levelBadgePalette = [
             'bg-sky-100 text-sky-900 ring-sky-200/80',
             'bg-emerald-100 text-emerald-900 ring-emerald-200/80',
@@ -150,8 +140,8 @@
                 </p>
                 <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-500">
                     {{ $isActiveTab
-                        ? __('Draft and published assessments appear here. Switch to Ended for archived quizzes.')
-                        : __('Archived assessments appear here once you close them out.') }}
+                        ? __('Drafts and published assessments that are still within their window appear here. Switch to Ended once an assessment has finished.')
+                        : __('Assessments move here automatically once their end time (or assignment due date) has passed, or when you archive them manually.') }}
                 </p>
                 @if ($isActiveTab)
                     <a
@@ -246,13 +236,20 @@
                                         <span class="text-xs font-bold uppercase tracking-wide text-slate-900">{{ $statusLabel }}</span>
                                     </td>
                                     <td class="whitespace-nowrap px-4 py-4 text-right align-middle text-xs font-semibold sm:px-5">
-                                        <a href="{{ route('examiner.exams.analytics.show', $exam) }}" class="text-sky-600 hover:text-sky-800 hover:underline">{{ __('Analytics') }}</a>
+                                        <a href="{{ route('examiner.quizzes.workspace', $exam) }}" class="text-sky-600 hover:text-sky-800 hover:underline">{{ __('View') }}</a>
                                         <span class="text-slate-200" aria-hidden="true"> | </span>
-                                        <a href="{{ route('examiner.quizzes.workspace', $exam) }}" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:text-sky-800 hover:underline">{{ __('View') }}</a>
+                                        <a href="{{ route('examiner.quizzes.workspace', $exam) }}" class="text-sky-600 hover:text-sky-800 hover:underline">{{ __('Edit') }}</a>
                                         <span class="text-slate-200" aria-hidden="true"> | </span>
-                                        <a href="{{ route('examiner.quizzes.workspace', $exam) }}" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:text-sky-800 hover:underline">{{ __('Edit') }}</a>
-                                        <span class="text-slate-200" aria-hidden="true"> | </span>
-                                        <a href="{{ route('examiner.quizzes.workspace', array_merge(['exam' => $exam], $sessionsTabQuery)) }}" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:text-sky-800 hover:underline">{{ __('Sessions') }}</a>
+                                        <form
+                                            method="post"
+                                            action="{{ route('examiner.exams.destroy', $exam) }}"
+                                            class="inline"
+                                            onsubmit="return confirm({{ Js::from(__('Delete “:title”? This permanently removes the assessment, all its questions, every student session, and any saved results. This cannot be undone.', ['title' => $exam->title])) }});"
+                                        >
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="text-rose-600 hover:text-rose-800 hover:underline">{{ __('Delete') }}</button>
+                                        </form>
                                     </td>
                                 </tr>
                             @endforeach

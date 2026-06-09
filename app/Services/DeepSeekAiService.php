@@ -11,6 +11,7 @@ class DeepSeekAiService
     private const string DEFAULT_BASE = 'https://api.deepseek.com';
 
     public function __construct(
+        private readonly AiIntegrationSettings $aiSettings,
         private readonly SystemSettingsService $system,
         private readonly PracticeModuleSettings $practiceSettings,
     ) {}
@@ -20,14 +21,14 @@ class DeepSeekAiService
      */
     public function chatJsonInstruction(User $user, string $systemPrompt, string $userPrompt): array
     {
-        $apiKey = $this->system->get('deepseek_api_key');
-        if ($apiKey === null || $apiKey === '') {
+        $apiKey = $this->aiSettings->apiKey();
+        if ($apiKey === null) {
             throw ValidationException::withMessages([
-                'ai' => __('DeepSeek API key is not configured.'),
+                'ai' => __('AI API key is not configured. Set it in Admin → Settings → AI integration.'),
             ]);
         }
 
-        $model = $this->practiceSettings->deepseekModel();
+        $model = $this->aiSettings->modelName();
         $base = self::DEFAULT_BASE;
 
         $estimateTokens = (int) ceil((strlen($systemPrompt) + strlen($userPrompt)) / 4) + 2048;
@@ -78,14 +79,14 @@ class DeepSeekAiService
      */
     public function chatPlainInstruction(User $user, string $systemPrompt, string $userPrompt): array
     {
-        $apiKey = $this->system->get('deepseek_api_key');
-        if ($apiKey === null || $apiKey === '') {
+        $apiKey = $this->aiSettings->apiKey();
+        if ($apiKey === null) {
             throw ValidationException::withMessages([
-                'ai' => __('DeepSeek API key is not configured.'),
+                'ai' => __('AI API key is not configured. Set it in Admin → Settings → AI integration.'),
             ]);
         }
 
-        $model = $this->practiceSettings->deepseekModel();
+        $model = $this->aiSettings->modelName();
         $base = self::DEFAULT_BASE;
 
         $estimateTokens = (int) ceil((strlen($systemPrompt) + strlen($userPrompt)) / 4) + 4096;

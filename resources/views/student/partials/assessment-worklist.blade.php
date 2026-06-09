@@ -1,121 +1,182 @@
 @php
     /** @var array<string, array<int, array<string, mixed>>> $studentAssessmentDeck */
     $deck = $studentAssessmentDeck ?? [];
-    $sections = [
-        'active_now' => ['title' => __('Active now'), 'empty' => __('Nothing open to start.')],
-        'continue' => ['title' => __('Continue'), 'empty' => __('Nothing in progress.')],
-        'assignments_due' => ['title' => __('Assignments due'), 'empty' => __('No assignments here.')],
-        'upcoming' => ['title' => __('Upcoming'), 'empty' => __('Nothing scheduled ahead.')],
-        'submitted_work' => ['title' => __('Submitted work'), 'empty' => __('Nothing waiting here.')],
-        'results_released' => ['title' => __('Results released'), 'empty' => __('No released results yet.')],
-        'closed_missed' => ['title' => __('Closed or missed'), 'empty' => __('Nothing to show.')],
+
+    /* Worklist is the "what to do" view. Submitted + graded items belong on
+       the dedicated Results page (/dashboard/results) so the two surfaces
+       don't show the same cards. We still surface "closed/missed" as a
+       reminder, since those aren't results either.                       */
+    $sectionMeta = [
+        'active_now' => ['icon' => 'fa-bolt', 'status' => __('LIVE')],
+        'continue' => ['icon' => 'fa-rotate-right', 'status' => __('ONGOING')],
+        'assignments_due' => ['icon' => 'fa-file-pen', 'status' => __('DUE')],
+        'upcoming' => ['icon' => 'fa-calendar', 'status' => __('SOON')],
+        'closed_missed' => ['icon' => 'fa-circle-xmark', 'status' => __('MISSED')],
     ];
-    $printedSection = false;
+
+    $flatRows = [];
+    foreach ($sectionMeta as $key => $meta) {
+        foreach (($deck[$key] ?? []) as $row) {
+            $flatRows[] = ['key' => $key, 'meta' => $meta, 'row' => $row];
+        }
+    }
+
+    $submittedHistoryCount = count($deck['submitted_work'] ?? []) + count($deck['results_released'] ?? []);
 @endphp
 
 <section id="student-work" class="scroll-mt-4" aria-labelledby="student-worklist-heading">
-    <h2 id="student-worklist-heading" class="sr-only">{{ __('Assessments by status') }}</h2>
+    <h2 id="student-worklist-heading" class="sr-only">{{ __('Assessments') }}</h2>
 
-    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div class="flex flex-col gap-3 border-b border-slate-100 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-            <p class="text-sm text-slate-600">{{ __('Each card is one assessment. Your main action is on the right.') }}</p>
-            <a
-                href="{{ route('student.assignments.index') }}"
-                class="inline-flex shrink-0 items-center justify-center self-stretch rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50 sm:self-auto"
-            >
-                {{ __('All assignments') }}
+    <div class="qs-wl-panel">
+        <header class="qs-wl-panel__head">
+            <span class="qs-wl-panel__avatar" aria-hidden="true">
+                <i class="fa-solid fa-list-check"></i>
+            </span>
+            <div class="qs-wl-panel__heading">
+                <p class="qs-wl-panel__eyebrow">{{ __('Worklist') }}</p>
+                <h2 class="qs-wl-panel__title">{{ __('What to do next') }}</h2>
+            </div>
+            <a href="{{ route('student.assignments.index') }}" class="qs-wl-panel__cta">
+                <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                <span>{{ __('All assignments') }}</span>
             </a>
-        </div>
+        </header>
 
-        <div class="px-4 py-4 sm:px-5 sm:py-5">
-            @foreach ($sections as $key => $meta)
-                @php $rows = $deck[$key] ?? []; @endphp
-                @continue($rows === [])
+        <div class="qs-wl-panel__body">
+            @if ($flatRows !== [])
+                <ul class="qs-wl-list">
+                    @foreach ($flatRows as $entry)
+                        @php
+                            $key = $entry['key'];
+                            $meta = $entry['meta'];
+                            $row = $entry['row'];
+                            $courseLine = trim((string) ($row['course_line'] ?? ''));
+                            $hasCountdown = ! empty($row['countdown_ends_at']) && ! empty($row['countdown_prefix']);
+                            $statusLabel = trim((string) ($row['status_label'] ?? ''));
+                            $scoreLine = trim((string) ($row['score_line'] ?? ''));
+                            $submissionFormat = trim((string) ($row['submission_format'] ?? ''));
+                            $secondaryInfo = $hasCountdown
+                                ? null
+                                : trim((string) ($row['due_line'] ?? ''));
+                        @endphp
 
-                <div class="{{ $printedSection ? 'mt-7 border-t border-slate-100 pt-7' : '' }}">
-                    <div class="flex items-center justify-between gap-2">
-                        <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $meta['title'] }}</h3>
-                        <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium tabular-nums text-slate-600">{{ count($rows) }}</span>
-                    </div>
+                        <li class="qs-wl-item qs-wl-item--{{ $key }}">
+                            <div class="qs-wl-item__head">
+                                <h3 class="qs-wl-item__title">{{ $row['title'] }}</h3>
+                                <span class="qs-wl-item__icon" aria-hidden="true">
+                                    <i class="fa-solid {{ $meta['icon'] }}"></i>
+                                </span>
+                            </div>
 
-                    <div class="mt-3 grid gap-2.5">
-                        @foreach ($rows as $row)
-                            <article
-                                class="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 transition-colors hover:border-slate-300 sm:flex-row sm:items-stretch sm:justify-between sm:gap-5 sm:p-4"
-                            >
-                                <div class="min-w-0 flex-1 space-y-2">
-                                    <div>
-                                        <p class="text-sm font-medium leading-snug text-slate-900">{{ $row['title'] }}</p>
-                                        @if (! empty($row['course_line']))
-                                            <p class="mt-0.5 truncate text-xs text-slate-600">{{ $row['course_line'] }}</p>
-                                        @endif
-                                    </div>
-                                    <p class="text-[11px] leading-relaxed text-slate-600">
-                                        <span class="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-700">{{ $row['type_label'] }}</span>
-                                        @if (! empty($row['submission_format']))
-                                            <span class="mx-1.5 text-slate-300" aria-hidden="true">·</span>
-                                            <span>{{ $row['submission_format'] }}</span>
-                                        @endif
-                                        @if (! empty($row['paste_notice']))
-                                            <span class="mx-1.5 text-slate-300" aria-hidden="true">·</span>
-                                            <span class="font-medium text-amber-800">{{ $row['paste_notice'] }}</span>
-                                        @endif
-                                        @if (! empty($row['due_line']))
-                                            <span class="mx-1.5 text-slate-300" aria-hidden="true">·</span>
-                                            <span>{{ $row['due_line'] }}</span>
-                                        @endif
-                                        @if (! empty($row['time_limit_line']))
-                                            <span class="mx-1.5 text-slate-300" aria-hidden="true">·</span>
-                                            <span>{{ $row['time_limit_line'] }}</span>
-                                        @endif
-                                    </p>
-                                    <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs">
-                                        <span class="font-medium text-slate-800">{{ $row['status_label'] }}</span>
-                                        @if (! empty($row['score_line']))
-                                            <span class="text-slate-300" aria-hidden="true">·</span>
-                                            <span class="text-slate-600">{{ $row['score_line'] }}</span>
-                                        @endif
-                                    </div>
-                                </div>
-                                <div class="flex w-full shrink-0 flex-col justify-center gap-2 sm:w-[11.5rem]">
-                                    @if (! empty($row['secondary_href']))
-                                        <a
-                                            href="{{ $row['secondary_href'] }}"
-                                            class="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-800 transition-colors hover:bg-slate-50"
-                                        >
-                                            {{ $row['secondary_label'] ?? __('More') }}
-                                        </a>
+                            @if ($courseLine !== '')
+                                <p class="qs-wl-item__sub">{{ $courseLine }}</p>
+                            @endif
+
+                            <div class="qs-wl-item__pills">
+                                <span class="qs-wl-pill">
+                                    <span class="qs-wl-pill__dot" aria-hidden="true"></span>
+                                    {{ $meta['status'] }}
+                                </span>
+
+                                @if ($hasCountdown)
+                                    @php
+                                        $wlPrefixKey = strtolower((string) $row['countdown_prefix']);
+                                        $wlExpiredCta = (string) ($row['countdown_expired_cta']
+                                            ?? match (true) {
+                                                str_contains($wlPrefixKey, 'close') => __('Closed'),
+                                                str_contains($wlPrefixKey, 'due') => __('Submit now'),
+                                                default => __('Start'),
+                                            });
+                                        $wlExpiredState = (string) ($row['countdown_expired_state']
+                                            ?? match (true) {
+                                                str_contains($wlPrefixKey, 'close') => 'closed',
+                                                str_contains($wlPrefixKey, 'due') => 'overdue',
+                                                default => 'ready',
+                                            });
+                                    @endphp
+                                    {{-- Same dynamic-swap pattern as the
+                                         dashboard feed rows: live clock +
+                                         pre-rendered Start CTA. CSS reveals
+                                         the CTA when the JS adds .is-expired. --}}
+                                    <span
+                                        class="qs-wl-pill qs-wl-pill--time qs-std-dash-countdown"
+                                        data-qs-countdown
+                                        data-qs-countdown-ends="{{ $row['countdown_ends_at'] }}"
+                                        data-qs-countdown-expired-state="{{ $wlExpiredState }}"
+                                        data-qs-countdown-keep-visible
+                                        role="timer"
+                                        aria-label="{{ $row['countdown_prefix'] }}"
+                                    >
+                                        <span class="qs-std-dash-countdown__live">
+                                            <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                                            <span class="qs-std-dash-countdown__prefix">{{ $row['countdown_prefix'] }}</span>
+                                            <span class="qs-std-dash-countdown__time">—</span>
+                                        </span>
+                                        <span class="qs-std-dash-countdown__expired qs-std-dash-countdown__expired--{{ $wlExpiredState }}" aria-hidden="true">
+                                            @if ($wlExpiredState === 'closed')
+                                                <i class="fa-solid fa-lock"></i>
+                                            @elseif ($wlExpiredState === 'overdue')
+                                                <i class="fa-solid fa-clock-rotate-left"></i>
+                                            @else
+                                                <i class="fa-solid fa-circle-play"></i>
+                                            @endif
+                                            <span>{{ $wlExpiredCta }}</span>
+                                        </span>
+                                    </span>
+                                @elseif ($secondaryInfo !== null && $secondaryInfo !== '')
+                                    <span class="qs-wl-pill qs-wl-pill--time">
+                                        <i class="fa-regular fa-calendar" aria-hidden="true"></i>
+                                        <span>{{ $secondaryInfo }}</span>
+                                    </span>
+                                @endif
+                            </div>
+
+                            @if ($statusLabel !== '' || $scoreLine !== '')
+                                <p class="qs-wl-item__status">
+                                    @if ($statusLabel !== '')
+                                        <span class="qs-wl-item__status-label">{{ $statusLabel }}</span>
                                     @endif
-                                    @if (! empty($row['action_href']))
-                                        <a
-                                            href="{{ $row['action_href'] }}"
-                                            class="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-slate-900 px-4 text-xs font-medium text-white transition-colors hover:bg-slate-800"
-                                        >
-                                            {{ $row['action_label'] }}
-                                        </a>
-                                    @else
-                                        <span class="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 text-center text-xs font-medium text-slate-500">{{ $row['action_label'] }}</span>
+                                    @if ($scoreLine !== '')
+                                        <span class="qs-wl-item__status-score">{{ $scoreLine }}</span>
                                     @endif
-                                </div>
-                            </article>
-                        @endforeach
-                    </div>
-                </div>
-                @php $printedSection = true; @endphp
-            @endforeach
+                                </p>
+                            @endif
 
-            @if (! $printedSection)
-                <div class="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center sm:px-6">
-                    <p class="text-sm font-medium text-slate-800">{{ __('Nothing here yet') }}</p>
-                    <p class="mx-auto mt-2 max-w-md text-xs leading-relaxed text-slate-600">
-                        {{ __('When your class has open windows, due assignments, or released results, they will show as cards in the sections above.') }}
+                            @if ($submissionFormat !== '')
+                                <p class="qs-wl-item__format">{{ $submissionFormat }}</p>
+                            @endif
+
+                            @if (! empty($row['action_href']))
+                                <a href="{{ $row['action_href'] }}" class="qs-wl-action qs-wl-action--primary">
+                                    <span>{{ $row['action_label'] ?? __('Open') }}</span>
+                                    <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                                </a>
+                            @endif
+                        </li>
+                    @endforeach
+                </ul>
+            @else
+                <div class="qs-wl-empty">
+                    <span class="qs-wl-empty__icon" aria-hidden="true"><i class="fa-solid fa-mug-saucer"></i></span>
+                    <p class="qs-wl-empty__title">{{ __('You are all caught up') }}</p>
+                    <p class="qs-wl-empty__sub">
+                        @if ($submittedHistoryCount > 0)
+                            {{ __('No open assessments right now. Past submissions and scores live on the Results page.') }}
+                        @else
+                            {{ __('Nothing open or due right now. New assessments and assignments will show up here when your class publishes them.') }}
+                        @endif
                     </p>
-                    <a
-                        href="{{ route('student.assignments.index') }}"
-                        class="mt-5 inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-300 bg-white px-4 text-xs font-medium text-slate-800 transition-colors hover:border-slate-400 hover:bg-slate-50"
-                    >
-                        {{ __('Browse assignments') }}
-                    </a>
+                    @if ($submittedHistoryCount > 0)
+                        <a href="{{ route('student.results.index') }}" class="qs-wl-panel__cta qs-wl-panel__cta--solo">
+                            <i class="fa-solid fa-square-poll-vertical" aria-hidden="true"></i>
+                            <span>{{ __('View results') }}</span>
+                        </a>
+                    @else
+                        <a href="{{ route('student.assignments.index') }}" class="qs-wl-panel__cta qs-wl-panel__cta--solo">
+                            <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                            <span>{{ __('Browse assignments') }}</span>
+                        </a>
+                    @endif
                 </div>
             @endif
         </div>

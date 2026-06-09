@@ -4,7 +4,7 @@
     :heading="__('Choose a new password')"
     :description="__('Your phone was verified. Pick a strong password you have not used here before.')"
 >
-    <form method="POST" action="{{ url('/student/reset-password') }}" class="space-y-6">
+    <form method="POST" action="{{ url('/student/reset-password') }}" class="space-y-4">
         @csrf
 
         <div>
@@ -18,7 +18,7 @@
             <x-text-input id="password_confirmation" name="password_confirmation" type="password" required autocomplete="new-password" />
         </div>
 
-        <button type="submit" class="qs-btn-primary w-full justify-center py-2.5 text-sm font-semibold">
+        <button type="submit" class="qs-btn-primary w-full justify-center">
             {{ __('Save password') }}
         </button>
     </form>

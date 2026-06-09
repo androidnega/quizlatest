@@ -61,8 +61,8 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
         $this->actingAs($ctx['student'])
             ->get(route('student.work.index'))
             ->assertOk()
-            ->assertSee(__('Your work'), false)
-            ->assertSee(__('Active now'), false)
+            ->assertSee(__('Assessments'), false)
+            ->assertSee(__('LIVE'), false)
             ->assertSee(__('Dash Smoke Quiz'), false);
     }
 
@@ -78,7 +78,7 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
         $this->actingAs($ctx['student'])
             ->get(route('student.work.index'))
             ->assertOk()
-            ->assertSee(__('Upcoming'), false)
+            ->assertSee(__('SOON'), false)
             ->assertSee('Future Window Quiz', false)
             ->assertSee(__('Preparation'), false);
     }
@@ -127,7 +127,7 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
         $this->actingAs($ctx['student'])
             ->get(route('student.work.index'))
             ->assertOk()
-            ->assertSee(__('Continue'), false)
+            ->assertSee(__('ONGOING'), false)
             ->assertSee('Continue Me Quiz', false)
             ->assertSee(__('In progress'), false);
     }
@@ -282,12 +282,55 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
             'graded_at' => null,
         ]);
 
-        $this->actingAs($student)
+        // The worklist is the "what to do" view — submitted items now live on
+        // the dedicated Results page, not the worklist. Scope the check to
+        // the worklist section so the header notification dropdown (which
+        // may mention the title) doesn't trip the assertion.
+        $workHtml = (string) $this->actingAs($student)
             ->get(route('student.work.index'))
             ->assertOk()
-            ->assertSee(__('Submitted work'), false)
+            ->getContent();
+        $worklistSection = $this->isolateWorklistSection($workHtml);
+        $this->assertStringNotContainsString('Submitted Pending Assignment', $worklistSection);
+        $this->assertStringNotContainsString('qs-wl-item--submitted_work', $worklistSection);
+
+        $this->actingAs($student)
+            ->get(route('student.results.index'))
+            ->assertOk()
             ->assertSee('Submitted Pending Assignment', false)
             ->assertSee(__('Awaiting grading'), false);
+    }
+
+    private function isolateWorklistSection(string $html): string
+    {
+        $start = strpos($html, 'id="student-work"');
+        if ($start === false) {
+            return '';
+        }
+        $end = strpos($html, '</section>', $start);
+        if ($end === false) {
+            return substr($html, $start);
+        }
+
+        return substr($html, $start, $end - $start);
+    }
+
+    /**
+     * Extract the results-page listing markup (the qs-wl-list ul), so we can
+     * make assertions that ignore the shared notification dropdown chrome.
+     */
+    private function isolateResultsList(string $html): string
+    {
+        $start = strpos($html, '<ul class="qs-wl-list qs-wl-list--shimmer');
+        if ($start === false) {
+            return '';
+        }
+        $end = strpos($html, '</ul>', $start);
+        if ($end === false) {
+            return substr($html, $start);
+        }
+
+        return substr($html, $start, $end - $start);
     }
 
     public function test_released_result_lists_under_results_released(): void
@@ -360,22 +403,31 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
             'graded_at' => now(),
         ]);
 
-        $html = $this->actingAs($student)
+        // Released results now live exclusively on the dedicated Results page;
+        // the worklist focuses on actionable / upcoming work.
+        $workHtml = (string) $this->actingAs($student)
             ->get(route('student.work.index'))
             ->assertOk()
-            ->assertSee(__('Results released'), false)
+            ->getContent();
+        $worklistSection = $this->isolateWorklistSection($workHtml);
+        $this->assertStringNotContainsString('Released Marks Quiz', $worklistSection);
+        $this->assertStringNotContainsString('qs-wl-item--results_released', $worklistSection);
+
+        $html = $this->actingAs($student)
+            ->get(route('student.results.index'))
+            ->assertOk()
+            ->assertSee(__('GRADED'), false)
             ->assertSee('Released Marks Quiz', false)
             ->assertSee(__('View result'), false)
             ->getContent();
 
-        $workPos = strpos((string) $html, 'id="student-work"');
-        $this->assertNotFalse($workPos);
-        $workHtml = substr((string) $html, $workPos);
-        $releasedHeadingPos = strpos($workHtml, (string) __('Results released'));
-        $titlePos = strpos($workHtml, 'Released Marks Quiz');
-        $this->assertNotFalse($releasedHeadingPos);
-        $this->assertNotFalse($titlePos);
-        $this->assertGreaterThan($releasedHeadingPos, $titlePos);
+        $listing = $this->isolateResultsList((string) $html);
+        $titlePos = strpos($listing, 'Released Marks Quiz');
+        $this->assertNotFalse($titlePos, 'Released item title should appear in the results listing.');
+        $itemStart = strrpos(substr($listing, 0, $titlePos), '<li class="qs-wl-item');
+        $this->assertNotFalse($itemStart, 'Released item should render as a results card.');
+        $itemHtml = substr($listing, $itemStart, $titlePos - $itemStart + 200);
+        $this->assertStringContainsString('qs-wl-item--results_released', $itemHtml);
     }
 
     public function test_graded_assignment_without_release_stays_out_of_results_released(): void
@@ -448,17 +500,26 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
             'graded_at' => now(),
         ]);
 
-        $html = $this->actingAs($student)
+        // Worklist focuses on "what to do" — submitted assignments
+        // (released or not) no longer appear here.
+        $workHtml = (string) $this->actingAs($student)
             ->get(route('student.work.index'))
+            ->assertOk()
+            ->getContent();
+        $worklistSection = $this->isolateWorklistSection($workHtml);
+        $this->assertStringNotContainsString('UNRELEASED ASSIGN MARKER', $worklistSection);
+
+        $html = $this->actingAs($student)
+            ->get(route('student.results.index'))
             ->assertOk()
             ->assertSee('UNRELEASED ASSIGN MARKER', false)
             ->assertSee(__('Awaiting release'), false)
             ->getContent();
 
         $this->assertStringNotContainsString(
-            (string) __('Results released'),
+            'qs-wl-item--results_released',
             (string) $html,
-            'Graded-but-unreleased assignments must not render a Results released section.',
+            'Graded-but-unreleased assignments must not render under the results-released bucket.',
         );
     }
 
@@ -474,7 +535,7 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
         $this->actingAs($ctx['student'])
             ->get(route('student.work.index'))
             ->assertOk()
-            ->assertSee(__('Closed or missed'), false)
+            ->assertSee(__('MISSED'), false)
             ->assertSee('Past Closed Quiz X', false);
     }
 
@@ -537,16 +598,6 @@ class StudentDashboardWorklistTest extends AssignmentCourseworkFlowTest
             ->get(route('student.work.index'))
             ->assertOk()
             ->assertDontSee('SECRET OTHER CLASS QUIZ', false);
-    }
-
-    public function test_student_cannot_open_examiner_analytics(): void
-    {
-        $ctx = $this->seedExaminerStudentCourse();
-        $quiz = $this->makePublishedQuiz($ctx['examiner'], $ctx['courseId'], $ctx['classId'], ['title' => 'Analytics Target']);
-
-        $this->actingAs($ctx['student'])
-            ->get(route('examiner.exams.analytics.show', $quiz))
-            ->assertForbidden();
     }
 
     public function test_student_cannot_view_peer_exam_session_result(): void

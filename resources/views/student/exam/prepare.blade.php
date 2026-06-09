@@ -208,13 +208,19 @@
             let verificationBlob = null;
             let snapStream = null;
             let faceLandmarker = null;
-            let snapDetectRaf = null;
+            let snapDetectTimer = null;
             let snapHumanFrames = 0;
-            let snapMpBypass = false;
-            let snapCocoCheckInFlight = false;
             let snapFinishing = false;
 
-            const SNAP_FRAMES_NEEDED = 12;
+            const SNAP_FRAMES_NEEDED = 8;
+            const SNAP_DETECT_INTERVAL_MS = 150;
+
+            const qsVideoConstraints = {
+                facingMode: 'user',
+                width: { ideal: 640, max: 1280 },
+                height: { ideal: 480, max: 720 },
+                frameRate: { ideal: 15, max: 24 },
+            };
 
             let permCameraOk = false;
             let permMicOk = false;
@@ -487,7 +493,10 @@
                     if (!navigator.mediaDevices?.getUserMedia) {
                         throw new Error('no-gum');
                     }
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: qsVideoConstraints,
+                        audio: false,
+                    });
                     stream.getTracks().forEach((t) => t.stop());
                     permCameraOk = true;
                     if (msgEl) msgEl.textContent = msgPermOk;
@@ -554,12 +563,11 @@
             let lastSnapMeshHint = 'none';
 
             async function stopSnapCamera() {
-                if (snapDetectRaf !== null) {
-                    cancelAnimationFrame(snapDetectRaf);
-                    snapDetectRaf = null;
+                if (snapDetectTimer !== null) {
+                    clearTimeout(snapDetectTimer);
+                    snapDetectTimer = null;
                 }
                 snapHumanFrames = 0;
-                snapCocoCheckInFlight = false;
                 if (snapStream) {
                     snapStream.getTracks().forEach((t) => t.stop());
                     snapStream = null;
@@ -716,11 +724,6 @@
                 if (snapStatus) snapStatus.textContent = '';
             }
 
-            async function runSnapTensorFlowPersonGate() {
-                if (typeof window.qsExamPrepareDetectPerson !== 'function') return true;
-                return window.qsExamPrepareDetectPerson(snapVideo);
-            }
-
             async function destroyFaceLandmarker() {
                 if (faceLandmarker?.close) {
                     try {
@@ -752,12 +755,12 @@
                     });
                 };
                 try {
-                    faceLandmarker = await tryCreate('GPU');
+                    faceLandmarker = await tryCreate('CPU');
                     return true;
                 } catch {
                     await destroyFaceLandmarker();
                     try {
-                        faceLandmarker = await tryCreate('CPU');
+                        faceLandmarker = await tryCreate('GPU');
                         return true;
                     } catch {
                         await destroyFaceLandmarker();
@@ -767,21 +770,22 @@
             }
 
             function stopSnapPresenceLoop() {
-                if (snapDetectRaf !== null) {
-                    cancelAnimationFrame(snapDetectRaf);
-                    snapDetectRaf = null;
+                if (snapDetectTimer !== null) {
+                    clearTimeout(snapDetectTimer);
+                    snapDetectTimer = null;
                 }
             }
 
             function startSnapPresenceLoop() {
                 stopSnapPresenceLoop();
                 const tick = () => {
-                    if (!snapStream || !snapVideo || snapVideo.readyState < 2) {
-                        snapDetectRaf = requestAnimationFrame(tick);
+                    snapDetectTimer = null;
+                    if (document.hidden || !snapStream || !snapVideo || snapVideo.readyState < 2) {
+                        snapDetectTimer = window.setTimeout(tick, SNAP_DETECT_INTERVAL_MS);
                         return;
                     }
                     if (!faceLandmarker) {
-                        snapDetectRaf = requestAnimationFrame(tick);
+                        snapDetectTimer = window.setTimeout(tick, SNAP_DETECT_INTERVAL_MS);
                         return;
                     }
                     const result = faceLandmarker.detectForVideo(snapVideo, performance.now());
@@ -797,32 +801,15 @@
                     }
                     if (snapHumanFrames >= SNAP_FRAMES_NEEDED) {
                         stopSnapPresenceLoop();
-                        if (snapCocoCheckInFlight) {
-                            return;
-                        }
-                        snapCocoCheckInFlight = true;
-                        void (async () => {
-                            const personOk = await runSnapTensorFlowPersonGate();
-                            snapCocoCheckInFlight = false;
-                            if (!personOk) {
-                                snapHumanFrames = 0;
-                        if (snapStatus) {
-                            snapStatus.textContent =
-                                '{{ __('Step back so your upper body is visible, then wait.') }}';
-                        }
-                                startSnapPresenceLoop();
-                                return;
-                            }
-                            if (snapStatus) snapStatus.textContent = '{{ __('Verified — saving your photo.') }}';
-                            snapHud?.classList.add('hidden');
-                            snapVerifiedBadge?.classList.remove('hidden');
-                            window.setTimeout(() => void finalizeVerificationSnapshot(), 1200);
-                        })();
+                        if (snapStatus) snapStatus.textContent = '{{ __('Verified — saving your photo.') }}';
+                        snapHud?.classList.add('hidden');
+                        snapVerifiedBadge?.classList.remove('hidden');
+                        window.setTimeout(() => void finalizeVerificationSnapshot(), 1200);
                         return;
                     }
-                    snapDetectRaf = requestAnimationFrame(tick);
+                    snapDetectTimer = window.setTimeout(tick, SNAP_DETECT_INTERVAL_MS);
                 };
-                snapDetectRaf = requestAnimationFrame(tick);
+                snapDetectTimer = window.setTimeout(tick, SNAP_DETECT_INTERVAL_MS);
             }
 
             function scheduleSnapAutoStart() {
@@ -880,9 +867,7 @@
                 if (snapStream && snapVideo.srcObject) return;
                 btnSnapRetry?.classList.add('hidden');
                 if (snapStatus) snapStatus.textContent = '';
-                snapMpBypass = false;
                 snapHumanFrames = 0;
-                snapCocoCheckInFlight = false;
                 btnSnapCapture?.classList.add('hidden');
                 snapVerifiedBadge?.classList.add('hidden');
                 try {
@@ -890,7 +875,7 @@
                         throw new Error('no-gum');
                     }
                     snapStream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: 'user' },
+                        video: qsVideoConstraints,
                         audio: false,
                     });
                     snapVideo.srcObject = snapStream;
@@ -904,24 +889,12 @@
                         }
                         startSnapPresenceLoop();
                     } else {
-                        snapMpBypass = true;
                         if (snapStatus) {
-                            snapStatus.textContent = '{{ __('Running backup person detection…') }}';
+                            snapStatus.textContent =
+                                '{{ __('Face detection could not start on this device. Tap Try camera again, or capture manually below.') }}';
                         }
-                        const personOk = await runSnapTensorFlowPersonGate();
-                        if (!personOk) {
-                            if (snapStatus) {
-                                snapStatus.textContent =
-                                    '{{ __('We need to see you clearly. Check permissions, then tap Try camera again.') }}';
-                            }
-                            btnSnapRetry?.classList.remove('hidden');
-                            await stopSnapCamera();
-                            return;
-                        }
-                        if (snapStatus) snapStatus.textContent = '{{ __('Verified — saving your photo.') }}';
-                        snapHud?.classList.add('hidden');
-                        snapVerifiedBadge?.classList.remove('hidden');
-                        window.setTimeout(() => void finalizeVerificationSnapshot(), 1200);
+                        btnSnapRetry?.classList.remove('hidden');
+                        btnSnapCapture?.classList.remove('hidden');
                     }
                 } catch {
                     if (snapStatus) {
@@ -942,7 +915,7 @@
 
             btnSnapCapture?.addEventListener('click', async () => {
                 if (!snapVideo || snapVideo.readyState < 2) return;
-                if (faceLandmarker && !snapMpBypass) {
+                if (faceLandmarker) {
                     const check = faceLandmarker.detectForVideo(snapVideo, performance.now());
                     const ana = snapFaceAnalysisOk(check);
                     if (!ana.ok) {
@@ -951,16 +924,6 @@
                                 ana.reason === 'multi'
                                     ? '{{ __('Only one person should be in the photo.') }}'
                                     : '{{ __('Step back into the frame, wait a second, then try capture again.') }}';
-                        }
-                        return;
-                    }
-                }
-                if (typeof window.qsExamPrepareDetectPerson === 'function') {
-                    const ok = await window.qsExamPrepareDetectPerson(snapVideo);
-                    if (!ok) {
-                        if (snapStatus) {
-                            snapStatus.textContent =
-                                '{{ __('Quick check did not see a person clearly. Adjust the camera and try again.') }}';
                         }
                         return;
                     }
@@ -1026,6 +989,19 @@
                 btnRulesNext.disabled = entryBlocked || !chkRules?.checked;
             }
             void navigateToStep(resolveInitialStep());
+
+            document.addEventListener('visibilitychange', () => {
+                if (currentStep !== 'snapshot' || !snapStream) {
+                    return;
+                }
+                if (document.hidden) {
+                    stopSnapPresenceLoop();
+                    return;
+                }
+                if (faceLandmarker && !snapFinishing) {
+                    startSnapPresenceLoop();
+                }
+            });
 
             window.addEventListener('beforeunload', () => {
                 void stopSnapCamera();

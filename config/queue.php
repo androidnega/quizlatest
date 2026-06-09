@@ -13,7 +13,13 @@ return [
     |
     */
 
-    'default' => env('QUEUE_CONNECTION', 'database'),
+    // Audit Phase 11 / Section 9.1.2: shared cPanel hosts cannot run a
+    // long-lived `queue:work` worker, so the database queue would
+    // accumulate jobs forever. The "sync" default runs jobs inline within
+    // the request — short tasks (mail, notifications) finish in <200 ms;
+    // longer jobs (PDF export) can be moved behind dispatchAfterResponse()
+    // or a cron-based drain.
+    'default' => env('QUEUE_CONNECTION', 'sync'),
 
     /*
     |--------------------------------------------------------------------------
@@ -24,7 +30,7 @@ return [
     | used by your application. An example configuration is provided for
     | each backend supported by Laravel. You're also free to add more.
     |
-    | Drivers: "sync", "database", "beanstalkd", "sqs", "redis",
+    | Drivers: "sync", "database", "beanstalkd", "sqs",
     |          "deferred", "background", "failover", "null"
     |
     */
@@ -61,15 +67,6 @@ return [
             'queue' => env('SQS_QUEUE', 'default'),
             'suffix' => env('SQS_SUFFIX'),
             'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
-            'after_commit' => false,
-        ],
-
-        'redis' => [
-            'driver' => 'redis',
-            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
-            'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
-            'block_for' => null,
             'after_commit' => false,
         ],
 

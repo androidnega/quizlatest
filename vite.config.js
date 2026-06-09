@@ -6,9 +6,13 @@ export default defineConfig({
         laravel({
             input: [
                 'resources/css/app.css',
+                'resources/css/student-dashboard.css',
+                'resources/css/student-assignment-take.css',
+                'resources/css/student-exam-arena.css',
                 'resources/js/app.js',
                 'resources/js/studentExamRuntime.js',
-                'resources/js/examPreparePersonCheck.js',
+                'resources/js/studentExamArena.js',
+                'resources/js/studentProfilePhotoCrop.js',
             ],
             refresh: true,
         }),

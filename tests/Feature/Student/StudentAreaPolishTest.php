@@ -23,7 +23,7 @@ class StudentAreaPolishTest extends TestCase
             ->assertSee('id="student-work"', false);
     }
 
-    public function test_student_header_includes_notifications_link(): void
+    public function test_student_header_includes_notification_bell_dropdown(): void
     {
         $this->seed(InitialSetupSeeder::class);
         $student = User::query()->where('role', 'student')->firstOrFail();
@@ -31,6 +31,8 @@ class StudentAreaPolishTest extends TestCase
         $this->actingAs($student)
             ->get(route('dashboard'))
             ->assertOk()
+            ->assertSee('id="student-notification-panel"', false)
+            ->assertSee('qs-std-shell-header__bar', false)
             ->assertSee(route('student.notifications.index'), false);
     }
 

@@ -13,12 +13,21 @@
     $clearAttemptConfirmJs = json_encode(__('Clear this attempt? The student can start again.'));
     $invalidateRangeConfirmJs = json_encode(__('This removes attempts for every student who completed in this period. Continue?'));
     $workspaceUrl = route('examiner.quizzes.workspace', $exam);
-    $analyticsUrl = route('examiner.exams.analytics.show', $exam);
-@endphp
 
-<div class="mb-3 flex flex-wrap gap-2 text-xs font-semibold">
-    <a href="{{ $analyticsUrl }}" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-slate-800 hover:bg-slate-50">{{ __('Open full analytics') }}</a>
-</div>
+    // Strip trailing decimal zeros so scores read "5/10" not "5.00/10.00",
+    // and "5.5/10" not "5.50/10.00".
+    $fmtMark = function ($value) {
+        if ($value === null || $value === '') {
+            return '0';
+        }
+        $s = number_format((float) $value, 2, '.', '');
+        if (str_contains($s, '.')) {
+            $s = rtrim(rtrim($s, '0'), '.');
+        }
+
+        return $s === '' ? '0' : $s;
+    };
+@endphp
 
 <div class="w-full min-w-0 space-y-5 pb-1 text-qs-text">
     {{-- Retake window --}}
@@ -191,14 +200,14 @@
                                 @if ($result !== null)
                                     <span>{{ $pct }}%</span>
                                     <span class="text-qs-muted/80"> · </span>
-                                    <span class="text-qs-muted">{{ $result->score }}/{{ $exam->total_marks }}</span>
+                                    <span class="text-qs-muted">{{ $fmtMark($result->score) }}/{{ $fmtMark($exam->total_marks) }}</span>
                                 @else
                                     <span class="text-qs-muted/60">—</span>
                                 @endif
                             </td>
                             <td class="whitespace-nowrap px-4 py-3 align-top text-qs-muted">{{ $row->risk_state }}</td>
                             <td class="whitespace-nowrap px-4 py-3 text-right align-top sm:px-5">
-                                <a href="{{ route('examiner.exam-sessions.show', $row) }}" class="qs-link text-sm font-semibold">{{ __('View') }}</a>
+                                <a href="{{ route('examiner.exam-sessions.show', ['exam' => $exam, 'examSession' => $row]) }}" class="qs-link text-sm font-semibold">{{ __('View') }}</a>
                                 <span class="text-qs-soft">·</span>
                                 <form method="post" action="{{ route('examiner.exam-sessions.invalidate-for-retake', $row) }}" class="inline" onsubmit='return confirm({!! $clearAttemptConfirmJs !!});'>
                                     @csrf

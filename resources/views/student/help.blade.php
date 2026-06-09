@@ -1,55 +1,80 @@
 <x-layouts.student>
-    <x-slot name="title">{{ __('Help & instructions') }}</x-slot>
-    <x-slot name="subtitle">{{ __('Plain-language guide for assessments in QuizSnap.') }}</x-slot>
+    <x-slot name="title">{{ __('Help') }}</x-slot>
+    <x-slot name="subtitle">{{ __('How assessments work in QuizSnap.') }}</x-slot>
 
-    <div class="mx-auto max-w-2xl space-y-4 pb-8 text-slate-900">
-        <section class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-            <h2 class="text-sm font-semibold text-slate-900">{{ __('Starting an assessment') }}</h2>
-            <p class="mt-2 text-sm leading-relaxed text-slate-600">
-                {{ __('Open your dashboard work list, choose the assessment, then follow Prepare. When the window is open, you can start. For timed quizzes and exams, the timer begins after you enter the attempt.') }}
-            </p>
-        </section>
+    @php
+        $helpItems = [
+            [
+                'key' => 'continue',
+                'icon' => 'fa-play',
+                'title' => __('Starting an assessment'),
+                'body' => __('Open Assessments, choose your work, then follow Prepare. For timed quizzes, the timer starts after you enter the attempt.'),
+            ],
+            [
+                'key' => 'assignments_due',
+                'icon' => 'fa-file-pen',
+                'title' => __('Assignments'),
+                'bullets' => [
+                    __('Typed response: write in the editor. You may add an optional or required file.'),
+                    __('Required attachment: upload before submit is accepted.'),
+                    __('File only: follow on-screen instructions when there is no text box.'),
+                ],
+            ],
+            [
+                'key' => 'active_now',
+                'icon' => 'fa-copy',
+                'title' => __('Copy and paste'),
+                'body' => __('Sometimes paste is disabled. If you see a notice, type your answer directly.'),
+            ],
+            [
+                'key' => 'submitted_work',
+                'icon' => 'fa-shield-halved',
+                'title' => __('Proctoring & integrity'),
+                'bullets' => [
+                    __('Your school may require camera, microphone, or tab-focus checks.'),
+                    __('Screenshot and display checks are best-effort only.'),
+                    __('Integrity flags do not automatically change your marks.'),
+                ],
+            ],
+            [
+                'key' => 'results_released',
+                'icon' => 'fa-square-poll-vertical',
+                'title' => __('Results & feedback'),
+                'body' => __('Scores appear after your examiner releases them. “Under review” means your work is still being processed.'),
+            ],
+            [
+                'key' => 'closed_missed',
+                'icon' => 'fa-circle-info',
+                'title' => __('If something goes wrong'),
+                'body' => __('Wrong class details: contact your coordinator. Marking questions: your examiner. Technical issues: school IT.'),
+            ],
+        ];
+    @endphp
 
-        <section class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-            <h2 class="text-sm font-semibold text-slate-900">{{ __('Assignments') }}</h2>
-            <ul class="mt-2 list-inside list-disc space-y-2 text-sm text-slate-600">
-                <li>{{ __('Typed response: write your answer in the box. You may be able to add an optional or required file, depending on what your examiner set.') }}</li>
-                <li>{{ __('Optional attachment: you can submit with text only.') }}</li>
-                <li>{{ __('Required attachment: choose a file before submit is accepted.') }}</li>
-                <li>{{ __('File only: follow the on-screen instructions; there may be no long text box.') }}</li>
-            </ul>
-        </section>
+    <div class="space-y-5 pb-6">
+        <ul class="qs-wl-list qs-wl-list--shimmer">
+            @foreach ($helpItems as $i => $item)
+                <li class="qs-wl-item qs-wl-item--{{ $item['key'] }} qs-help-item" style="--card-i: {{ $i }}">
+                    <div class="qs-wl-item__head">
+                        <h3 class="qs-wl-item__title">{{ $item['title'] }}</h3>
+                        <span class="qs-wl-item__icon" aria-hidden="true">
+                            <i class="fa-solid {{ $item['icon'] }}"></i>
+                        </span>
+                    </div>
 
-        <section class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-            <h2 class="text-sm font-semibold text-slate-900">{{ __('Copy and paste') }}</h2>
-            <p class="mt-2 text-sm leading-relaxed text-slate-600">
-                {{ __('Sometimes paste is turned off to reduce unfair copying. If you see a notice, use your own words in the editor.') }}
-            </p>
-        </section>
+                    @if (! empty($item['body']))
+                        <p class="qs-help-item__body">{{ $item['body'] }}</p>
+                    @endif
 
-        <section class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-            <h2 class="text-sm font-semibold text-slate-900">{{ __('Proctoring & integrity') }}</h2>
-            <ul class="mt-2 list-inside list-disc space-y-2 text-sm text-slate-600">
-                <li>{{ __('Your school may require camera, microphone, tab focus checks, and similar signals. These help your examiner review fairness; they are not a guarantee that every rule break is detected.') }}</li>
-                <li>{{ __('Screenshot and external display checks are best-effort only — they are not perfect.') }}</li>
-                <li>{{ __('Tab-switch and phone-detection rules depend on your institution’s settings.') }}</li>
-                <li>{{ __('Face visibility may be required so identity checks can run.') }}</li>
-                <li>{{ __('Integrity flags and proctoring events do not automatically change your marks. Your examiner decides outcomes.') }}</li>
-            </ul>
-        </section>
-
-        <section class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-            <h2 class="text-sm font-semibold text-slate-900">{{ __('Results & feedback') }}</h2>
-            <p class="mt-2 text-sm leading-relaxed text-slate-600">
-                {{ __('Scores and written feedback appear only after your examiner releases them (and for some assignments, after grades are released to the class). If you see “under review” or “awaiting grading”, your work is still being processed.') }}
-            </p>
-        </section>
-
-        <section class="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-            <h2 class="text-sm font-semibold text-slate-900">{{ __('If something goes wrong') }}</h2>
-            <p class="mt-2 text-sm leading-relaxed text-slate-600">
-                {{ __('For wrong class or programme details, contact your coordinator. For marking questions, contact your course examiner. For technical issues, contact your school IT or support channel.') }}
-            </p>
-        </section>
+                    @if (! empty($item['bullets']))
+                        <ul class="qs-help-item__bullets">
+                            @foreach ($item['bullets'] as $bullet)
+                                <li>{{ $bullet }}</li>
+                            @endforeach
+                        </ul>
+                    @endif
+                </li>
+            @endforeach
+        </ul>
     </div>
 </x-layouts.student>

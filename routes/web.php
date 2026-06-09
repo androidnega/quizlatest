@@ -7,23 +7,25 @@ use App\Http\Controllers\Admin\CoordinatorController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\ProctoringGovernanceController;
 use App\Http\Controllers\Admin\ReportingController as AdminReportingController;
+use App\Http\Controllers\Admin\StudentDashboardBrandingController;
 use App\Http\Controllers\Admin\UniversityController;
 use App\Http\Controllers\Admin\UserAccountController;
 use App\Http\Controllers\Coordinator\AcademicResetController;
 use App\Http\Controllers\Coordinator\ClassCourseAssignmentController;
 use App\Http\Controllers\Coordinator\ClassroomController;
 use App\Http\Controllers\Coordinator\CourseController;
+use App\Http\Controllers\Coordinator\ExamCommandCenterController;
 use App\Http\Controllers\Coordinator\LevelController;
 use App\Http\Controllers\Coordinator\ProgramController;
 use App\Http\Controllers\Coordinator\ReportingController as CoordinatorReportingController;
 use App\Http\Controllers\Coordinator\StudentController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\Examiner\AssessmentAnalyticsController as ExaminerAssessmentAnalyticsController;
 use App\Http\Controllers\Examiner\ClassExplorerController;
 use App\Http\Controllers\Examiner\CourseMaterialController as ExaminerCourseMaterialController;
 use App\Http\Controllers\Examiner\CoursesController as ExaminerCoursesController;
 use App\Http\Controllers\Examiner\DashboardController as ExaminerDashboardController;
 use App\Http\Controllers\Examiner\ExamBuilderController;
+use App\Http\Controllers\Examiner\ExaminerEmergencyController;
 use App\Http\Controllers\Examiner\ExamSessionReviewController as ExaminerExamSessionReviewController;
 use App\Http\Controllers\Examiner\ManualGradingController as ExaminerManualGradingController;
 use App\Http\Controllers\Examiner\PracticeOverviewController;
@@ -45,6 +47,7 @@ use App\Http\Controllers\Student\StudentPracticeSummaryController;
 use App\Http\Controllers\Student\StudentResultController;
 use App\Http\Controllers\Student\StudentRevisionSelfCheckController;
 use App\Http\Controllers\Student\StudentWorkController;
+use App\Models\ExamSession;
 use App\Models\Quiz;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -52,6 +55,21 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('home');
 })->name('home');
+
+// Browsers (and inline PDF viewers) ask for /favicon.ico by default.
+// We only ship favicon.svg, so serve it under both URLs with the
+// correct MIME type and long-lived cache headers.
+Route::get('/favicon.ico', function () {
+    $path = public_path('favicon.svg');
+    if (! is_file($path)) {
+        abort(404);
+    }
+
+    return response(file_get_contents($path), 200, [
+        'Content-Type' => 'image/svg+xml',
+        'Cache-Control' => 'public, max-age=2592000, immutable',
+    ]);
+})->name('favicon');
 
 Route::get('/about', AboutController::class)->name('about');
 
@@ -81,7 +99,7 @@ Route::any('/coordinator/{path?}', function (?string $path = null) {
 Route::any('/examiner/{path?}', function (?string $path = null) {
     $path = $path === null ? '' : ltrim($path, '/');
 
-    return redirect($path === '' ? '/dashboard/workspace' : '/dashboard/'.$path, 301);
+    return redirect($path === '' ? '/dashboard' : '/dashboard/'.$path, 301);
 })->where('path', '.*');
 
 Route::any('/student/results/{path?}', function (?string $path = null) {
@@ -101,6 +119,8 @@ Route::any('/student/practice/{path?}', function (?string $path = null) {
 Route::middleware('auth')->group(function () {
     Route::get('/student/exam/{examSession}', [StudentExamController::class, 'take'])
         ->name('student.exam.take');
+    Route::get('/student/exam/{examSession}/submitted', [StudentExamController::class, 'submitted'])
+        ->name('student.exam.submitted');
 
     Route::middleware(['verified', 'student'])->group(function () {
         Route::get('/student/exams/{quiz}/instructions', [StudentExamEntryController::class, 'instructions'])
@@ -119,24 +139,58 @@ Route::middleware('auth')->group(function () {
                 ->middleware('throttle:60,1')
                 ->name('start');
             Route::post('/proctoring-capability', [ExamSessionController::class, 'proctoringCapability'])->name('proctoring-capability');
-            Route::get('/{examSession}/state', [ExamSessionController::class, 'state'])->name('state');
+            // Red-team Phase 2 finding M4: throttle the high-frequency
+            // exam runtime endpoints. Laravel's default throttle key is
+            // user_id-when-authenticated, ip-when-not, so two students
+            // sharing a NAT do not share a bucket. Limits are sized at
+            // 2x-30x the legitimate frontend traffic shown in
+            // QUIZSNAP_PRODUCTION_READINESS.txt Phase 5.
+            Route::get('/{examSession}/state', [ExamSessionController::class, 'state'])
+                ->middleware('throttle:60,1')
+                ->name('state');
+
+            // Architecture Review Phase 1+4: split heavy /state payload
+            // into invariant /exam-structure (browser-cacheable, ETag)
+            // and revision-aware /answers (ETag, 304-friendly). The
+            // student client fetches /exam-structure ONCE per attempt
+            // and re-validates with If-None-Match thereafter; /answers
+            // is only refetched after a save or on reconnect.
+            Route::get('/{examSession}/exam-structure', [ExamSessionController::class, 'examStructure'])
+                ->middleware('throttle:30,1')
+                ->name('exam-structure');
+            Route::get('/{examSession}/answers', [ExamSessionController::class, 'answers'])
+                ->middleware('throttle:60,1')
+                ->name('answers');
             Route::post('/{examSession}/resume', [ExamSessionController::class, 'resume'])->name('resume');
-            Route::post('/{examSession}/answers', [ExamSessionController::class, 'saveAnswer'])->name('answers.save');
-            Route::post('/{examSession}/heartbeat', [ExamSessionController::class, 'heartbeat'])->name('heartbeat');
+            Route::post('/{examSession}/answers', [ExamSessionController::class, 'saveAnswer'])
+                ->middleware('throttle:120,1')
+                ->name('answers.save');
+            Route::post('/{examSession}/heartbeat', [ExamSessionController::class, 'heartbeat'])
+                ->middleware('throttle:60,1')
+                ->name('heartbeat');
             Route::post('/{examSession}/verification-image', [ExamSessionController::class, 'storeVerificationImage'])
                 ->middleware('throttle:30,1')
                 ->name('verification-image');
-            Route::post('/{examSession}/proctoring-events', [ExamSessionController::class, 'logProctoringEvent'])->name('proctoring-events.store');
-            Route::post('/{examSession}/proctoring-events/batch', [ExamSessionController::class, 'logProctoringEventBatch'])->name('proctoring-events.batch');
+            Route::post('/{examSession}/proctoring-events', [ExamSessionController::class, 'logProctoringEvent'])
+                ->middleware('throttle:30,1')
+                ->name('proctoring-events.store');
+            Route::post('/{examSession}/proctoring-events/batch', [ExamSessionController::class, 'logProctoringEventBatch'])
+                ->middleware('throttle:30,1')
+                ->name('proctoring-events.batch');
             Route::post('/{examSession}/proctoring-overlay/clear', [ExamSessionController::class, 'clearProctoringOverlay'])
+                ->middleware('throttle:30,1')
                 ->name('proctoring-overlay.clear');
             Route::post('/{examSession}/assignment-files', [ExamSessionController::class, 'storeAssignmentSubmissionFile'])
                 ->middleware('throttle:30,1')
                 ->name('assignment-files.store');
             Route::get('/{examSession}/assignment-files/{assignmentFile}', [ExamSessionController::class, 'downloadOwnAssignmentSubmissionFile'])
                 ->name('assignment-files.download');
-            Route::post('/{examSession}/submit', [ExamSessionController::class, 'submit'])->name('submit');
-            Route::post('/{examSession}/force-submit', [ExamSessionController::class, 'forceSubmit'])->name('force-submit');
+            Route::post('/{examSession}/submit', [ExamSessionController::class, 'submit'])
+                ->middleware('throttle:5,1')
+                ->name('submit');
+            Route::post('/{examSession}/force-submit', [ExamSessionController::class, 'forceSubmit'])
+                ->middleware('throttle:5,1')
+                ->name('force-submit');
             Route::get('/{examSession}/review-timeline', [ExamSessionController::class, 'reviewTimeline'])->name('review-timeline');
             Route::post('/{examSession}/review/release', [ExamSessionController::class, 'releaseHeldResult'])->name('review.release');
             Route::post('/{examSession}/review/confirm-fail', [ExamSessionController::class, 'confirmFail'])->name('review.confirm-fail');
@@ -173,7 +227,7 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
     Route::any('examiner/{path?}', function (?string $path = null) {
         $path = $path === null ? '' : ltrim($path, '/');
         if ($path === '') {
-            return redirect('/dashboard/workspace', 301);
+            return redirect('/dashboard', 301);
         }
 
         return redirect('/dashboard/'.$path, 301);
@@ -258,6 +312,8 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
             Route::put('/settings', [AdminSettingsController::class, 'update'])->name('settings.update');
             Route::post('/settings/lock', [AdminSettingsController::class, 'lock'])->name('settings.lock');
             Route::post('/settings/unlock', [AdminSettingsController::class, 'unlock'])->name('settings.unlock');
+            Route::post('/settings/student-dashboard-banner', [StudentDashboardBrandingController::class, 'update'])
+                ->name('settings.student-dashboard-banner.update');
 
             Route::get('/academic-reset-snapshots', [AcademicResetSnapshotsController::class, 'index'])->name('academic-reset-snapshots.index');
 
@@ -326,6 +382,13 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
             Route::get('/courses/assign/classes', [ClassCourseAssignmentController::class, 'edit'])->name('courses.assign.edit');
             Route::post('/courses/assign/classes', [ClassCourseAssignmentController::class, 'update'])->name('courses.assign.update');
 
+            // Live-Ops Phase 2: Exam Command Center.
+            Route::get('/command-center', [ExamCommandCenterController::class, 'index'])
+                ->name('command-center.index');
+            Route::get('/command-center/metrics', [ExamCommandCenterController::class, 'metrics'])
+                ->middleware('throttle:60,1')
+                ->name('command-center.metrics');
+
             Route::get('/reporting', [CoordinatorReportingController::class, 'index'])->name('reporting.index');
             Route::get('/reporting/export/class-completion.csv', [CoordinatorReportingController::class, 'exportClassCompletionCsv'])->name('reporting.export.class-completion');
             Route::get('/reporting/export/course-performance.csv', [CoordinatorReportingController::class, 'exportCoursePerformanceCsv'])->name('reporting.export.course-performance');
@@ -345,13 +408,35 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
             Route::post('/exams/sessions/{examSession}/invalidate-for-retake', [ExamSessionController::class, 'invalidateForRetake'])
                 ->name('exam-sessions.invalidate-for-retake');
 
-            Route::get('/workspace', [ExaminerDashboardController::class, 'index'])->name('dashboard');
+            // Live-Ops Phase 5: examiner emergency tools. Every action
+            // is gated by Quiz::manageResults policy and writes an
+            // audit row via ExaminerEmergencyAuditService. Throttled
+            // because they're rare, high-impact, examiner-typed.
+            Route::prefix('exams/sessions/{examSession}/emergency')
+                ->name('exam-sessions.emergency.')
+                ->middleware('throttle:20,1')
+                ->group(function () {
+                    Route::post('/extend-time', [ExaminerEmergencyController::class, 'extendTime'])->name('extend-time');
+                    Route::post('/unlock', [ExaminerEmergencyController::class, 'unlockSession'])->name('unlock');
+                    Route::post('/override', [ExaminerEmergencyController::class, 'override'])->name('override');
+                    Route::get('/audit-trail', [ExaminerEmergencyController::class, 'auditTrail'])->name('audit-trail');
+                });
+
+            Route::get('/workspace', function (Request $request) {
+                $target = route('dashboard', absolute: false);
+                if ($request->getQueryString()) {
+                    $target .= '?'.$request->getQueryString();
+                }
+
+                return redirect($target, 301);
+            })->name('dashboard');
             Route::get('/quizzes/{exam}', [ExamBuilderController::class, 'builder'])->name('quizzes.workspace');
             Route::prefix('/exams')->group(function () {
                 Route::get('/', [ExamBuilderController::class, 'index'])->name('exams.index');
                 Route::get('/create', [ExamBuilderController::class, 'create'])->name('exams.create');
                 Route::post('/create/validate-import-json', [ExamBuilderController::class, 'validateCreateImportJson'])->name('exams.create.validate-import-json');
                 Route::post('/create/outline-suggest-topics', [ExamBuilderController::class, 'suggestCreateOutlineTopics'])->name('exams.create.outline-suggest-topics');
+                Route::post('/create/ai/generate-batch', [ExamBuilderController::class, 'aiGenerateBatch'])->name('exams.create.ai.generate-batch');
                 Route::post('/', [ExamBuilderController::class, 'store'])->name('exams.store');
                 Route::get('/{exam}/builder', function (Request $request, Quiz $exam) {
                     $to = route('examiner.quizzes.workspace', ['exam' => $exam]);
@@ -361,10 +446,12 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
 
                     return redirect($to, 301);
                 });
+                Route::get('/{exam}/review', [ExamBuilderController::class, 'reviewPool'])->name('exams.review');
                 Route::post('/{exam}/publish', [ExamBuilderController::class, 'publish'])->name('exams.publish');
                 Route::post('/{exam}/unpublish', [ExamBuilderController::class, 'unpublish'])->name('exams.unpublish');
                 Route::post('/{exam}/archive', [ExamBuilderController::class, 'archive'])->name('exams.archive');
                 Route::post('/{exam}/clone', [ExamBuilderController::class, 'cloneExam'])->name('exams.clone');
+                Route::delete('/{exam}', [ExamBuilderController::class, 'destroy'])->name('exams.destroy');
                 Route::post('/{exam}/release-assignment-grades', [ExamBuilderController::class, 'releaseAssignmentGrades'])->name('exams.release-assignment-grades');
                 Route::patch('/{exam}/schedule', [ExamBuilderController::class, 'updateSchedule'])->name('exams.schedule.update');
                 Route::patch('/{exam}/assignment-submission', [ExamBuilderController::class, 'updateAssignmentSubmissionSettings'])->name('exams.assignment-submission.update');
@@ -380,17 +467,12 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
                 Route::post('/{exam}/questions/import/commit', [ExamBuilderController::class, 'commitQuestionImport'])->name('exams.questions.import.commit');
                 Route::post('/{exam}/questions/ai/prompt', [ExamBuilderController::class, 'buildAiPrompt'])->name('exams.questions.ai.prompt');
                 Route::post('/{exam}/questions/ai/generate', [ExamBuilderController::class, 'generateWithAi'])->name('exams.questions.ai.generate');
-                Route::get('/{exam}/analytics', [ExaminerAssessmentAnalyticsController::class, 'show'])->name('exams.analytics.show');
-                Route::get('/{exam}/analytics/export/students.csv', [ExaminerAssessmentAnalyticsController::class, 'exportStudentsCsv'])->name('exams.analytics.export.students');
-                Route::get('/{exam}/analytics/export/questions.csv', [ExaminerAssessmentAnalyticsController::class, 'exportQuestionsCsv'])->name('exams.analytics.export.questions');
-                Route::get('/{exam}/analytics/export/proctoring.csv', [ExaminerAssessmentAnalyticsController::class, 'exportProctoringCsv'])->name('exams.analytics.export.proctoring');
-                Route::get('/{exam}/analytics/export/assignment-submissions.csv', [ExaminerAssessmentAnalyticsController::class, 'exportAssignmentSubmissionsCsv'])->name('exams.analytics.export.assignment-submissions');
-
                 Route::get('/{exam}/sessions', [ExaminerExamSessionReviewController::class, 'index'])->name('exams.sessions.index');
                 Route::get('/{exam}/sessions/export.csv', [ExaminerExamSessionReviewController::class, 'exportCsv'])->name('exams.sessions.export-csv');
+                Route::get('/{exam}/score-report', [ExamBuilderController::class, 'scoreReport'])->name('exams.score-report');
                 Route::post('/{exam}/sessions/invalidate-range', [ExaminerExamSessionReviewController::class, 'invalidateSessionsInRange'])->name('exams.sessions.invalidate-range');
                 Route::get('/{exam}/classes', [ExaminerExamSessionReviewController::class, 'classSummary'])->name('exams.classes.summary');
-                Route::get('/{exam}/classes/{classroom}/results', [ExaminerExamSessionReviewController::class, 'classResults'])->name('exams.classes.results');
+                Route::post('/{exam}/grading/ai-assist', [ExamBuilderController::class, 'gradeAssignmentWithAi'])->name('exams.assignment-grade-ai');
             });
 
             Route::prefix('/examiner/exams')->group(function () {
@@ -421,6 +503,7 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
             Route::get('/grading/pending-essays', [ExaminerManualGradingController::class, 'index'])->name('grading.pending');
             Route::get('/grading/answers/{answer}', [ExaminerManualGradingController::class, 'show'])->name('grading.show');
             Route::post('/grading/answers/{answer}', [ExaminerManualGradingController::class, 'grade'])->name('grading.grade');
+            Route::post('/grading/answers/{answer}/ai-suggest', [ExaminerManualGradingController::class, 'aiAssistAnswer'])->name('grading.ai-suggest');
 
             Route::get('/exams/sessions/{examSession}/evidence/verification', [SecureExamEvidenceController::class, 'verification'])
                 ->name('exam-sessions.evidence.verification');
@@ -428,7 +511,25 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
                 ->name('exam-sessions.evidence.event');
             Route::get('/exams/sessions/{examSession}/assignment-files/{assignmentFile}', [ExaminerExamSessionReviewController::class, 'downloadAssignmentSubmission'])
                 ->name('exam-sessions.assignment-files.download');
-            Route::get('/exams/sessions/{examSession}', [ExaminerExamSessionReviewController::class, 'show'])->name('exam-sessions.show');
+
+            // Canonical: /dashboard/quizzes/{exam}/sessions/{examSession}
+            Route::get('/quizzes/{exam}/sessions/{examSession}', [ExaminerExamSessionReviewController::class, 'show'])
+                ->name('exam-sessions.show');
+
+            // Legacy: keep the flat URL working — accepts both numeric id and
+            // UUID session_id and redirects to the canonical nested URL.
+            Route::get('/exams/sessions/{examSession}', function (ExamSession $examSession) {
+                $examSession->loadMissing('exam');
+
+                if ($examSession->exam === null) {
+                    abort(404);
+                }
+
+                return redirect()->route('examiner.exam-sessions.show', [
+                    'exam' => $examSession->exam,
+                    'examSession' => $examSession,
+                ], 301);
+            });
         });
 });
 

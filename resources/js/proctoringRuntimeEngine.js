@@ -100,8 +100,20 @@ export class ProctoringRuntimeEngine {
         /** When true, only tab/fullscreen/window listeners — no camera models or intervals. */
         this.browserOnly = false;
 
-        this.faceIntervalMs = this.performanceProfile?.face_interval_ms ?? 12000;
-        this.phoneIntervalMs = this.performanceProfile?.phone_interval_ms ?? 25000;
+        // Audit Phase 8 / P2.5 / Section 6.3.3: hardware-aware defaults.
+        // Low-end devices (<4 cores or <4 GB RAM) get longer intervals so
+        // the face/phone inference doesn't dominate the CPU. The server
+        // can still override via performance_profile.
+        const hwCores = Number(this.performanceProfile?.hardware_concurrency)
+            || (typeof navigator !== 'undefined' ? Number(navigator.hardwareConcurrency) : 0);
+        const memGb = Number(this.performanceProfile?.device_memory_gb)
+            || (typeof navigator !== 'undefined' ? Number(navigator.deviceMemory) : 0);
+        const isLowEnd = (hwCores > 0 && hwCores < 4) || (memGb > 0 && memGb < 4);
+        this.faceIntervalMs = this.performanceProfile?.face_interval_ms
+            ?? (isLowEnd ? 18000 : 12000);
+        this.phoneIntervalMs = this.performanceProfile?.phone_interval_ms
+            ?? (isLowEnd ? 35000 : 25000);
+        this.isLowEndHardware = isLowEnd;
 
         this.eventBatcher =
             options.eventBatcher ??
@@ -137,7 +149,16 @@ export class ProctoringRuntimeEngine {
 
         this.localPreviewRafId = null;
         this.lastLocalPreviewMs = 0;
-        this.localPreviewMinIntervalMs = 250;
+        // Audit Section 6.3.3: was 250ms (≈4 fps mesh inference). Drop to
+        // 800ms on capable hardware and 1500ms on low-end hardware. The
+        // overlay still feels responsive but face mesh inference no longer
+        // dominates CPU on student laptops.
+        this.localPreviewMinIntervalMs = this.isLowEndHardware ? 1500 : 800;
+
+        // Audit Phase 8: pause heavy timers when the tab is hidden. The
+        // tab_switch listener still fires from the browser-event side.
+        this._visibilityHandler = null;
+        this._timersPausedForVisibility = false;
     }
 
     async ensurePhoneModel() {
@@ -219,12 +240,7 @@ export class ProctoringRuntimeEngine {
         this.faceIntervalMs = this.performanceProfile?.face_interval_ms ?? this.faceIntervalMs;
         this.phoneIntervalMs = this.performanceProfile?.phone_interval_ms ?? this.phoneIntervalMs;
 
-        this.faceTimer = setInterval(() => void this.runFaceChecks(), this.faceIntervalMs);
-
-        if (this.phoneModel && this.phoneIntervalMs) {
-            this.phoneTimer = setInterval(() => void this.runPhoneDetection(), this.phoneIntervalMs);
-        }
-
+        this._startTimers();
         this.bindBrowserEvents();
 
         if (this.externalDisplayCheckEnabled) {
@@ -233,6 +249,57 @@ export class ProctoringRuntimeEngine {
         }
 
         if (this.previewCanvas && this.faceLandmarker && this.videoElement) {
+            this.startLocalPreviewLoop();
+        }
+
+        // Audit Phase 8 / Section 6.3.3: stop face / phone / preview RAF
+        // work while the tab is hidden. The tab_switch detector keeps
+        // firing because it lives on the document visibility listener
+        // chain — but mediapipe and tfjs go silent so a backgrounded tab
+        // stops eating CPU.
+        if (typeof document !== 'undefined') {
+            this._visibilityHandler = () => {
+                if (document.visibilityState === 'hidden') {
+                    this._pauseTimersForVisibility();
+                } else {
+                    this._resumeTimersForVisibility();
+                }
+            };
+            document.addEventListener('visibilitychange', this._visibilityHandler);
+        }
+    }
+
+    _startTimers() {
+        if (!this.faceTimer) {
+            this.faceTimer = setInterval(() => void this.runFaceChecks(), this.faceIntervalMs);
+        }
+        if (this.phoneModel && this.phoneIntervalMs && !this.phoneTimer) {
+            this.phoneTimer = setInterval(() => void this.runPhoneDetection(), this.phoneIntervalMs);
+        }
+    }
+
+    _pauseTimersForVisibility() {
+        if (this._timersPausedForVisibility) return;
+        this._timersPausedForVisibility = true;
+        if (this.faceTimer) {
+            clearInterval(this.faceTimer);
+            this.faceTimer = null;
+        }
+        if (this.phoneTimer) {
+            clearInterval(this.phoneTimer);
+            this.phoneTimer = null;
+        }
+        if (this.localPreviewRafId) {
+            window.cancelAnimationFrame(this.localPreviewRafId);
+            this.localPreviewRafId = null;
+        }
+    }
+
+    _resumeTimersForVisibility() {
+        if (!this._timersPausedForVisibility) return;
+        this._timersPausedForVisibility = false;
+        this._startTimers();
+        if (this.previewCanvas && this.faceLandmarker && this.videoElement && !this.localPreviewRafId) {
             this.startLocalPreviewLoop();
         }
     }
@@ -295,7 +362,9 @@ export class ProctoringRuntimeEngine {
 
     async stop() {
         clearInterval(this.faceTimer);
+        this.faceTimer = null;
         clearInterval(this.phoneTimer);
+        this.phoneTimer = null;
         if (this.screenDetailsTimer) {
             clearInterval(this.screenDetailsTimer);
             this.screenDetailsTimer = null;
@@ -313,6 +382,10 @@ export class ProctoringRuntimeEngine {
             this.multipleFacesAutoSubmitTimer = null;
         }
         document.removeEventListener('visibilitychange', this.onVisibilityChange);
+        if (this._visibilityHandler) {
+            document.removeEventListener('visibilitychange', this._visibilityHandler);
+            this._visibilityHandler = null;
+        }
         document.removeEventListener('fullscreenchange', this.onFullscreenChange);
         document.removeEventListener('webkitfullscreenchange', this.onFullscreenChange);
         window.removeEventListener('blur', this.onBlur);

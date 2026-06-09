@@ -172,7 +172,7 @@ class StudentResultPagesTest extends TestCase
 
         $this->actingAs($ctx['student']);
         $html = $this->get(route('student.results.show', $ctx['session']))->assertOk()->getContent();
-        $this->assertStringContainsString('Your result is pending manual grading.', $html);
+        $this->assertStringContainsString('Your score will appear here as soon as your examiner finishes reviewing your answers.', $html);
         $this->assertStringNotContainsString('Score</dt>', $html);
         $this->assertStringNotContainsString('Download PDF', $html);
     }
@@ -208,7 +208,7 @@ class StudentResultPagesTest extends TestCase
             'exam_session_id' => $ctx['session']->id,
             'question_id' => $questionId,
             'answer_text' => null,
-            'answer_payload' => json_encode(['choice' => 0]),
+            'answer_payload' => json_encode(['type' => 'mcq', 'selected' => [0]]),
             'points_awarded' => 88,
             'evaluation_status' => 'auto_scored',
             'evaluation_detail' => json_encode(['correct' => true]),
@@ -224,6 +224,8 @@ class StudentResultPagesTest extends TestCase
             ->assertOk()
             ->assertSeeText('72.5')
             ->assertSeeText('Question breakdown')
+            ->assertSeeText('Pick one')
+            ->assertSeeText('Your pick')
             ->assertSeeText('Nice work.')
             ->assertSeeText('Download PDF')
             ->assertDontSeeText('evaluation_detail');
@@ -260,7 +262,7 @@ class StudentResultPagesTest extends TestCase
             'exam_session_id' => $ctx['session']->id,
             'question_id' => $questionId,
             'answer_text' => null,
-            'answer_payload' => json_encode(['choice' => 0]),
+            'answer_payload' => json_encode(['type' => 'mcq', 'selected' => [0]]),
             'points_awarded' => 50,
             'evaluation_status' => 'auto_scored',
             'evaluation_detail' => json_encode(['correct' => true]),
@@ -349,7 +351,7 @@ class StudentResultPagesTest extends TestCase
             'exam_session_id' => $ctx['session']->id,
             'question_id' => $questionId,
             'answer_text' => null,
-            'answer_payload' => json_encode(['choice' => 0]),
+            'answer_payload' => json_encode(['type' => 'mcq', 'selected' => [0]]),
             'points_awarded' => 10,
             'evaluation_status' => 'auto_scored',
             'evaluation_detail' => json_encode(['correct' => true]),

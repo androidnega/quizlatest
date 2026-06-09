@@ -6448,10 +6448,10 @@ body.qs-std--wallet:not([data-qs-wallet-theme="noir"]) .qs-stat-card--link:focus
 
 /* =============================================================
    Dark mode overrides: follow OS Dark Appearance.
-   We re-tint rules that pinned literal hex colors (slate-*/white)
+   We re-tint rules that pinned literal hex colors (slate-#, white)
    so the result detail page, notifications page, and other student
    dashboard surfaces stay legible on a dark background. The Tailwind
-   `qs.*` palette is already CSS-variable-driven and adapts on its own.
+   qs.* palette is already CSS-variable-driven and adapts on its own.
    ============================================================= */
 @media (prefers-color-scheme: dark) {
     /* Student shell variables — these shadow the :root brand palette,

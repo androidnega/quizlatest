@@ -7,8 +7,11 @@ use Illuminate\Support\Facades\Http;
 
 /**
  * Calls the configured LLM using {@see AiIntegrationSettings}. Never logs secrets.
+ *
+ * Not marked final on purpose — tests mock this with Mockery, and there's no
+ * invariant that requires sealing the class.
  */
-final class ExamAiQuestionGenerator
+class ExamAiQuestionGenerator
 {
     public function __construct(
         private readonly AiIntegrationSettings $aiSettings,
@@ -18,9 +21,10 @@ final class ExamAiQuestionGenerator
     /**
      * @param  list<string>|null  $allowedTypes  Question types permitted for this run (e.g. assessment selection).
      * @param  list<string>|null  $existingQuestionTextsNormalized  Lowercased trimmed question_text values already in the pool.
+     * @param  bool               $lenient  Skip duplicate / malformed individual questions instead of failing the whole batch.
      * @return array{ok: true, sections: list<array<string, mixed>>}|array{ok: false, errors: list<string>}
      */
-    public function generateFromPrompt(string $prompt, ?array $allowedTypes = null, ?array $existingQuestionTextsNormalized = null): array
+    public function generateFromPrompt(string $prompt, ?array $allowedTypes = null, ?array $existingQuestionTextsNormalized = null, bool $lenient = false): array
     {
         $key = $this->aiSettings->apiKey();
         $model = trim((string) ($this->aiSettings->modelName() ?? ''));
@@ -89,7 +93,7 @@ final class ExamAiQuestionGenerator
 
         $extracted = $this->extractJsonObject($content);
 
-        return $this->importValidator->validateJsonString($extracted, $allowedTypes, $existingQuestionTextsNormalized);
+        return $this->importValidator->validateJsonString($extracted, $allowedTypes, $existingQuestionTextsNormalized, $lenient);
     }
 
     private function extractJsonObject(string $content): string

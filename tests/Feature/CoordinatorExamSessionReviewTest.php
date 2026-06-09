@@ -139,9 +139,12 @@ class CoordinatorExamSessionReviewTest extends TestCase
         $ctx = $this->seedScopedExamContext();
 
         $this->actingAs($ctx['examiner']);
-        $this->get(route('examiner.exam-sessions.show', $ctx['session']))
+        $this->get(route('examiner.exam-sessions.show', [
+            'exam' => $ctx['session']->exam,
+            'examSession' => $ctx['session'],
+        ]))
             ->assertOk()
-            ->assertSeeText('Proctoring timeline');
+            ->assertSeeText('Violation log');
     }
 
     public function test_coordinator_cannot_view_examiner_sessions_index(): void

@@ -4,7 +4,8 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Pending OTP (stored in Redis only; otp_hash is bcrypt, never plaintext)
+    | Pending OTP (stored in the Laravel cache store; otp_hash is bcrypt,
+    | never plaintext)
     |--------------------------------------------------------------------------
     */
     'ttl_seconds' => (int) env('EXAM_OTP_TTL_SECONDS', 300),
@@ -36,10 +37,12 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Emergency: use Laravel cache store when Redis is unavailable (never DB)
+    | Cache store used to persist pending OTP state. Defaults to "file"
+    | which works on shared cPanel hosting without any external cache
+    | server.
     |--------------------------------------------------------------------------
     */
-    'fallback_enabled' => (bool) env('EXAM_OTP_FALLBACK_ENABLED', false),
+    'fallback_enabled' => (bool) env('EXAM_OTP_FALLBACK_ENABLED', true),
 
     'fallback_cache_store' => env('EXAM_OTP_FALLBACK_CACHE_STORE', 'file'),
 

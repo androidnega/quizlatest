@@ -26,20 +26,42 @@ export class ProctoringEventBatcher {
     constructor(options) {
         this.examSessionKey = options.examSessionKey;
         this.apiClient = options.apiClient || window.axios;
-        this.flushIntervalMs = options.flushIntervalMs ?? 4500;
+        // Audit P2.5: lengthen the idle flush window to 9s and keep 4.5s
+        // when an event is pending. Prevents the batcher from POSTing
+        // empty arrays every 4.5s on a calm exam (no tab switches, no
+        // detection events).
+        this.activeFlushIntervalMs = options.flushIntervalMs ?? 4500;
+        this.idleFlushIntervalMs = options.idleFlushIntervalMs ?? 9000;
+        this.flushIntervalMs = this.activeFlushIntervalMs;
         this.maxBatch = options.maxBatch ?? 14;
         this.preferGzip = options.preferGzip !== false;
         this.onFlushResult = typeof options.onFlushResult === 'function' ? options.onFlushResult : null;
+        // Audit Phase 8: pause flushes while the tab is hidden — listeners
+        // continue to enqueue events, we just don't ship them until the
+        // student returns. Stops a backgrounded laptop from sending
+        // proctoring batches every 9s for hours.
+        this.pausedWhenHidden = options.pausedWhenHidden !== false;
 
         this.queue = [];
         this.timer = null;
         this.pendingResolvers = [];
+
+        if (this.pausedWhenHidden && typeof document !== 'undefined') {
+            this._visibilityHandler = () => {
+                if (document.visibilityState === 'visible' && this.queue.length) {
+                    void this.flush();
+                }
+            };
+            document.addEventListener('visibilitychange', this._visibilityHandler);
+        }
     }
 
     enqueue(eventPayload) {
         return new Promise((resolve, reject) => {
             this.queue.push(eventPayload);
             this.pendingResolvers.push({ resolve, reject });
+            // Active interval whenever there is real work pending.
+            this.flushIntervalMs = this.activeFlushIntervalMs;
             if (this.queue.length >= this.maxBatch) {
                 void this.flush();
                 return;
@@ -50,10 +72,20 @@ export class ProctoringEventBatcher {
 
     scheduleFlush() {
         if (this.timer) return;
+        // Audit P2.5: skip empty timer wakeups while the tab is hidden.
+        if (
+            this.pausedWhenHidden
+            && typeof document !== 'undefined'
+            && document.visibilityState === 'hidden'
+            && this.queue.length === 0
+        ) {
+            return;
+        }
+        const interval = this.queue.length ? this.activeFlushIntervalMs : this.idleFlushIntervalMs;
         this.timer = window.setTimeout(() => {
             this.timer = null;
             void this.flush();
-        }, this.flushIntervalMs);
+        }, interval);
     }
 
     async flush() {
@@ -62,6 +94,8 @@ export class ProctoringEventBatcher {
             this.timer = null;
         }
 
+        // Audit P2.5: empty flushes were a major source of wasted requests.
+        // Returning here keeps the batcher silent during quiet exam moments.
         if (!this.queue.length) {
             return null;
         }

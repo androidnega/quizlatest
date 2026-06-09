@@ -40,6 +40,20 @@ class StudentDashboardDigestTest extends TestCase
         ]);
     }
 
+    public function test_mobile_profile_card_uses_brand_gradient_overlay(): void
+    {
+        $this->seed(InitialSetupSeeder::class);
+        $student = User::query()->where('role', 'student')->firstOrFail();
+
+        $html = $this->actingAs($student)->get(route('dashboard'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('qs-std-profile-banner__gradient', $html);
+        $this->assertStringContainsString('qs-std-profile-bleed', $html);
+        $this->assertStringNotContainsString('from-[#EF3340]/95 via-[#D91F2D]', $html);
+        $this->assertStringContainsString('images/student/quizsnap-student-dashboard-profile-banner-background.jpg', $html);
+        $this->assertStringNotContainsString('data-dashboard-mobile-hero', $html);
+    }
+
     public function test_student_dashboard_shows_new_course_materials_since_last_visit(): void
     {
         $this->seed(InitialSetupSeeder::class);

@@ -3,52 +3,17 @@
 namespace App\Services;
 
 /**
- * Admin + environment gates for Redis-backed exam runtime and live WebSockets.
+ * Admin + environment gates for the exam runtime and live WebSockets.
+ *
+ * The runtime relies entirely on the Laravel cache store, RateLimiter,
+ * and the database. This gate retains the live-sockets / Reverb fields
+ * because those are still admin-toggleable.
  */
 final class ExamRuntimeInfraGate
 {
     public function __construct(
         private readonly SystemSettingsService $settings,
-        private readonly RedisHealthService $redisHealth,
     ) {}
-
-    public function redisRuntimeEnabledByAdmin(): bool
-    {
-        return $this->settings->getBool('enable_redis_runtime', true);
-    }
-
-    /**
-     * True when Redis should be used for exam runtime primitives (locks, counters, OTP store, etc.).
-     */
-    public function useRedisForExamRuntime(): bool
-    {
-        return $this->redisRuntimeEnabledByAdmin() && $this->redisHealth->isAvailable();
-    }
-
-    public function allowRedisFallback(): bool
-    {
-        return $this->settings->getBool('allow_redis_fallback', true);
-    }
-
-    /**
-     * True when neither Redis nor admin wants Redis, but Laravel cache/rate-limiter fallbacks are allowed.
-     */
-    public function useCacheBackedExamRuntimeFallbacks(): bool
-    {
-        if ($this->useRedisForExamRuntime()) {
-            return false;
-        }
-
-        return $this->allowRedisFallback();
-    }
-
-    /**
-     * No Redis and fallbacks disabled — distributed primitives are skipped (logged).
-     */
-    public function examRuntimeFullyDegraded(): bool
-    {
-        return ! $this->useRedisForExamRuntime() && ! $this->allowRedisFallback();
-    }
 
     public function enableLiveSockets(): bool
     {
@@ -81,14 +46,11 @@ final class ExamRuntimeInfraGate
     }
 
     /**
-     * Exam OTP storage can proceed (Redis or cache fallback path).
+     * Exam OTP storage is always available — backed by the Laravel
+     * cache store (file by default on shared hosting).
      */
     public function examOtpStorageOperational(): bool
     {
-        if ($this->useRedisForExamRuntime()) {
-            return true;
-        }
-
-        return $this->allowRedisFallback() || (bool) config('exam_otp.fallback_enabled', false);
+        return true;
     }
 }

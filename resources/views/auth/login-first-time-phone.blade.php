@@ -5,7 +5,7 @@
     :heading="__('Mobile number for verification')"
     :description="__('Your coordinator did not add a phone yet. Enter your Ghana mobile number — we will send a one-time code by SMS only. Your number is saved only after you verify the code.')"
 >
-    <form method="POST" action="{{ route('login.first-time.phone.store') }}" class="space-y-6">
+    <form method="POST" action="{{ route('login.first-time.phone.store') }}" class="space-y-5">
         @csrf
 
         <div>
@@ -14,17 +14,17 @@
             <x-input-error :messages="$errors->get('phone')" class="mt-2" />
         </div>
 
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <a href="{{ route('login', ['restart' => 1]) }}" class="qs-btn-secondary justify-center px-4 py-2.5 text-sm font-semibold sm:inline-flex sm:w-auto">
+        <div class="qs-auth-actions">
+            <a href="{{ route('login', ['restart' => 1]) }}" class="qs-btn-secondary justify-center">
                 {{ __('Back') }}
             </a>
-            <button type="submit" class="qs-btn-primary flex-1 justify-center py-2.5 text-sm font-semibold sm:flex-none sm:min-w-[9rem]">
+            <button type="submit" class="qs-btn-primary flex-1 justify-center sm:flex-none sm:min-w-[8rem]">
                 {{ __('Send code') }}
             </button>
         </div>
     </form>
 
-    <p class="mt-8 border-t border-qs-soft pt-6 text-center text-sm text-qs-muted">
+    <p class="qs-auth-help">
         {{ __('Coordinator or admin?') }}
     </p>
 </x-guest-layout>

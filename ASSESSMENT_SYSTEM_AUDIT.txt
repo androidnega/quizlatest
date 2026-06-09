@@ -1,0 +1,253 @@
+{
+  "audit_status": "completed",
+  "overall_readiness": "partially_ready",
+  "summary": "The codebase implements a coherent Laravel stack for universities through coordinators to examiners, with unified Quiz model carrying assessment_type (quiz, mid, exam, assignment), exam_sections, questions, exam_sessions, answers, results, and proctoring_events. Student login uses index number plus OTP, dashboards list published work, and a SPA-style student exam runtime saves answers and submits. Gaps remain versus the reference flow: no true multi-attempt model for students, assignment-type assessments lack first-class file-upload coursework storage, proctoring mark-deduction flags are not applied to published scores (documented in ResultFinalizationService), eye tracking and reliable audio/HDMI surveillance are not implemented, and section-level topics exist only informally (section title / AI prompt text), not as structured entities.",
+  "critical_blockers": [
+    {
+      "area": "Proctoring violation actions vs final score",
+      "issue": "Quiz proctoring_settings include violation_actions (warn, deduct, autosubmit) and violation_deduct_marks_per_flag can be stored, but ResultFinalizationService documents that proctoring violations do not change the persisted Result score; scoring is sum of answer points only.",
+      "impact": "Examiners and students may believe configured automatic mark deductions apply when they do not; fairness and policy alignment require manual adjustment or code changes.",
+      "recommended_fix": "Either implement deduction in syncAfterSubmission / refresh paths with clear audit trail, or remove/hide deduct UI and document examiner-only adjustment for violations."
+    },
+    {
+      "area": "Student retakes / multiple attempts",
+      "issue": "ExamEntryPipelineService blocks a new start if any submitted session exists for that student and exam; there is no configurable max_attempts column or student self-service retake. Retake requires examiner invalidate flow.",
+      "impact": "Any product requirement for multiple graded attempts per assessment is not met without operational examiner intervention.",
+      "recommended_fix": "Add explicit attempt limits and session rows per attempt, or document single-attempt as intentional and align UI copy."
+    },
+    {
+      "area": "Assignment file submissions",
+      "issue": "exam_session_answers store answer_text and answer_payload JSON; there is no dedicated assignment submission file storage or validation pipeline comparable to coursework uploads.",
+      "impact": "Assignment flow is effectively timed text/essay-style delivery through the same runtime; institutions expecting document hand-ins need new storage, virus scan, and grader download UX.",
+      "recommended_fix": "Design file attachment model (disk path, mime, size) linked to session or answer, with examiner review and secure download routes."
+    }
+  ],
+  "missing_features": [
+    {
+      "area": "Structured topics per section",
+      "missing": "exam_sections has title and order only; no topics table or per-topic tagging beyond question metadata / AI topic strings.",
+      "recommended_fix": "Add optional section_topic rows or structured metadata if curricula require topic-level reporting."
+    },
+    {
+      "area": "Dedicated short_answer type in live builder",
+      "missing": "Legacy short_answer was migrated to fill_blank in migrations; examiner-facing types are mcq, true_false, fill_blank, essay — not a distinct long short-answer rubric.",
+      "recommended_fix": "If product needs both fill-in and short paragraph, extend types and validators consistently."
+    },
+    {
+      "area": "Eye tracking and continuous audio analysis",
+      "missing": "No gaze/eye model; getUserMedia may request audio with video for stream setup but there is no sustained audio classification pipeline in reviewed JS.",
+      "recommended_fix": "Treat as out of scope or integrate a vetted SDK with privacy review; do not claim audio proctoring without implementation."
+    },
+    {
+      "area": "External display / HDMI / casting detection",
+      "missing": "Not implemented; browsers cannot reliably detect HDMI or casting.",
+      "recommended_fix": "Rely on policy, invigilation, or locked-down lab software; document browser limits in admin copy."
+    },
+    {
+      "area": "Student dashboard taxonomy",
+      "missing": "Main dashboard aggregates published assessments in one list with filtering logic; dedicated missed/expired buckets and per-type tabs are partial (separate assignments index exists but core list mixes types).",
+      "recommended_fix": "Unify or clearly segment quiz vs mid vs exam vs assignment with status badges and closed-state explanations."
+    },
+    {
+      "area": "Examiner analytics depth",
+      "missing": "Workspace and session review exist; dedicated question-performance analytics and violation dashboards are limited compared to the reference checklist.",
+      "recommended_fix": "Add aggregated item analysis and export from proctoring_events and session answers."
+    }
+  ],
+  "working_features": [
+    {
+      "area": "Admin / coordinator structure",
+      "status": "Migrations and models cover universities, faculties, departments, programs, levels, classes, class_course, examiner_course_assignments, coordinator_assignments; coordinator routes manage students (CSV upload, JSON import), programs, levels, classes, courses, examiner and class assignment."
+    },
+    {
+      "area": "Assessment authoring",
+      "status": "Examiner ExamBuilderController supports create with assessment_type, target classrooms, schedule, JSON import with session preview/commit, AI prompt build, optional internal AI generation (ExamAiQuestionGenerator when API key configured), sections and questions, publish/unpublish/archive, pool delivery (questions_per_student, randomization), and assignment-specific due_at and grades_released_at."
+    },
+    {
+      "area": "Student entry and runtime",
+      "status": "Student login (index + OTP), onboarding gate, prepare/instructions routes, exam-sessions API for start, state, save answers, heartbeat, proctoring events, submit/force-submit; StudentExamController take view wires proctoring and assignment mode flags."
+    },
+    {
+      "area": "Grading pipeline",
+      "status": "AnswerEvaluationService auto-grades mcq, true_false, fill_blank; essays pending_manual; Examiner ManualGradingController; results with statuses pending_manual, graded, held; assignment grade visibility gated by grades_released_at on Quiz."
+    },
+    {
+      "area": "Results and PDF",
+      "status": "StudentResultController index/show/pdf with ExamSessionPolicy gating graded PDF; breakdown via StudentExamResultBreakdown when published and allowed."
+    },
+    {
+      "area": "Proctoring engine (browser)",
+      "status": "ProctoringRuntimeEngine uses MediaPipe face (and optional pose), coco-ssd phone hints, tab/window/blur and fullscreen listeners, batched events; ProctoringOrchestratorService scores events, cooldown, risk bands, auto-submit path; assignment mode relaxes several checks in ExamEntryPipelineService."
+    },
+    {
+      "area": "Academic reset safety narrative",
+      "status": "AcademicResetService freeze narratives state exams/results/sessions are not deleted for complete/partial resets; operations focus on class deactivation and clearing student class_id as designed — verify run* implementations before production bulk use."
+    }
+  ],
+  "student_dashboard_review": {
+    "exists": true,
+    "working_items": [
+      "Welcome-style hero with active session, open-now, upcoming, or awaiting-result states",
+      "Published assessments filtered by class_course enrollment, university, optional quiz_class targeting",
+      "Practice module hooks, policy notice dismissal, class-year warning, new course materials digest (via StudentDashboardDigestService)",
+      "Separate assignments index route student.assignments.index grouping assignment-type quizzes by course",
+      "Links to results, practice, prepare flow"
+    ],
+    "missing_items": [
+      "Explicit unified table of all assessment types with attempt count per assessment (only single in-flight / submitted dedupe)",
+      "Clear missed vs closed copy for every edge case (window end, assignment late window) on main dashboard",
+      "In-app notifications beyond material digest and policy notice"
+    ],
+    "ui_issues": [
+      "Naming still skews to exam language in places while assignments share the same mental model",
+      "Heavy blade with much inline PHP — harder to maintain parity with mobile-first goals without dedicated QA pass"
+    ]
+  },
+  "examiner_dashboard_review": {
+    "exists": true,
+    "working_items": [
+      "Metrics: assessment count, sessions, results, held results, pending manual essay count, class and course counts",
+      "Quick actions to create assessment, list assessments, courses, classes, grading queue",
+      "Academic year filter on overview"
+    ],
+    "missing_items": [
+      "Dedicated violation count card and drill-down from dashboard (partially available under per-session review)",
+      "Rich analytics (discrimination indices, time-on-item) not on overview",
+      "Per-assessment draft vs published counts as first-class widgets"
+    ],
+    "ui_issues": [
+      "Some metrics deep-link generically to exams index rather than filtered views"
+    ]
+  },
+  "grading_review": {
+    "auto_grading": "working",
+    "manual_grading": "partial",
+    "result_publication": "partial",
+    "issues": [
+      "Essay and similar rely on manual path; fill_blank auto only",
+      "Assignments use grades_released_at as publication gate — good — but mixed-type terminology in results views may confuse",
+      "Proctoring deduction not in automatic score sum (see critical_blockers)",
+      "Letter grades / GPA mapping not observed in core Result model (score numeric)"
+    ]
+  },
+  "proctoring_review": {
+    "implemented_checks": [
+      "Verification snapshot on start when policy requires",
+      "Face presence / framing hints via MediaPipe face landmarker",
+      "Optional pose landmarker for movement-related signals",
+      "Phone-like object detection via TensorFlow coco-ssd",
+      "Tab switch / window blur / visibility-based signals",
+      "Fullscreen enter/exit detection and UI gate",
+      "Clipboard / integrity hooks in studentExamRuntime for essays and exam modes",
+      "Server-side ProctoringOrchestratorService scoring, cooldown, autosubmit decision, ProctoringEvent persistence",
+      "Live channels (Reverb) when infra enabled — ExamRuntimeInfraGate"
+    ],
+    "missing_checks": [
+      "Dedicated eye tracking / gaze scoring",
+      "Continuous audio content monitoring (stream may include audio but no analyser pipeline found)",
+      "Reliable second-device or network fingerprinting beyond coarse navigator hints",
+      "HDMI / casting / external monitor detection"
+    ],
+    "unreliable_or_browser_limited_checks": [
+      "Phone detection depends on model quality and camera angle",
+      "Tab-switch signals false positives with legitimate OS overlays or multi-monitor focus changes",
+      "Any HDMI/external display surveillance is not realistically available in standard browsers"
+    ],
+    "issues": [
+      "Assignment default caps disable several aggressive checks in ExamEntryPipelineService — intentional but must match institutional policy",
+      "violation_actions.deduct does not automatically reduce stored Result score (service layer comment)"
+    ]
+  },
+  "security_review": {
+    "passed_checks": [
+      "ExamSessionPolicy restricts student result PDF to own session and graded result",
+      "ExamPolicy ties examiner update/manageResults to created_by plus active ExaminerCourseAssignment on same course",
+      "Exam session routes use authorizeStudentOwnsSession patterns in ExamSessionController for student APIs",
+      "Staff vs student auth split in routes/auth.php",
+      "Secure evidence routes for admin/examiner for verification images and snapshots"
+    ],
+    "risks": [
+      "Any mass-assignment route IDs must stay bound to authorization in each action — spot-check new endpoints when adding features",
+      "Proctoring event POST endpoints require valid session binding; ensure rate limits and payload size remain adequate under abuse",
+      "Coordinators have broad student PII via CSV — operational not code defect"
+    ],
+    "recommended_fixes": [
+      "Periodic security review of exam-sessions.* JSON endpoints for mass assignment tampering",
+      "Ensure file evidence storage remains on private disk with signed or authorized download only"
+    ]
+  },
+  "database_review": {
+    "missing_tables_or_columns": [
+      "No per-assessment max_attempts or attempt_number on exam_sessions",
+      "No assignment_submission_files or similar for coursework binaries",
+      "No separate section_topics table",
+      "No formal grade_letter column on results (numeric score focus)"
+    ],
+    "relationship_issues": [
+      "Quizzes and questions cascade from course/university deletions — deleting a course destroys assessments; acceptable only with strict admin UX warnings",
+      "exam_session_answers unique per question per session — good for one row per item; file uploads would need extension"
+    ],
+    "data_loss_risks": [
+      "Coordinator academic reset clears class_id for affected students — historical exam_sessions still point to old class_id numerically; understand reporting joins after reset",
+      "Examiner invalidate-for-retake deletes attempts per service naming — confirm scope before bulk use",
+      "Cascade chains on users/courses can remove large subgraphs if misused from admin tools"
+    ]
+  },
+  "route_controller_review": {
+    "broken_or_missing_routes": [
+      "No obvious orphan for core flows; legacy path redirects present in web.php for admin/coordinator/examiner prefixes"
+    ],
+    "incomplete_controller_methods": [
+      "Some UX flows depend on session flash for AI import preview — expected pattern but fragile for multi-tab",
+      "Coordinators cannot mutate exams via ExamPolicy update — by design examiners own builder; coordinators manage roster only"
+    ],
+    "duplicate_or_confusing_logic": [
+      "Student assessments appear on dashboard and again under /dashboard/assignments for assignment type — document relationship for users",
+      "examiner/exams prefix redirects duplicate routes to reduce broken bookmarks — good but increases route surface to test"
+    ]
+  },
+  "recommended_next_phase": {
+    "phase_name": "Close assessment and proctoring policy gaps",
+    "priority_order": [
+      "Decide and implement truth for violation mark deductions vs examiner-only adjustment",
+      "Add assignment file submission and grader download if in product scope",
+      "Expose attempt policy explicitly in UI and schema (single vs multi)",
+      "Dashboard segmentation and copy pass for quiz vs mid vs exam vs assignment",
+      "Analytics slice: violations per assessment and item difficulty from existing tables"
+    ]
+  },
+  "files_checked": [
+    "routes/web.php",
+    "routes/auth.php",
+    "app/Models/Quiz.php",
+    "app/Models/Question.php",
+    "app/Models/ExamSession.php",
+    "app/Models/Result.php",
+    "app/Models/ExamSection.php",
+    "app/Http/Controllers/DashboardController.php",
+    "app/Http/Controllers/ExamSessionController.php (partial)",
+    "app/Http/Controllers/Student/StudentExamController.php",
+    "app/Http/Controllers/Student/StudentResultController.php",
+    "app/Http/Controllers/Student/StudentAssignmentsController.php",
+    "app/Http/Controllers/Examiner/DashboardController.php",
+    "app/Http/Controllers/Examiner/ExamBuilderController.php (partial)",
+    "app/Http/Controllers/Coordinator/AcademicResetController.php (partial)",
+    "app/Services/ExamEntryPipelineService.php (partial)",
+    "app/Services/ResultFinalizationService.php",
+    "app/Services/AnswerEvaluationService.php (partial)",
+    "app/Services/ProctoringOrchestratorService.php (partial)",
+    "app/Services/AcademicResetService.php (partial)",
+    "app/Services/ExamAiQuestionGenerator.php",
+    "app/Policies/ExamPolicy.php",
+    "app/Policies/ExamSessionPolicy.php",
+    "resources/js/proctoringRuntimeEngine.js (partial)",
+    "resources/js/studentExamRuntime.js (grep)",
+    "resources/views/student/dashboard.blade.php (partial)",
+    "resources/views/examiner/dashboard.blade.php (partial)",
+    "database/migrations/2026_05_01_113158_create_quizzes_table.php",
+    "database/migrations/2026_05_14_140000_add_assignment_coursework_columns.php",
+    "database/migrations/2026_05_01_152100_create_exam_session_answers_table.php",
+    "database/migrations/2026_05_01_180200_add_evaluation_fields_to_exam_session_answers.php"
+  ],
+  "do_not_change_yet": true
+}

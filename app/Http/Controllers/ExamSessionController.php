@@ -15,7 +15,7 @@ use App\Services\AnswerPayloadValidator;
 use App\Services\ExamAnswerSynthesisService;
 use App\Services\ExamEntryPipelineService;
 use App\Services\ExamOtpService;
-use App\Services\ExamRedisService;
+use App\Services\ExamRuntimeService;
 use App\Services\ExamSessionSubmissionService;
 use App\Services\ExamSessionInvalidateForRetakeService;
 use App\Services\ProctoringGlobalControlService;
@@ -45,7 +45,7 @@ class ExamSessionController extends Controller
         private readonly ExamAnswerSynthesisService $answerSynthesis,
         private readonly ResultFinalizationService $resultFinalization,
         private readonly ExamOtpService $examOtp,
-        private readonly ExamRedisService $examRedis,
+        private readonly ExamRuntimeService $examRuntime,
         private readonly SystemExamPolicyService $examPolicy,
         private readonly ExamSessionSubmissionService $sessionSubmission,
     ) {}
@@ -101,46 +101,135 @@ class ExamSessionController extends Controller
     {
         $this->authorizeStudentOwnsSession($request, $examSession);
 
+        // Audit P1.6: prepareTimedSessionForStudent() returns a fully reloaded model.
+        // We update last_seen_at in-memory + a single save() and skip the
+        // immediately-following $examSession->fresh() round trip — nothing
+        // else mutates the row between save() and JSON serialization.
         $fresh = $this->prepareTimedSessionForStudent($examSession);
         abort_if($fresh === null, 404);
 
         if ($fresh->status === 'active') {
             $fresh->forceFill(['last_seen_at' => now()])->save();
-            $fresh = $examSession->fresh();
-            abort_if($fresh === null, 404);
         }
 
         return response()->json($this->mergeStudentExamStatePayload($fresh));
+    }
+
+    /**
+     * Architecture Review Phase 1 + 4 — invariant exam structure.
+     *
+     * Returns sections + questions + options + answer_schema for the
+     * student's per-session question slice. Browser-cacheable for the
+     * lifetime of the attempt; ETag enables a 304 Not Modified
+     * fast-path on every revisit.
+     */
+    public function examStructure(Request $request, ExamSession $examSession): JsonResponse
+    {
+        $this->authorizeStudentOwnsSession($request, $examSession);
+
+        $etag = ExamRuntimeStateExtension::structureEtag($examSession);
+
+        $ifNoneMatch = trim((string) $request->headers->get('If-None-Match'));
+        if ($ifNoneMatch !== '' && $this->etagMatches($ifNoneMatch, $etag)) {
+            return response()->json(null, 304, [
+                'ETag' => $etag,
+                'Cache-Control' => 'private, must-revalidate, max-age=0',
+            ]);
+        }
+
+        $payload = ExamRuntimeStateExtension::structureFor($examSession);
+
+        return response()->json($payload, 200, [
+            'ETag' => $etag,
+            'Cache-Control' => 'private, must-revalidate, max-age=0',
+            'Vary' => 'Cookie, Accept-Encoding',
+        ]);
+    }
+
+    /**
+     * Architecture Review Phase 1 + 4 — saved answers map, revision-aware.
+     *
+     * Returns the saved_answers map plus the max client_revision
+     * across answers for this session. ETag advances on every saved
+     * answer; the 304 response body is empty.
+     */
+    public function answers(Request $request, ExamSession $examSession): JsonResponse
+    {
+        $this->authorizeStudentOwnsSession($request, $examSession);
+
+        $etag = ExamRuntimeStateExtension::answersEtag($examSession);
+
+        $ifNoneMatch = trim((string) $request->headers->get('If-None-Match'));
+        if ($ifNoneMatch !== '' && $this->etagMatches($ifNoneMatch, $etag)) {
+            return response()->json(null, 304, [
+                'ETag' => $etag,
+                'Cache-Control' => 'private, must-revalidate, max-age=0',
+            ]);
+        }
+
+        $payload = ExamRuntimeStateExtension::answersFor($examSession);
+
+        return response()->json($payload, 200, [
+            'ETag' => $etag,
+            'Cache-Control' => 'private, must-revalidate, max-age=0',
+            'Vary' => 'Cookie, Accept-Encoding',
+        ]);
+    }
+
+    /**
+     * Compare a client If-None-Match header against a server ETag.
+     * Tolerant of weak prefixes ("W/...") and whitespace per RFC 7232.
+     */
+    private function etagMatches(string $clientHeader, string $serverEtag): bool
+    {
+        $strip = static function (string $tag): string {
+            $tag = trim($tag);
+            if (str_starts_with($tag, 'W/')) {
+                $tag = substr($tag, 2);
+            }
+            return trim($tag, " \t");
+        };
+
+        $serverNormalized = $strip($serverEtag);
+        foreach (explode(',', $clientHeader) as $piece) {
+            if ($strip($piece) === $serverNormalized) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function resume(Request $request, ExamSession $examSession): JsonResponse
     {
         $this->authorizeStudentOwnsSession($request, $examSession);
 
-        $row = $examSession->fresh();
-        abort_if($row === null, 404);
-        abort_unless($row->status === 'paused', 422, 'Session is not paused.');
+        // Audit P1.6: route binding already produced a fresh row. Drop the
+        // initial ->fresh() and the post-update ->fresh(): update() refreshes
+        // the model's attributes in-place via the underlying query.
+        abort_unless($examSession->status === 'paused', 422, 'Session is not paused.');
 
-        $row->loadMissing('exam');
-        abort_if($row->exam === null, 422);
-        abort_unless($row->exam->isAvailableForStudentToStart(now()), 422, 'This exam is no longer in its scheduled window.');
+        $examSession->loadMissing('exam');
+        abort_if($examSession->exam === null, 422);
+        abort_unless(
+            $examSession->exam->isAvailableForStudentToStart(now()),
+            422,
+            'This exam is no longer in its scheduled window.'
+        );
 
-        $segmentStart = $row->pause_segment_started_at ?? now();
+        $segmentStart = $examSession->pause_segment_started_at ?? now();
         $add = max(0, $segmentStart->diffInSeconds(now()));
 
-        $row->update([
+        $examSession->update([
             'status' => 'active',
-            'accumulated_pause_seconds' => (int) ($row->accumulated_pause_seconds ?? 0) + $add,
+            'accumulated_pause_seconds' => (int) ($examSession->accumulated_pause_seconds ?? 0) + $add,
             'pause_segment_started_at' => null,
             'last_seen_at' => now(),
         ]);
 
-        $out = $row->fresh();
-        abort_if($out === null, 404);
-
         return response()->json(array_merge(
             ['status' => 'resumed'],
-            $this->mergeStudentExamStatePayload($out),
+            $this->mergeStudentExamStatePayload($examSession),
         ));
     }
 
@@ -184,19 +273,32 @@ class ExamSessionController extends Controller
             'client_revision' => ['nullable', 'integer', 'min:1'],
         ]);
 
+        // Audit Section 3.1: project only the columns the validator/payload
+        // builder needs. The full Question row otherwise pulls a longtext
+        // body and a large JSON options blob on every saveAnswer call.
         $question = Question::query()
             ->where('id', $validated['question_id'])
             ->where('quiz_id', $examSession->exam_id)
-            ->first();
+            ->first(['id', 'quiz_id', 'type', 'correct_answer', 'answer_schema', 'options']);
         abort_unless($question !== null, 422, 'Question does not belong to this exam.');
 
+        // Audit P1.6: replace 1 SELECT + 1 EXISTS (+ implicit 2nd SELECT) with
+        // a single SELECT that also tells us whether the assignment table is
+        // populated for this session.
         $sessionQuestion = ExamSessionQuestion::query()
             ->where('exam_session_id', $examSession->id)
             ->where('question_id', $validated['question_id'])
             ->first();
 
-        if (ExamSessionQuestion::query()->where('exam_session_id', $examSession->id)->exists()) {
-            abort_unless($sessionQuestion !== null, 422, 'Question is not assigned to this exam attempt.');
+        if ($sessionQuestion === null) {
+            $hasAnyAssignment = ExamSessionQuestion::query()
+                ->where('exam_session_id', $examSession->id)
+                ->exists();
+            abort_if(
+                $hasAnyAssignment,
+                422,
+                'Question is not assigned to this exam attempt.'
+            );
         }
 
         try {
@@ -235,20 +337,81 @@ class ExamSessionController extends Controller
             ? (int) ($existing?->client_revision ?? 0)
             : max((int) ($existing?->client_revision ?? 0), (int) $incomingRev);
 
-        ExamSessionAnswer::query()->updateOrCreate(
-            [
+        // Architecture Review Phase 5 (Sprint 2 finding): the previous
+        // code did an unconditional UPSERT, which means two concurrent
+        // /save-answer requests racing for the same question could
+        // overwrite a higher-revision write that landed between our
+        // SELECT-existing and our UPSERT.
+        //
+        // Replacement is a two-step compare-and-swap:
+        //   1. Guarded UPDATE that only matches rows whose existing
+        //      client_revision is <= the revision we are about to
+        //      write. If a concurrent winner already wrote a higher
+        //      revision, affected_rows = 0 and we DO NOT touch the row.
+        //   2. If no row matched AND no row existed at the start of
+        //      this request, INSERT IGNORE creates the row. The
+        //      unique (exam_session_id, question_id) index makes a
+        //      racing INSERT a no-op rather than a duplicate.
+        //
+        // Net effect: every write of a given (session, question) is
+        // monotonic in client_revision, regardless of concurrency.
+        $now = now();
+        $payloadJson = is_array($normalized) ? json_encode($normalized) : $normalized;
+
+        $affected = \Illuminate\Support\Facades\DB::table('exam_session_answers')
+            ->where('exam_session_id', $examSession->id)
+            ->where('question_id', $validated['question_id'])
+            ->where(function ($q) use ($storedRevision) {
+                $q->whereNull('client_revision')
+                    ->orWhere('client_revision', '<=', $storedRevision);
+            })
+            ->update([
+                'answer_text' => null,
+                'answer_payload' => $payloadJson,
+                'saved_at' => $now,
+                'client_revision' => $storedRevision,
+                'updated_at' => $now,
+            ]);
+
+        if ($affected === 0 && $existing === null) {
+            \Illuminate\Support\Facades\DB::table('exam_session_answers')->insertOrIgnore([
                 'exam_session_id' => $examSession->id,
                 'question_id' => $validated['question_id'],
-            ],
-            [
                 'answer_text' => null,
-                'answer_payload' => $normalized,
-                'saved_at' => now(),
+                'answer_payload' => $payloadJson,
+                'saved_at' => $now,
                 'client_revision' => $storedRevision,
-            ],
-        );
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
 
-        $examSession->forceFill(['last_seen_at' => now()])->save();
+        if ($affected === 0) {
+            // Either nothing changed because a concurrent writer won
+            // with a higher revision, or our INSERT IGNORE saw the
+            // unique-key collision. Either way, the authoritative
+            // revision now stored MAY be higher than ours — return it
+            // so the client can resync.
+            $authoritative = (int) \Illuminate\Support\Facades\DB::table('exam_session_answers')
+                ->where('exam_session_id', $examSession->id)
+                ->where('question_id', $validated['question_id'])
+                ->value('client_revision');
+
+            if ($authoritative > $storedRevision) {
+                return response()->json([
+                    'status' => 'noop',
+                    'reason' => 'stale_revision',
+                    'client_revision' => $authoritative,
+                ]);
+            }
+        }
+
+        // Audit P1.6: replace ->save() with a single targeted UPDATE. No
+        // model events are needed for last_seen_at heartbeating.
+        \Illuminate\Support\Facades\DB::table('exam_sessions')
+            ->where('id', $examSession->id)
+            ->update(['last_seen_at' => $now, 'updated_at' => $now]);
+        $examSession->last_seen_at = $now;
 
         return response()->json([
             'status' => 'saved',
@@ -260,14 +423,19 @@ class ExamSessionController extends Controller
     {
         $this->authorizeStudentSession($request, $examSession);
 
+        // Audit P1.6: prepareTimedSessionForStudent returns the freshest
+        // model state; the previous code re-fetched immediately after.
         $fresh = $this->prepareTimedSessionForStudent($examSession);
         if ($fresh?->status === 'submitted') {
             return response()->json(['status' => 'submitted', 'reason' => 'timeout']);
         }
 
-        $fresh = $examSession->fresh();
-        if ($fresh && $fresh->status === 'active') {
-            $fresh->forceFill(['last_seen_at' => now()])->save();
+        if ($fresh !== null && $fresh->status === 'active') {
+            $now = now();
+            \Illuminate\Support\Facades\DB::table('exam_sessions')
+                ->where('id', $fresh->id)
+                ->update(['last_seen_at' => $now, 'updated_at' => $now]);
+            $fresh->last_seen_at = $now;
         }
 
         return response()->json(['status' => $fresh?->status ?? $examSession->status]);
@@ -329,7 +497,7 @@ class ExamSessionController extends Controller
             ]);
         }
 
-        $this->examRedis->enforceProctoringEventBudget($examSession->session_id, 1);
+        $this->examRuntime->enforceProctoringEventBudget($examSession->session_id, 1);
 
         $decision = $this->orchestrator->ingestEvent(
             examSession: $examSession,
@@ -341,7 +509,9 @@ class ExamSessionController extends Controller
 
         if ($decision['auto_submit'] === true) {
             $code = $this->autoSubmitReasonCodeFromEventType((string) $validated['event_type']);
-            $this->sessionSubmission->submit($examSession->fresh(), 'submitted_held', 'violation_threshold', $code);
+            // Audit P1.6: orchestrator already mutated $examSession in
+            // memory; no need for an extra SELECT before submit().
+            $this->sessionSubmission->submit($examSession, 'submitted_held', 'violation_threshold', $code);
 
             $msg = is_string($decision['client_message'] ?? null) && $decision['client_message'] !== ''
                 ? (string) $decision['client_message']
@@ -406,8 +576,13 @@ class ExamSessionController extends Controller
             ]);
         }
 
-        $this->examRedis->enforceProctoringEventBudget($examSession->session_id, count($eventsToProcess));
+        $this->examRuntime->enforceProctoringEventBudget($examSession->session_id, count($eventsToProcess));
 
+        // Audit P1.6 / Phase 6: previously this loop fetched a fresh model
+        // BEFORE every ingestEvent and AFTER every iteration — that's
+        // 2 SELECTs per event * up to 25 events = 50 wasted SELECTs per
+        // batch. ProctoringOrchestratorService now mutates the model
+        // in-place, so we just refresh() once per iteration when needed.
         foreach ($eventsToProcess as $eventPayload) {
             abort_unless($eventPayload['metadata']['session_id'] === $examSession->session_id, 422, 'session_id mismatch.');
             abort_unless((int) $eventPayload['metadata']['student_id'] === (int) $examSession->student_id, 422, 'student_id mismatch.');
@@ -421,7 +596,7 @@ class ExamSessionController extends Controller
             }
 
             $decision = $this->orchestrator->ingestEvent(
-                examSession: $examSession->fresh(),
+                examSession: $examSession,
                 eventType: $eventPayload['event_type'],
                 metadata: $eventPayload['metadata'],
                 severity: $eventPayload['severity'] ?? null,
@@ -430,7 +605,7 @@ class ExamSessionController extends Controller
 
             if ($decision['auto_submit'] === true) {
                 $code = $this->autoSubmitReasonCodeFromEventType((string) ($eventPayload['event_type'] ?? ''));
-                $this->sessionSubmission->submit($examSession->fresh(), 'submitted_held', 'violation_threshold', $code);
+                $this->sessionSubmission->submit($examSession, 'submitted_held', 'violation_threshold', $code);
 
                 $msg = is_string($decision['client_message'] ?? null) && $decision['client_message'] !== ''
                     ? (string) $decision['client_message']
@@ -445,8 +620,6 @@ class ExamSessionController extends Controller
                     'proctoring_overlay' => $decision['proctoring_overlay'] ?? ['active' => false, 'reason' => null, 'message' => null],
                 ]);
             }
-
-            $examSession = $examSession->fresh();
         }
 
         return response()->json([
@@ -494,6 +667,7 @@ class ExamSessionController extends Controller
             'multiple_faces' => 'multiple_faces_limit',
             'possible_screenshot_attempt' => 'screenshot_attempt',
             'possible_screen_record_attempt' => 'screen_record_attempt',
+            'proctoring_overlay_resolved' => 'overlay_dismiss_abuse',
             default => 'violation',
         };
     }
@@ -517,7 +691,7 @@ class ExamSessionController extends Controller
 
         $meta = ['resolved_reason' => $validated['resolved_reason'] ?? 'student_cleared'];
         $decision = $this->orchestrator->ingestEvent(
-            examSession: $examSession->fresh(),
+            examSession: $examSession,
             eventType: 'proctoring_overlay_resolved',
             metadata: array_merge($meta, [
                 'session_id' => $examSession->session_id,
@@ -526,9 +700,33 @@ class ExamSessionController extends Controller
             ]),
         );
 
+        // Red-team Phase 1 finding H1: when the student abuses the overlay
+        // dismissal endpoint to bypass camera enforcement, the orchestrator
+        // returns auto_submit=true. Mirror the violation-threshold submit
+        // path used by /proctoring-events.
+        if (($decision['auto_submit'] ?? false) === true) {
+            $this->sessionSubmission->submit(
+                $examSession,
+                'submitted_held',
+                'violation_threshold',
+                'overlay_dismiss_abuse',
+            );
+
+            $msg = is_string($decision['client_message'] ?? null) && $decision['client_message'] !== ''
+                ? (string) $decision['client_message']
+                : 'You have dismissed the camera-check warning too many times. Your assessment has been submitted for review.';
+
+            return response()->json([
+                'status' => 'submitted_held',
+                'reason' => 'overlay_dismiss_abuse',
+                'message' => $msg,
+                'proctoring_overlay' => $decision['proctoring_overlay'] ?? ['active' => false, 'reason' => null, 'message' => null],
+            ]);
+        }
+
         return response()->json(array_merge(
             ['status' => 'ok'],
-            $this->mergeStudentExamStatePayload($examSession->fresh()),
+            $this->mergeStudentExamStatePayload($examSession),
             ['proctoring_overlay' => $decision['proctoring_overlay'] ?? []],
         ));
     }
@@ -642,24 +840,24 @@ class ExamSessionController extends Controller
     {
         $this->authorizeStudentOwnsSession($request, $examSession);
 
-        $fresh = $examSession->fresh();
-        abort_if($fresh === null, 404);
-
-        if ($fresh->status === 'submitted') {
+        // Audit P1.6: route binding produced a fresh model. Use it directly
+        // and lock the row inside ExamSessionSubmissionService::submit() to
+        // avoid the redundant SELECT we previously did with ->fresh().
+        if ($examSession->status === 'submitted') {
             return response()->json(array_merge(
                 ['status' => 'submitted', 'already_submitted' => true],
-                $this->mergeStudentExamStatePayload($fresh),
+                $this->mergeStudentExamStatePayload($examSession),
             ));
         }
 
-        abort_unless(in_array($fresh->status, ['active', 'paused'], true), 422, 'Session is not active.');
+        abort_unless(in_array($examSession->status, ['active', 'paused'], true), 422, 'Session is not active.');
 
-        $fresh->loadMissing('exam');
-        $quiz = $fresh->exam;
+        $examSession->loadMissing('exam');
+        $quiz = $examSession->exam;
         if ($quiz !== null && $quiz->isAssignment()) {
             if ($quiz->assignment_allows_files && ($quiz->assignment_attachment_required ?? false)) {
                 $hasFile = AssignmentSubmissionFile::query()
-                    ->where('exam_session_id', $fresh->id)
+                    ->where('exam_session_id', $examSession->id)
                     ->exists();
                 if (! $hasFile) {
                     throw ValidationException::withMessages([
@@ -669,7 +867,7 @@ class ExamSessionController extends Controller
             }
         }
 
-        $this->sessionSubmission->submit($fresh, 'submitted', 'manual_submit');
+        $this->sessionSubmission->submit($examSession, 'submitted', 'manual_submit');
 
         return response()->json(['status' => 'submitted']);
     }
@@ -871,23 +1069,31 @@ class ExamSessionController extends Controller
 
     private function prepareTimedSessionForStudent(ExamSession $examSession): ?ExamSession
     {
-        $fresh = $examSession->fresh();
-        if ($fresh === null) {
-            return null;
+        // Audit P1.6: route binding already produced a fresh row. Use the
+        // bound model directly and refresh() in-place ONLY when a downstream
+        // service mutates it (timer start / auto-expire). This drops 3
+        // SELECTs to at most 2 in the worst case (one if no mutations).
+        $examSession->loadMissing('exam');
+
+        if ($examSession->exam !== null
+            && ! $examSession->exam->isAssignment()
+            && $examSession->status !== 'submitted'
+        ) {
+            $mutated = ExamSessionTimer::ensureWritingTimerStarted($examSession, $examSession->exam);
+            if ($mutated) {
+                $examSession->refresh();
+                $examSession->loadMissing('exam');
+            }
         }
 
-        $fresh->loadMissing('exam');
-        if ($fresh->exam !== null && ! $fresh->exam->isAssignment() && $fresh->status !== 'submitted') {
-            ExamSessionTimer::ensureWritingTimerStarted($fresh, $fresh->exam);
-            $fresh = $examSession->fresh();
+        if ($examSession->status !== 'submitted') {
+            $expired = $this->sessionSubmission->autoExpireIfTimedOut($examSession);
+            if ($expired) {
+                $examSession->refresh();
+            }
         }
 
-        if ($fresh !== null && $fresh->status !== 'submitted') {
-            $this->sessionSubmission->autoExpireIfTimedOut($fresh);
-            $fresh = $examSession->fresh();
-        }
-
-        return $fresh;
+        return $examSession;
     }
 
     /**
@@ -895,16 +1101,53 @@ class ExamSessionController extends Controller
      */
     private function mergeStudentExamStatePayload(ExamSession $examSession): array
     {
-        $examSession->loadMissing(['exam', 'answers']);
+        // Architecture Review Phase 1: /state ships ONLY the volatile
+        // runtime fields. The invariant exam structure (sections,
+        // questions, options, answer_schema) and the saved_answers map
+        // moved to /exam-structure (browser-cacheable, ETagged) and
+        // /answers (revision-aware, ETagged). The student client now
+        // fetches structure once per attempt and re-validates with
+        // If-None-Match.
+        $examSession->loadMissing('exam');
 
         $base = ExamSessionStateResolver::payload($examSession, $this->globalControl->getControl());
-        $runtime = ExamRuntimeStateExtension::forSession($examSession);
+        $runtime = ExamRuntimeStateExtension::volatileStateFor($examSession);
         $merged = array_merge($base, $runtime);
 
+        // The minimal `exam` block kept on /state lets templates that
+        // need the title, type, due_at, etc. avoid an extra round trip.
+        // It does NOT include sections / questions — those live in
+        // /exam-structure.
+        $exam = $examSession->exam;
+        if ($exam !== null) {
+            $merged['exam'] = [
+                'id' => (int) $exam->id,
+                'title' => (string) $exam->title,
+                'description' => $exam->description,
+                'duration_minutes' => (int) ($exam->duration_minutes ?? 0),
+                'total_marks' => $exam->total_marks !== null ? (float) $exam->total_marks : null,
+                'assessment_type' => (string) ($exam->assessment_type ?? 'exam'),
+                'due_at' => $exam->due_at?->toAtomString(),
+                'start_time' => $exam->start_time?->toAtomString(),
+                'end_time' => $exam->end_time?->toAtomString(),
+                'grades_released_at' => $exam->grades_released_at?->toAtomString(),
+                'assignment_allows_text' => (bool) ($exam->assignment_allows_text ?? true),
+                'assignment_allows_files' => (bool) ($exam->assignment_allows_files ?? false),
+                'assignment_attachment_required' => (bool) ($exam->assignment_attachment_required ?? false),
+                'assignment_disable_paste' => (bool) ($exam->assignment_disable_paste ?? true),
+                'assignment_allowed_extensions' => $exam->assignment_allowed_extensions,
+                'assignment_max_file_kb' => $exam->assignment_max_file_kb,
+            ];
+        }
+
+        // Audit P1.6 / Phase 7: fetch the result ONCE with all the columns
+        // both branches (held check + assignment hints) need. The previous
+        // code ran two near-identical SELECTs against the results table on
+        // every state poll.
         $resultRow = Result::query()
             ->where('user_id', $examSession->student_id)
             ->where('quiz_id', $examSession->exam_id)
-            ->first(['status']);
+            ->first(['status', 'score', 'feedback', 'graded_at']);
 
         $held =
             $examSession->status === 'submitted'
@@ -917,7 +1160,7 @@ class ExamSessionController extends Controller
             return $this->scrubHeldStudentExamPayload($merged);
         }
 
-        return $this->withAssignmentStudentStateHints($merged, $examSession);
+        return $this->withAssignmentStudentStateHints($merged, $examSession, $resultRow);
     }
 
     /**
@@ -955,17 +1198,15 @@ class ExamSessionController extends Controller
      * @param  array<string, mixed>  $merged
      * @return array<string, mixed>
      */
-    private function withAssignmentStudentStateHints(array $merged, ExamSession $examSession): array
+    private function withAssignmentStudentStateHints(array $merged, ExamSession $examSession, ?Result $result = null): array
     {
         $exam = $examSession->exam;
         if ($exam === null || ! $exam->isAssignment()) {
             return $merged;
         }
 
-        $result = Result::query()
-            ->where('user_id', $examSession->student_id)
-            ->where('quiz_id', $exam->id)
-            ->first(['status', 'score', 'feedback', 'graded_at']);
+        // Audit P1.6: $result is now passed in from the caller — eliminates
+        // a duplicate SELECT against the results table per state poll.
 
         $gradesVisible = $exam->assignmentGradesVisibleToStudents();
         $feedbackPlain = null;
@@ -1053,7 +1294,11 @@ class ExamSessionController extends Controller
                 'review_note' => $note,
             ]);
 
-        $this->resultFinalization->refreshResultFromSessionState($examSession->fresh(['answers']));
+        // Audit P1.6: refresh in place + load answers, instead of fetching
+        // an entirely new model instance.
+        $examSession->refresh();
+        $examSession->load('answers');
+        $this->resultFinalization->refreshResultFromSessionState($examSession);
     }
 
     private function assertStudentActiveAndOnboardedForExamApi(Request $request): void

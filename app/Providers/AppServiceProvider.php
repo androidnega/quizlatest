@@ -22,6 +22,7 @@ use App\Policies\UniversityPolicy;
 use App\Policies\UserPolicy;
 use App\Services\PracticeModuleSettings;
 use App\Services\StudentNoticeDigestService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\View;
@@ -46,6 +47,15 @@ class AppServiceProvider extends ServiceProvider
         if (config('app.name') === 'Laravel') {
             Config::set('app.name', 'QuizSnap');
         }
+
+        // Audit P3.8: surface accidental N+1 lazy loads in non-production
+        // (tests + local dev) so they get fixed before hitting the shared
+        // host. We deliberately do NOT call ->shouldBeStrict() because
+        // it also asserts that every selected attribute exists on the
+        // model — projecting columns is one of the optimisations we just
+        // applied, so silent missing-attribute access is a feature here,
+        // not a bug.
+        Model::preventLazyLoading(! $this->app->isProduction());
 
         Gate::policy(Quiz::class, ExamPolicy::class);
         Gate::policy(ExamSession::class, ExamSessionPolicy::class);
@@ -74,38 +84,76 @@ class AppServiceProvider extends ServiceProvider
             fn (User $user): bool => $userPolicy->manageGlobalUserAccounts($user),
         );
 
+        // Audit Phase 7 / P2.2: this composer runs for layouts.navigation,
+        // components.layouts.student, student.dashboard AND
+        // dashboard-mobile-wallet — that's up to 4 invocations per page
+        // render. Without memoization the StudentNoticeDigestService::noticeCount
+        // and ::noticesFor queries each fire 4x. We cache the heavy lookups
+        // for the lifetime of one HTTP request via a static memo array
+        // keyed by user id.
         $studentPracticeComposer = function ($view): void {
+            static $memo = [];
+
             $user = auth()->user();
-            $practice = app(PracticeModuleSettings::class);
-            $view->with(
-                'studentPracticeNavEnabled',
-                $user !== null && $user->role === 'student' && $practice->studentPracticeEnabled(),
-            );
+            $isStudent = $user !== null && $user->role === 'student';
+            $userKey = $user?->id ?? 0;
+
+            if (! isset($memo[$userKey])) {
+                $practice = app(PracticeModuleSettings::class);
+                $noticeService = app(StudentNoticeDigestService::class);
+
+                $seenAt = $isStudent ? (string) session('student_notifications_seen_at', '') : '';
+                $seenAt = $seenAt !== '' ? $seenAt : null;
+
+                $memo[$userKey] = [
+                    'studentPracticeNavEnabled' => $isStudent && $practice->studentPracticeEnabled(),
+                    'studentMaterialsBrowseEnabled' => $isStudent && $practice->studentCourseMaterialsBrowseEnabled(),
+                    'practiceEnabled' => $practice->studentPracticeEnabled(),
+                    'studentNoticeCount' => $isStudent ? (int) $noticeService->noticeCount($user, $seenAt) : 0,
+                    'studentHeaderNotices' => $isStudent ? $noticeService->noticesFor($user, 8, $seenAt) : [],
+                ];
+            }
+
+            $cached = $memo[$userKey];
+            $view->with('studentPracticeNavEnabled', $cached['studentPracticeNavEnabled']);
+            $view->with('studentMaterialsBrowseEnabled', $cached['studentMaterialsBrowseEnabled']);
             $view->with(
                 'studentCourseMaterialsNavEnabled',
-                $user !== null
-                    && $user->role === 'student'
-                    && $practice->courseMaterialUploadsEnabled()
-                    && ! $practice->studentPracticeEnabled(),
+                $cached['studentMaterialsBrowseEnabled'] && ! $cached['practiceEnabled'],
             );
-            $view->with(
-                'studentNoticeCount',
-                $user !== null && $user->role === 'student'
-                    ? (int) app(StudentNoticeDigestService::class)->noticeCount($user)
-                    : 0,
-            );
+            $view->with('studentNoticeCount', $cached['studentNoticeCount']);
+            $view->with('studentHeaderNotices', $cached['studentHeaderNotices']);
         };
 
         View::composer('layouts.navigation', $studentPracticeComposer);
         View::composer('components.layouts.student', $studentPracticeComposer);
+        // The mobile wallet bell + the dashboard's own greeting need the
+        // unread-notice count too. The x-component layout composer above
+        // does NOT bleed into slot content, so register the same composer
+        // directly onto the dashboard view + the wallet partial. This makes
+        // $studentNoticeCount available wherever the bell is rendered.
+        View::composer('student.dashboard', $studentPracticeComposer);
+        View::composer('student.partials.dashboard-mobile-wallet', $studentPracticeComposer);
 
         $staffLayoutComposer = function ($view): void {
             $user = auth()->user();
             if ($user === null || $user->university_id === null) {
                 return;
             }
-            $year = AcademicYear::activeForUniversity((int) $user->university_id);
-            $term = $year !== null ? Term::activeForAcademicYear($year->id) : null;
+
+            // Audit P2.2: short-cache active year / active term lookups.
+            $year = \Illuminate\Support\Facades\Cache::remember(
+                "academic_year_active_full:university:{$user->university_id}",
+                300,
+                fn () => AcademicYear::activeForUniversity((int) $user->university_id),
+            );
+            $term = $year !== null
+                ? \Illuminate\Support\Facades\Cache::remember(
+                    "term_active:year:{$year->id}",
+                    300,
+                    fn () => Term::activeForAcademicYear($year->id),
+                )
+                : null;
 
             $badge = null;
             if ($year !== null) {

@@ -15,7 +15,10 @@ return [
     |
     */
 
-    'default' => env('CACHE_STORE', 'database'),
+    // Audit P1.3: file cache is the recommended default on shared hosting.
+    // The database driver multiplies DB hits via RateLimiter and Cache::*
+    // calls, so we keep "file" as the default.
+    'default' => env('CACHE_STORE', 'file'),
 
     /*
     |--------------------------------------------------------------------------
@@ -27,8 +30,7 @@ return [
     | same cache driver to group types of items stored in your caches.
     |
     | Supported drivers: "array", "database", "file", "memcached",
-    |                    "redis", "dynamodb", "octane",
-    |                    "failover", "null"
+    |                    "dynamodb", "octane", "failover", "null"
     |
     */
 
@@ -72,12 +74,6 @@ return [
             ],
         ],
 
-        'redis' => [
-            'driver' => 'redis',
-            'connection' => env('REDIS_CACHE_CONNECTION', 'cache'),
-            'lock_connection' => env('REDIS_CACHE_LOCK_CONNECTION', 'default'),
-        ],
-
         'dynamodb' => [
             'driver' => 'dynamodb',
             'key' => env('AWS_ACCESS_KEY_ID'),
@@ -106,9 +102,9 @@ return [
     | Cache Key Prefix
     |--------------------------------------------------------------------------
     |
-    | When utilizing the APC, database, memcached, Redis, and DynamoDB cache
-    | stores, there might be other applications using the same cache. For
-    | that reason, you may prefix every cache key to avoid collisions.
+    | When utilizing the APC, database, memcached, and DynamoDB cache stores,
+    | there might be other applications using the same cache. For that
+    | reason, you may prefix every cache key to avoid collisions.
     |
     */
 

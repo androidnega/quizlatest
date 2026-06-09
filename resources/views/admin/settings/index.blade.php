@@ -15,20 +15,7 @@
         <section class="{{ $setPanel }}">
             <h3 class="text-base font-semibold text-slate-900">{{ __('Infrastructure (cPanel / shared hosting)') }}</h3>
             <p class="text-sm text-slate-600">
-                {{ __('If Redis is disabled or unavailable, the system will use database/cache fallback. This is slower but keeps exams running.') }}
-            </p>
-            <label class="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
-                <input type="checkbox" name="enable_redis_runtime" value="1" class="{{ $setCheck }}"
-                    @checked(old('enable_redis_runtime', $enable_redis_runtime)) @disabled($lock_enable_redis_runtime) />
-                {{ __('Use Redis for exam runtime (locks, counters, OTP store when available)') }}
-            </label>
-            <label class="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
-                <input type="checkbox" name="allow_redis_fallback" value="1" class="{{ $setCheck }}"
-                    @checked(old('allow_redis_fallback', $allow_redis_fallback)) @disabled($lock_allow_redis_fallback) />
-                {{ __('Allow application cache and rate limiter fallbacks when Redis is off or down') }}
-            </label>
-            <p class="text-sm text-slate-600">
-                {{ __('If live sockets are disabled or unavailable, the system will use polling.') }}
+                {{ __('Exam runtime primitives (locks, counters, OTP store) run on the application cache and database. If live sockets are disabled or unavailable, the system will use polling.') }}
             </p>
             <label class="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
                 <input type="checkbox" name="enable_live_sockets" value="1" class="{{ $setCheck }}"
@@ -161,28 +148,162 @@
         </section>
 
         <section class="{{ $setPanel }}">
-            <h3 class="text-base font-semibold text-slate-900">AI</h3>
+            <h3 class="text-base font-semibold text-slate-900">{{ __('AI integration (system-wide)') }}</h3>
+            <p class="text-xs text-slate-600">
+                {{ __('Single source of truth for every AI feature in QuizSnap — examiner question generation, lecturer essay grading assistant, student practice quizzes, and study summaries all use the credentials below. Configure once here; there is no separate per-feature key.') }}
+            </p>
             <label class="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
                 <input type="checkbox" name="enable_ai" value="1" class="{{ $setCheck }}"
                     @checked(old('enable_ai', $enable_ai)) @disabled($lock_enable_ai) />
-                Enable AI integrations
+                {{ __('Enable AI integrations (master switch)') }}
             </label>
-            <div>
-                <label class="mb-1 block text-sm text-slate-600">API key</label>
-                <input type="password" name="ai_api_key" autocomplete="off" class="{{ $setInput }} max-w-xl"
-                    placeholder="{{ $ai_api_key_masked ? '•••••••• (enter new to replace)' : 'Not set' }}"
-                    @disabled($ai_key_locked) />
+            <div class="grid gap-4 sm:grid-cols-3">
+                <div class="sm:col-span-1">
+                    <label class="mb-1 block text-sm text-slate-600">{{ __('Provider') }}</label>
+                    @php
+                        $aiProviderCurrent = old('ai_provider', $ai_provider);
+                    @endphp
+                    <select name="ai_provider" class="{{ $setInput }}" @disabled($lock_ai_provider)>
+                        <option value="deepseek" @selected($aiProviderCurrent === 'deepseek')>DeepSeek</option>
+                        <option value="openai" @selected($aiProviderCurrent === 'openai')>OpenAI</option>
+                    </select>
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="mb-1 block text-sm text-slate-600">{{ __('API key') }}</label>
+                    <input type="password" name="ai_api_key" autocomplete="off" class="{{ $setInput }} w-full"
+                        placeholder="{{ $ai_api_key_masked ? '•••••••• (enter new to replace)' : 'Not set' }}"
+                        @disabled($ai_key_locked) />
+                </div>
             </div>
             <div>
-                <label class="mb-1 block text-sm text-slate-600">Model name</label>
+                <label class="mb-1 block text-sm text-slate-600">{{ __('Model name') }}</label>
                 <input type="text" name="ai_model_name" value="{{ old('ai_model_name', $ai_model_name) }}"
+                    placeholder="{{ \App\Services\AiIntegrationSettings::DEFAULT_MODEL }}"
                     class="{{ $setInput }} max-w-xl" @disabled($ai_model_locked) />
+                <p class="mt-1 text-xs text-slate-500">
+                    {{ __('Examples: deepseek-chat, deepseek-coder, gpt-4o-mini. Defaults to deepseek-chat when blank.') }}
+                </p>
             </div>
+            @if (! empty($ai_legacy_deepseek_present) && empty(trim((string) ($ai_api_key_masked ?? ''))))
+                <div class="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
+                    {{ __('A legacy DeepSeek key was found from a previous version and is being used as a fallback. Enter a new API key above to migrate it into the unified integration.') }}
+                </div>
+            @endif
         </section>
+
+        @if (auth()->user()?->isSuperAdmin())
+            <section class="{{ $setPanel }}">
+                <h3 class="text-base font-semibold text-slate-900">{{ __('Student dashboard') }}</h3>
+                <p class="text-sm text-slate-600">
+                    {{ __('Opt the entire student body into the wallet-style mobile experience (hero with a live countdown, action ring, recent activity card, floating bottom bar). The chosen color theme is also applied to the mobile header and floating navigation on every student page so the feel is consistent. Phones only — tablets and desktop are unchanged.') }}
+                </p>
+                <label class="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
+                    <input
+                        type="checkbox"
+                        name="student_dashboard_mobile_wallet"
+                        value="1"
+                        class="{{ $setCheck }}"
+                        @checked(old('student_dashboard_mobile_wallet', $student_dashboard_mobile_wallet))
+                        @disabled($lock_student_dashboard_mobile_wallet)
+                    />
+                    {{ __('Use wallet-style mobile dashboard for students') }}
+                </label>
+                <p class="text-xs text-slate-500">
+                    {{ __('After saving, students will see the new layout on phones the next time their dashboard loads. Sign in as a student on a phone (or use a narrow-window mobile emulator) to preview it.') }}
+                </p>
+
+                @php
+                    $walletThemeCurrent = old('student_dashboard_mobile_wallet_theme', $student_dashboard_mobile_wallet_theme);
+                    $walletThemeSwatches = [
+                        'teal' => ['#56aebb', '#15343a', '#e46f2e'],
+                        'forest' => ['#1b6b4e', '#14523c', '#c9f656'],
+                        'indigo' => ['#1e1b4b', '#312e81', '#7dd3fc'],
+                        'coral' => ['#c2410c', '#9a3412', '#fde68a'],
+                        'noir' => ['#050507', '#16161e', '#2dd4bf'],
+                    ];
+                @endphp
+                <div class="mt-3 rounded-xl border border-slate-200/80 bg-slate-50/60 p-3 sm:p-4">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-600">{{ __('Color theme') }}</p>
+                    <p class="mt-1 text-xs text-slate-500">{{ __('Picks the color the wallet hero, mobile header, and floating navigation use across all student pages. Default is the main QuizSnap teal so the mobile shell matches the rest of the product.') }}</p>
+                    <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                        @foreach ($student_dashboard_mobile_wallet_theme_options as $themeOption)
+                            @php
+                                $slug = $themeOption['slug'];
+                                $swatches = $walletThemeSwatches[$slug] ?? ['#94a3b8', '#475569', '#f1f5f9'];
+                            @endphp
+                            <label class="flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 text-sm text-slate-800 transition-colors {{ $walletThemeCurrent === $slug ? 'border-emerald-400 bg-white' : 'border-slate-200 bg-white/80 hover:bg-white' }}">
+                                <input
+                                    type="radio"
+                                    name="student_dashboard_mobile_wallet_theme"
+                                    value="{{ $slug }}"
+                                    class="mt-1 h-4 w-4 text-emerald-600 focus:ring-emerald-500/35"
+                                    @checked($walletThemeCurrent === $slug)
+                                    @disabled($lock_student_dashboard_mobile_wallet_theme)
+                                />
+                                <span class="min-w-0 flex-1 space-y-0.5">
+                                    <span class="flex items-center gap-2">
+                                        <span class="block font-semibold text-slate-900">{{ __($themeOption['label']) }}</span>
+                                        <span class="inline-flex items-center gap-0.5" aria-hidden="true">
+                                            @foreach ($swatches as $swatch)
+                                                <span class="inline-block h-3.5 w-3.5 rounded-full ring-1 ring-slate-200" style="background: {{ $swatch }};"></span>
+                                            @endforeach
+                                        </span>
+                                    </span>
+                                    <span class="block text-xs text-slate-600">{{ __($themeOption['description']) }}</span>
+                                </span>
+                            </label>
+                        @endforeach
+                    </div>
+                </div>
+            </section>
+
+            <section class="{{ $setPanel }}">
+                <h3 class="text-base font-semibold text-slate-900">{{ __('Student exam: presentation mode') }}</h3>
+                <p class="text-sm text-slate-600">
+                    {{ __('Picks which student-facing layout the exam runtime shows. The proctoring stack (camera, fullscreen, tab-switch warnings, auto-submit, answer save) is identical in both modes — only the presentation changes.') }}
+                </p>
+                @php
+                    $playModeCurrent = old('student_exam_play_mode', $student_exam_play_mode);
+                @endphp
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <label class="flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 text-sm text-slate-800 transition-colors {{ $playModeCurrent === 'classic' ? 'border-emerald-400 bg-emerald-50/70' : 'border-slate-200 bg-white' }}">
+                        <input
+                            type="radio"
+                            name="student_exam_play_mode"
+                            value="classic"
+                            class="mt-0.5 h-4 w-4 text-emerald-600 focus:ring-emerald-500/35"
+                            @checked($playModeCurrent === 'classic')
+                            @disabled($lock_student_exam_play_mode)
+                        />
+                        <span class="space-y-0.5">
+                            <span class="block font-semibold text-slate-900">{{ __('Classic') }}</span>
+                            <span class="block text-xs text-slate-600">{{ __('List of A/B/C/D rows with left nav rail. The default — works well for long forms and reading-heavy exams.') }}</span>
+                        </span>
+                    </label>
+                    <label class="flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 text-sm text-slate-800 transition-colors {{ $playModeCurrent === 'arena' ? 'border-emerald-400 bg-emerald-50/70' : 'border-slate-200 bg-white' }}">
+                        <input
+                            type="radio"
+                            name="student_exam_play_mode"
+                            value="arena"
+                            class="mt-0.5 h-4 w-4 text-emerald-600 focus:ring-emerald-500/35"
+                            @checked($playModeCurrent === 'arena')
+                            @disabled($lock_student_exam_play_mode)
+                        />
+                        <span class="space-y-0.5">
+                            <span class="block font-semibold text-slate-900">{{ __('Arena (gamified)') }}</span>
+                            <span class="block text-xs text-slate-600">{{ __('Kahoot-style single card with colored answer tiles, 3-stage progress rail, “locked-in” feedback sweep, floating camera PiP, and a step-by-step finish screen before submit.') }}</span>
+                        </span>
+                    </label>
+                </div>
+                <p class="text-xs text-slate-500">
+                    {{ __('Assignments always use the classic essay editor regardless of this setting (the arena card layout cannot host long-form text + file uploads).') }}
+                </p>
+            </section>
+        @endif
 
         <section class="{{ $setPanel }}">
             <h3 class="text-base font-semibold text-slate-900">Practice &amp; course materials (unofficial)</h3>
-            <p class="text-xs text-slate-600">Student practice is separate from official exams and proctoring. DeepSeek key is stored encrypted and never shown in full.</p>
+            <p class="text-xs text-slate-600">{{ __('Student practice is separate from official exams and proctoring. AI features below use the unified AI integration configured above — there is no separate API key here.') }}</p>
 
             <label class="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
                 <input type="checkbox" name="enable_student_practice_quizzes" value="1" class="{{ $setCheck }}"
@@ -224,19 +345,13 @@
                     <input type="number" name="practice_ai_token_limit_per_student" min="0" value="{{ old('practice_ai_token_limit_per_student', $practice_ai_token_limit_per_student) }}" class="{{ $setInput }} max-w-xs" @disabled($lock_practice_ai_token_limit_per_student) />
                 </div>
             </div>
-            <div>
-                <label class="mb-1 block text-sm text-slate-600">Provider identifier</label>
-                <input type="text" name="practice_ai_provider" value="{{ old('practice_ai_provider', $practice_ai_provider) }}" class="{{ $setInput }} max-w-md" @disabled($lock_practice_ai_provider) />
-            </div>
-            <div>
-                <label class="mb-1 block text-sm text-slate-600">DeepSeek API key</label>
-                <input type="password" name="deepseek_api_key" autocomplete="off" class="{{ $setInput }} max-w-xl"
-                    placeholder="{{ $deepseek_api_key_masked ? '•••••••• (enter new to replace)' : 'Not set' }}"
-                    @disabled($lock_deepseek_api_key) />
-            </div>
-            <div>
-                <label class="mb-1 block text-sm text-slate-600">DeepSeek model</label>
-                <input type="text" name="deepseek_model" value="{{ old('deepseek_model', $deepseek_model) }}" class="{{ $setInput }} max-w-xl" @disabled($lock_deepseek_model) />
+            <div class="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5 text-xs text-slate-700">
+                <p class="font-semibold text-slate-800">
+                    <i class="fa-solid fa-link" aria-hidden="true"></i>
+                    {{ __('AI provider:') }}
+                    <span class="font-normal">{{ __('Active provider is') }} <code class="rounded bg-white px-1 py-0.5 ring-1 ring-inset ring-slate-200">{{ $ai_provider_active }}</code> {{ __('using') }} <code class="rounded bg-white px-1 py-0.5 ring-1 ring-inset ring-slate-200">{{ $ai_model_active }}</code>.</span>
+                </p>
+                <p class="mt-1 text-slate-600">{{ __('Update credentials in the “AI integration (system-wide)” section above. All practice features inherit the same configuration automatically.') }}</p>
             </div>
         </section>
 
@@ -289,6 +404,70 @@
             @endforeach
         </ul>
     </section>
+
+    @if (auth()->user()?->isSuperAdmin())
+        <section class="{{ $setPanel }}">
+            <h3 class="text-base font-semibold text-slate-900">{{ __('Student dashboard branding') }}</h3>
+            <p class="text-sm text-slate-600">
+                {{ __('Background photo behind the mobile profile card on the student dashboard. Saved as a compressed JPEG (max ~180 KB).') }}
+            </p>
+            <div class="overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                <div
+                    class="aspect-[16/9] w-full max-w-md bg-cover bg-center"
+                    style="background-image: url('{{ $studentDashboardBannerUrl }}');"
+                    role="img"
+                    aria-label="{{ __('Current student dashboard banner preview') }}"
+                ></div>
+            </div>
+            @if ($studentDashboardHasCustomBanner)
+                <p class="text-xs font-medium text-emerald-800">{{ __('Using a custom banner.') }}</p>
+            @else
+                <p class="text-xs text-slate-500">{{ __('Using the default banner.') }}</p>
+            @endif
+
+            <form
+                method="post"
+                action="{{ route('admin.settings.student-dashboard-banner.update') }}"
+                enctype="multipart/form-data"
+                class="space-y-4"
+            >
+                @csrf
+                <div>
+                    <label for="banner_image" class="mb-1 block text-sm text-slate-600">{{ __('Upload new banner') }}</label>
+                    <input
+                        id="banner_image"
+                        name="banner_image"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        class="{{ $setInput }} max-w-md"
+                    />
+                    @error('banner_image')
+                        <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
+                    @enderror
+                    <p class="mt-1 text-xs text-slate-500">{{ __('JPEG, PNG, or WebP. Optimized to 1280×720 or smaller.') }}</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800">
+                        {{ __('Save banner') }}
+                    </button>
+                </div>
+            </form>
+
+            @if ($studentDashboardHasCustomBanner)
+                <form method="post" action="{{ route('admin.settings.student-dashboard-banner.update') }}" class="pt-2">
+                    @csrf
+                    <input type="hidden" name="remove_banner" value="1" />
+                    <button type="submit" class="text-sm font-semibold text-rose-700 hover:text-rose-900">
+                        {{ __('Reset to default banner') }}
+                    </button>
+                </form>
+            @endif
+
+            <p class="mt-4 border-t border-slate-200 pt-4 text-xs text-slate-500">
+                {{ __('The wallet-style mobile theme toggle lives in the “Student dashboard” section above (saved with the main settings form).') }}
+            </p>
+        </section>
+    @endif
 
     @if (session('scroll_to_setting_lock'))
         @push('scripts')

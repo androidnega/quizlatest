@@ -20,6 +20,8 @@ class ProfileUpdateRequest extends FormRequest
         if ($user->role === 'student') {
             return [
                 'phone' => ['nullable', 'string', 'max:40'],
+                'profile_photo' => ['nullable', 'image', 'mimes:jpeg,jpg', 'max:250'],
+                'remove_profile_photo' => ['sometimes', 'boolean'],
             ];
         }
 

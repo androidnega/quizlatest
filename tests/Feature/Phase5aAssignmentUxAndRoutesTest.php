@@ -385,7 +385,10 @@ class Phase5aAssignmentUxAndRoutesTest extends AssignmentCourseworkFlowTest
         ]);
 
         $this->actingAs($examiner);
-        $html = $this->get(route('examiner.exam-sessions.show', $session))->assertOk()->getContent();
+        $html = $this->get(route('examiner.exam-sessions.show', [
+            'exam' => $session->exam,
+            'examSession' => $session,
+        ]))->assertOk()->getContent();
         $this->assertStringContainsString('Assignment submission', (string) $html);
         $this->assertStringContainsString('Submission review', (string) $html);
         $this->assertStringContainsString('Grading queue', (string) $html);

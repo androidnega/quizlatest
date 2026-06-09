@@ -14,7 +14,7 @@
     if ($initials === '') {
         $initials = '?';
     }
-    $showPortraitAvatar = $user->role !== 'student' && filled($user->face_image_path ?? null);
+    $showPortraitAvatar = filled($user->face_image_path ?? null);
     $avatarSrc = $showPortraitAvatar && \Illuminate\Support\Facades\Route::has('profile.face-image') ? route('profile.face-image') : null;
     $profileHref = \Illuminate\Support\Facades\Route::has('profile.edit') ? route('profile.edit') : '#';
 @endphp

@@ -434,6 +434,36 @@ class ExamLifecycleTest extends TestCase
         );
     }
 
+    public function test_student_redirected_to_results_when_exam_already_submitted(): void
+    {
+        $ctx = $this->seedExaminerAndStudentContext();
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
+        $this->addSectionAndMcq($exam);
+        $this->setDeliveryForExaminer($ctx['examiner'], $exam->fresh());
+        $this->actingAs($ctx['examiner']);
+        $this->post(route('examiner.exams.publish', $exam->fresh()))->assertRedirect();
+
+        $exam->refresh();
+        $session = ExamSession::query()->create([
+            'student_id' => $ctx['student']->id,
+            'class_id' => $ctx['classId'],
+            'exam_id' => $exam->id,
+            'session_id' => (string) Str::uuid(),
+            'status' => 'submitted',
+            'start_time' => now()->subHour(),
+            'end_time' => now(),
+        ]);
+
+        $this->actingAs($ctx['student'])
+            ->get(route('student.exam.instructions', $exam))
+            ->assertRedirect(route('student.results.show', $session, absolute: false))
+            ->assertSessionHas('status');
+
+        $this->actingAs($ctx['student'])
+            ->get(route('student.exam.prepare', $exam))
+            ->assertRedirect(route('student.results.show', $session, absolute: false));
+    }
+
     public function test_exam_start_does_not_require_stored_face_template(): void
     {
         $ctx = $this->seedExaminerAndStudentContext();

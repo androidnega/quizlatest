@@ -197,4 +197,111 @@ class ExamPoolDeliveryTest extends TestCase
         $this->assertSame(2, $questionCount);
         $this->assertSame(2.0, $payload['exam']['total_marks']);
     }
+
+    public function test_entry_pipeline_seeds_per_session_question_subset_so_runtime_does_not_serve_all_questions(): void
+    {
+        // Regression for the case where the runtime fell back to showing
+        // every approved question because nobody had ever called the
+        // assignment service in production. The entry pipeline must now
+        // materialize the per-student subset the moment a session is
+        // created so the very first state fetch serves the right slice.
+        $ctx = $this->seedCoordinatorStudentCourseClass();
+        $exam = $this->createDraftExam($ctx['examiner'], $ctx['courseId']);
+
+        // Build a 5-question pool (every one approved) and tell the exam
+        // each student should see ONLY 2 of them.
+        $section = ExamSection::query()->create([
+            'exam_id' => $exam->id,
+            'title' => 'A',
+            'section_order' => 1,
+        ]);
+        for ($i = 1; $i <= 5; $i++) {
+            Question::query()->create([
+                'quiz_id' => $exam->id,
+                'section_id' => $section->id,
+                'question_text' => 'Q'.$i,
+                'type' => 'mcq',
+                'options' => ['a', 'b', 'c', 'd'],
+                'correct_answer' => [0],
+                'answer_schema' => null,
+                'marks' => 1,
+                'question_order' => $i,
+                'pool_status' => 'approved',
+            ]);
+        }
+        $exam->update([
+            'status' => 'published',
+            'published_at' => now()->subHour(),
+            'start_time' => now()->subHour(),
+            'end_time' => now()->addWeek(),
+            'questions_per_student' => 2,
+            'randomize_questions' => true,
+            'randomize_options' => true,
+            'total_marks' => 5,
+        ]);
+
+        // We're driving the entry pipeline directly (no real browser →
+        // no snapshot file), so disable the start-snapshot gate for this
+        // test only. It's the same toggle examiners use when they want
+        // to allow exams to start without a verification photo.
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'is_super_admin' => true,
+            'university_id' => $ctx['examiner']->university_id,
+            'email_verified_at' => now(),
+        ]);
+        app(\App\Services\SystemSettingsService::class)
+            ->set('require_exam_start_snapshot', '0', $admin);
+        app(\App\Services\SystemSettingsService::class)
+            ->set('face_verification_required', '0', $admin);
+
+        // Drive the entry pipeline the same way the controller does.
+        $request = \Illuminate\Http\Request::create('/exam-sessions/start', 'POST');
+        $request->setUserResolver(fn () => $ctx['student']);
+
+        $pipeline = app(\App\Services\ExamEntryPipelineService::class);
+        $result = $pipeline->execute($request, [
+            'exam_id' => (int) $exam->id,
+        ]);
+
+        $session = ExamSession::query()->where('session_id', $result['session_id'])->firstOrFail();
+        $assignedIds = ExamSessionQuestion::query()
+            ->where('exam_session_id', $session->id)
+            ->orderBy('display_order')
+            ->pluck('question_id')
+            ->all();
+
+        $this->assertCount(
+            2,
+            $assignedIds,
+            'questions_per_student=2 must serve exactly 2 questions per session, even from a 5-question pool.',
+        );
+
+        // And the state payload that the runtime actually consumes must
+        // match — i.e. the runtime sees the same 2 questions, not all 5.
+        $payload = ExamRuntimeStateExtension::forSession($session->fresh());
+        $questionCount = collect($payload['sections'])->sum(fn (array $s) => count($s['questions']));
+        $this->assertSame(
+            2,
+            $questionCount,
+            'The runtime state payload must respect the per-session subset.',
+        );
+
+        // The serialized questions should also have shuffled options because
+        // randomize_options=true → the assignment service writes a non-null
+        // option_order on each ExamSessionQuestion. We can't assert a
+        // specific permutation (it's random), but we can assert the option
+        // metadata is present and well-formed.
+        $links = ExamSessionQuestion::query()
+            ->where('exam_session_id', $session->id)
+            ->get();
+        foreach ($links as $link) {
+            $this->assertIsArray(
+                $link->option_order,
+                'Each MCQ link must store a per-session option shuffle so different students see different correct-answer positions.',
+            );
+            $this->assertCount(4, $link->option_order);
+            $this->assertSame([0, 1, 2, 3], collect($link->option_order)->sort()->values()->all());
+        }
+    }
 }
