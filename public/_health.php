@@ -21,12 +21,16 @@ declare(strict_types=1);
 // ─────────────────────────────────────────────────────────────────────
 //   ✏️  STEP 1 — Set this to a long random secret (16+ chars, letters
 //       and digits only).  Re-upload after editing.
+//
+//   The unconfigured-check below uses a SHA1 hash of the placeholder
+//   so a global "Replace All" in your editor cannot accidentally
+//   replace both the constant value AND the comparison string.
 // ─────────────────────────────────────────────────────────────────────
 const TOKEN = 'CHANGE_ME_TO_A_LONG_RANDOM_STRING';
 // ─────────────────────────────────────────────────────────────────────
 
-// Reject misconfigured deployments.
-if (TOKEN === 'CHANGE_ME_TO_A_LONG_RANDOM_STRING' || strlen(TOKEN) < 16) {
+// 75aeb3da64dd8e1db335bd609f123b617b1b0432 == sha1('CHANGE_ME_TO_A_LONG_RANDOM_STRING')
+if (sha1(TOKEN) === '75aeb3da64dd8e1db335bd609f123b617b1b0432' || strlen(TOKEN) < 16) {
     http_response_code(503);
     header('Content-Type: text/plain; charset=utf-8');
     echo "_health.php is unconfigured. Edit the TOKEN constant first.";
