@@ -1,9 +1,9 @@
 # QUIZSNAP — cPanel deployment runbook
 
 This is the short, copy/paste path to fix a 500 on
-`fada.neckpressing.com` after pulling new code on the cPanel server.
+`fada.neckpressing.com`.
 
-## TL;DR
+## Path A — SSH available
 
 ```bash
 ssh neckpre1@185.150.191.249       # or use PuTTY
@@ -14,6 +14,38 @@ bash bin/deploy.sh                 # idempotent — safe to re-run
 
 If `bin/deploy.sh` finishes with `Deploy complete.` but the site still
 500s, run `bash bin/check-server.sh` and paste the failed lines.
+
+## Path B — No SSH (cPanel only)
+
+If PuTTY/SSH won't connect, use the browser-based health console:
+
+1. **cPanel → Git Version Control** (or File Manager) → pull/upload the
+   latest code so `public/_health.php` exists in `~/fada/public/`.
+2. **Edit `public/_health.php`** in cPanel File Manager. Find
+   `const TOKEN = 'CHANGE_ME_TO_A_LONG_RANDOM_STRING';` and replace
+   the value with a long random string of your choice (≥16 chars).
+3. **Visit** `https://fada.neckpressing.com/_health.php?token=YOUR_TOKEN`
+4. The page lists the exact blocker(s) and gives one-click buttons to:
+   - Show the last 80 lines of `storage/logs/laravel-*.log`
+   - Toggle `APP_DEBUG` so the next refresh shows the real stack trace
+   - Create `.env` from the template
+   - Generate `APP_KEY`
+   - Strip Redis driver values from `.env`
+   - Fix `storage/` and `bootstrap/cache/` permissions
+   - Clear / rebuild config, route, view caches
+   - Run `php artisan migrate --force`
+5. **★ When the site is healthy, click "Delete _health.php"** at the
+   bottom of the page (or delete it via File Manager). Never leave it
+   on a public server.
+
+If `_health.php` itself shows the "vendor/ missing" blocker, you need
+to upload `vendor/`:
+
+- Locally: `composer install --no-dev --optimize-autoloader`, then
+  `cd .. && zip -r vendor.zip QUIZSNAP/vendor`.
+- cPanel File Manager → upload `vendor.zip` into `~/fada/`.
+- Right-click `vendor.zip` → **Extract** into `~/fada/`.
+- Re-visit the `_health.php` URL — the blocker should be gone.
 
 ---
 
