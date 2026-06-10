@@ -84,10 +84,6 @@
                     </a>
                 @else
                     <a href="{{ route('login') }}"
-                       class="hidden text-sm font-medium text-qs-muted transition-colors duration-200 hover:text-qs-text sm:inline-flex sm:items-center">
-                        {{ __('Sign in') }}
-                    </a>
-                    <a href="{{ route('login') }}"
                        class="group inline-flex items-center gap-1.5 rounded-full bg-qs-text px-4 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#1a2a2e] md:px-5 md:py-2.5">
                         {{ __('Student login') }}
                         <i class="fa-solid fa-arrow-right text-[0.7rem] transition-transform duration-300 ease-out group-hover:translate-x-0.5" aria-hidden="true"></i>
