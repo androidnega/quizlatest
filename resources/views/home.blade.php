@@ -17,7 +17,7 @@
     whatever vertical space the header leaves behind, regardless of
     viewport height or zoom.
 --}}
-<body class="flex min-h-screen flex-col bg-[#fdf9f1] font-sans text-qs-text antialiased">
+<body class="flex min-h-screen flex-col bg-white font-sans text-qs-text antialiased">
 
     @php
         $branding = app(\App\Services\BrandingImagesService::class);
@@ -40,7 +40,7 @@
         • No shadows anywhere — consistent with the flat editorial
           treatment of the hero photo below.
     --}}
-    <header class="z-50 shrink-0 border-b border-qs-text/[0.06] bg-[#fdf9f1]">
+    <header class="z-50 shrink-0 border-b border-qs-text/[0.06] bg-white">
         <div class="mx-auto grid h-16 max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-4 px-5 sm:h-[68px] sm:px-6 md:gap-8 md:px-10">
 
             {{-- Brand: small teal chip + 2-tone wordmark, with a tiny rotation on hover --}}
