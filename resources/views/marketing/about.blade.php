@@ -398,15 +398,25 @@
             {{-- HERO --}}
             <section class="qs-about-hero relative overflow-hidden text-white">
                 <div class="qs-about-hero-grid pointer-events-none absolute inset-0" aria-hidden="true"></div>
-                <div class="relative mx-auto max-w-6xl px-5 pt-44 pb-14 sm:px-8 sm:pt-56 sm:pb-20 lg:px-8 lg:pt-[18rem] lg:pb-28">
+                {{--
+                  Hero rhythm (matches the design spec):
+                    Navbar  ↓  pt-24 / sm:pt-28 / lg:pt-32   (96 / 112 / 128px)
+                    Heading ↓  mt-6 / sm:mt-8                 (24 / 32px)
+                    Paragraph ↓ mt-8 / sm:mt-10                (32 / 40px)
+                    Buttons ↓  mt-20 / sm:mt-24                (80 / 96px)
+                    Stats   .qs-about-stats (top border)
+                  No negative margins, no absolute positioning — the buttons
+                  end before the stats' top border by ≥80px on every viewport.
+                --}}
+                <div class="relative mx-auto max-w-6xl px-5 pt-24 pb-16 sm:px-8 sm:pt-28 sm:pb-20 lg:px-8 lg:pt-32 lg:pb-24">
                     <div class="mx-auto max-w-3xl text-center">
                         <h1 class="text-balance text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-6xl">
                             {{ __('The exam platform schools use when results have to count.') }}
                         </h1>
-                        <p class="mx-auto mt-6 max-w-2xl text-pretty text-base leading-relaxed text-white/70 sm:text-lg">
+                        <p class="mx-auto mt-6 max-w-2xl text-pretty text-base leading-relaxed text-white/70 sm:mt-8 sm:text-lg">
                             {{ __('From cohort setup to final marks, QuizSnap keeps everyone on the same rails — coordinators organise, examiners deliver, students attempt in a controlled environment, and integrity options that scale with how high the stakes are.') }}
                         </p>
-                        <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+                        <div class="mt-8 flex flex-wrap items-center justify-center gap-3 sm:mt-10">
                             <a href="{{ route('login') }}" class="qs-btn-primary min-h-[44px] px-5 py-2.5 text-sm font-semibold">
                                 <i class="fa-solid fa-arrow-right-to-bracket text-xs" aria-hidden="true"></i>
                                 <span class="ml-1.5">{{ __('Student login') }}</span>
@@ -418,7 +428,7 @@
                         </div>
                     </div>
 
-                    <div class="qs-about-stats mt-14 sm:mt-16">
+                    <div class="qs-about-stats mt-20 sm:mt-24">
                         <div class="qs-about-stats__cell">
                             <div class="qs-about-stats__num">100%</div>
                             <div class="qs-about-stats__label">{{ __('Built in-house') }}</div>
