@@ -11,22 +11,31 @@
 </head>
 <body class="min-h-screen bg-white font-sans text-qs-text antialiased md:bg-qs-bg">
     <div class="flex min-h-screen flex-col">
-        {{-- =============== Sticky marketing nav =============== --}}
-        <header class="sticky top-0 z-50 border-b border-qs-soft/80 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 md:shadow-sm">
-            <div class="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 md:gap-4 md:px-8">
-                <a href="{{ url('/') }}" class="inline-flex items-baseline text-lg font-bold tracking-tight sm:text-xl md:text-2xl" aria-label="{{ config('app.name', 'QuizSnap') }} home">
-                    <span class="text-qs-primary">Quiz</span><span class="text-qs-text">Snap</span>
+        {{-- =============== Sticky marketing nav (Podium-inspired: airy, well-spaced) =============== --}}
+        <header class="sticky top-0 z-50 border-b border-qs-soft/60 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/75">
+            <div class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6 md:gap-6 md:px-10 md:py-5">
+                <a href="{{ url('/') }}" class="inline-flex items-center gap-2.5 text-lg font-bold tracking-tight md:text-xl" aria-label="{{ config('app.name', 'QuizSnap') }} home">
+                    <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-qs-primary text-white shadow-sm">
+                        <i class="fa-solid fa-graduation-cap text-sm" aria-hidden="true"></i>
+                    </span>
+                    <span><span class="text-qs-primary">Quiz</span><span class="text-qs-text">Snap</span></span>
                 </a>
-                <nav class="flex items-center gap-2 sm:gap-3">
-                    <a href="{{ route('about') }}" class="hidden min-h-[44px] rounded-lg px-3 py-2 text-sm font-semibold text-qs-muted transition hover:bg-qs-soft/60 hover:text-qs-text sm:inline-flex sm:items-center md:px-4 md:py-2.5">
-                        {{ __('About us') }}
+                <nav class="flex items-center gap-1 sm:gap-2 md:gap-3">
+                    <a href="{{ route('about') }}" class="hidden min-h-[44px] rounded-lg px-3 py-2 text-[0.7rem] font-bold uppercase tracking-[0.16em] text-qs-muted transition hover:text-qs-text sm:inline-flex sm:items-center md:px-4">
+                        {{ __('About') }}
                     </a>
                     @auth
-                        <a href="{{ route('dashboard') }}" class="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-qs-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-qs-primary-deep sm:px-5 sm:py-2.5">
+                        <a href="{{ route('dashboard') }}" class="hidden min-h-[44px] rounded-lg px-3 py-2 text-[0.7rem] font-bold uppercase tracking-[0.16em] text-qs-muted transition hover:text-qs-text sm:inline-flex sm:items-center md:px-4">
                             {{ __('Dashboard') }}
                         </a>
+                        <a href="{{ route('dashboard') }}" class="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-qs-text px-4 py-2.5 text-[0.7rem] font-bold uppercase tracking-[0.16em] text-white shadow-sm transition hover:bg-[#1a2a2e] md:px-5">
+                            {{ __('Get Started') }}
+                        </a>
                     @else
-                        <a href="{{ route('login') }}" class="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-qs-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-qs-primary-deep sm:px-5 sm:py-2.5">
+                        <a href="{{ route('login') }}" class="hidden min-h-[44px] rounded-lg px-3 py-2 text-[0.7rem] font-bold uppercase tracking-[0.16em] text-qs-muted transition hover:text-qs-text sm:inline-flex sm:items-center md:px-4">
+                            {{ __('Sign in') }}
+                        </a>
+                        <a href="{{ route('login') }}" class="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-qs-text px-4 py-2.5 text-[0.7rem] font-bold uppercase tracking-[0.16em] text-white shadow-sm transition hover:bg-[#1a2a2e] md:px-5">
                             {{ __('Student login') }}
                         </a>
                     @endauth
@@ -37,26 +46,24 @@
         <main class="flex-1">
             {{-- =============== Mobile hero — clean typographic layout, white bg =============== --}}
             <section class="md:hidden">
-                <div class="mx-auto max-w-md px-5 pt-12 pb-10 text-center">
-                    <span class="inline-flex items-center gap-2 rounded-full border border-qs-soft bg-white px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-qs-muted">
+                <div class="mx-auto max-w-md px-5 pt-14 pb-12 text-center">
+                    <span class="inline-flex items-center gap-2 rounded-full bg-qs-primary/10 px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.18em] text-qs-primary ring-1 ring-qs-primary/15">
                         <span class="inline-block h-1.5 w-1.5 rounded-full bg-qs-primary"></span>
                         {{ __('Built for schools') }}
                     </span>
-                    <h1 class="mt-5 text-balance text-[1.85rem] font-semibold leading-[1.15] tracking-tight text-qs-text">
-                        {{ __('Secure digital') }}
-                        <span class="block text-qs-primary">{{ __('quizzes and exams') }}</span>
-                        {{ __('for schools') }}
+                    <h1 class="mt-6 text-balance text-[2.1rem] font-bold leading-[1.08] tracking-tight text-qs-text">
+                        <span class="block">{{ __('Secure Digital') }}</span>
+                        <span class="block text-qs-primary">{{ __('Exams. Perfected.') }}</span>
                     </h1>
                     <p class="mx-auto mt-5 max-w-sm text-pretty text-base leading-relaxed text-qs-muted">
                         {{ __('Verified students. Smart assessments. Trusted results.') }}
                     </p>
 
                     <div class="mt-8 flex flex-col gap-2.5">
-                        <a href="{{ route('login') }}" class="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-qs-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-qs-primary-deep">
-                            <i class="fa-solid fa-arrow-right-to-bracket text-xs" aria-hidden="true"></i>
+                        <a href="{{ route('login') }}" class="inline-flex min-h-[52px] w-full items-center justify-center rounded-md bg-qs-primary px-6 py-3 text-[0.72rem] font-bold uppercase tracking-[0.18em] text-white shadow-lg shadow-qs-primary/30 transition hover:bg-qs-primary-deep">
                             {{ __('Student login') }}
                         </a>
-                        <a href="{{ route('about') }}" class="inline-flex min-h-[48px] w-full items-center justify-center rounded-lg border border-qs-soft bg-white px-6 py-3 text-sm font-semibold text-qs-text transition hover:border-qs-primary/40 hover:text-qs-primary">
+                        <a href="{{ route('about') }}" class="inline-flex min-h-[52px] w-full items-center justify-center rounded-md border border-qs-soft bg-white px-6 py-3 text-[0.72rem] font-bold uppercase tracking-[0.18em] text-qs-text transition hover:border-qs-primary hover:text-qs-primary">
                             {{ __('About us') }}
                         </a>
                     </div>
@@ -86,55 +93,99 @@
                 </div>
             </section>
 
-            {{-- =============== Tablet+ hero with inlined visual =============== --}}
+            {{-- =============== Tablet+ hero (Podium-inspired) =============== --}}
+            {{--
+              Podium-inspired desktop hero:
+                • Two-column split with generous whitespace
+                • Eyebrow pill with leading dot
+                • Big bold H1, second line in brand color
+                • Pair of uppercase, letter-spaced CTAs (solid + outline)
+                • Polished photo card on the right with a bottom-left caption overlay
+            --}}
             <section class="hidden border-b border-qs-soft bg-qs-bg md:block">
-                <div class="mx-auto max-w-6xl min-w-0 gap-10 px-5 py-14 sm:gap-12 sm:py-16 md:grid md:grid-cols-2 md:items-center md:gap-14 md:py-20 lg:gap-16 lg:px-8 lg:py-24">
-                    <div class="min-w-0 max-w-2xl">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-qs-primary">{{ __('Built for schools') }}</p>
-                        <h1 class="mt-4 text-3xl font-semibold leading-[1.12] tracking-tight text-qs-text sm:text-4xl lg:text-[2.65rem] lg:leading-tight">
-                            <span class="block">{{ __('Secure digital') }}</span>
-                            <span class="mt-1 block text-qs-primary">{{ __('quizzes and exams') }}</span>
-                            <span class="mt-1 block">{{ __('for schools') }}</span>
+                <div class="mx-auto min-w-0 max-w-7xl px-5 py-20 sm:py-24 md:grid md:grid-cols-2 md:items-center md:gap-12 md:px-8 md:py-24 lg:gap-16 lg:py-28">
+                    {{-- Left column: text + CTAs --}}
+                    <div class="min-w-0 max-w-xl">
+                        <span class="inline-flex items-center gap-2 rounded-full bg-qs-primary/10 px-3 py-1.5 text-[0.66rem] font-bold uppercase tracking-[0.18em] text-qs-primary ring-1 ring-qs-primary/15">
+                            <span class="inline-block h-1.5 w-1.5 rounded-full bg-qs-primary"></span>
+                            {{ __('Built for schools') }}
+                        </span>
+
+                        <h1 class="mt-6 text-balance text-5xl font-bold leading-[1.05] tracking-tight text-qs-text sm:text-6xl lg:text-[4.25rem] lg:leading-[1.04]">
+                            <span class="block">{{ __('Secure Digital') }}</span>
+                            <span class="block text-qs-primary">{{ __('Exams. Perfected.') }}</span>
                         </h1>
-                        <p class="mt-5 text-base font-medium leading-snug text-qs-primary sm:text-lg">
+
+                        <p class="mt-6 max-w-md text-base leading-relaxed text-qs-muted sm:text-lg">
                             {{ __('Verified students. Smart assessments. Trusted results.') }}
+                            <span class="block mt-1">{{ __('The exam platform schools use when results have to count.') }}</span>
                         </p>
-                        <p class="mt-4 max-w-xl text-base leading-relaxed text-qs-muted sm:text-lg">
-                            {{ __('Plan exams with ease, support learners, keep sessions fair, read results fast, and add practice quizzes beside formal exams.') }}
-                        </p>
-                        <div class="mt-8 flex flex-wrap items-center gap-3 sm:gap-4">
-                            <a href="{{ route('login') }}" class="inline-flex min-h-[48px] items-center gap-2 rounded-lg bg-qs-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-qs-primary-deep sm:text-base">
+
+                        <div class="mt-9 flex flex-wrap items-center gap-3 sm:gap-4">
+                            <a href="{{ route('login') }}" class="inline-flex min-h-[52px] items-center justify-center rounded-md bg-qs-primary px-7 py-3 text-[0.72rem] font-bold uppercase tracking-[0.18em] text-white shadow-lg shadow-qs-primary/30 ring-1 ring-qs-primary/30 transition hover:bg-qs-primary-deep hover:shadow-xl hover:shadow-qs-primary/35">
                                 {{ __('Student login') }}
                             </a>
+                            <a href="{{ route('about') }}" class="inline-flex min-h-[52px] items-center justify-center rounded-md border border-qs-soft bg-white px-7 py-3 text-[0.72rem] font-bold uppercase tracking-[0.18em] text-qs-text shadow-sm transition hover:border-qs-primary hover:text-qs-primary">
+                                {{ __('About us') }}
+                            </a>
+                        </div>
+
+                        {{-- Trust strip beneath CTAs (kept understated, like Podium's spacing) --}}
+                        <div class="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-qs-muted">
+                            <span class="inline-flex items-center gap-2">
+                                <i class="fa-solid fa-shield-halved text-qs-primary" aria-hidden="true"></i>
+                                {{ __('Optional proctoring') }}
+                            </span>
+                            <span class="inline-flex items-center gap-2">
+                                <i class="fa-solid fa-bolt text-qs-primary" aria-hidden="true"></i>
+                                {{ __('Built in-house') }}
+                            </span>
+                            <span class="inline-flex items-center gap-2">
+                                <i class="fa-solid fa-chart-line text-qs-primary" aria-hidden="true"></i>
+                                {{ __('Audit-ready trail') }}
+                            </span>
                         </div>
                     </div>
 
-                    {{-- Inlined desktop hero visual (used to be <x-online-quiz-hero />). Pure Tailwind, no <style> block, no qs-* hooks. --}}
+                    {{-- Right column: hero photo card with caption overlay --}}
                     <div
                         data-online-quiz-hero="1"
-                        class="group relative mx-auto w-full min-w-0 max-w-md sm:max-w-lg md:ml-auto md:max-w-xl lg:max-w-2xl"
+                        class="group relative mx-auto mt-12 w-full min-w-0 max-w-xl md:ml-auto md:mt-0 lg:max-w-2xl"
                     >
                         <p class="sr-only">
                             {{ __('QuizSnap promotional illustration: a student on a laptop in a teal chair beside a phone showing secure digital quizzes and exams for schools.') }}
                         </p>
 
-                        <div class="relative mx-auto aspect-[4/3] w-full max-h-[min(58vh,480px)] sm:max-h-[min(62vh,520px)]">
-                            {{-- Soft glow, behind the image --}}
-                            <div class="pointer-events-none absolute inset-[8%] -z-10 rounded-[40%] bg-qs-primary/20 blur-3xl" aria-hidden="true"></div>
+                        {{-- Decorative accent shapes (subtle, behind the card) --}}
+                        <div class="pointer-events-none absolute -right-6 -top-6 -z-10 h-32 w-32 rounded-full bg-qs-primary/20 blur-2xl sm:h-40 sm:w-40" aria-hidden="true"></div>
+                        <div class="pointer-events-none absolute -bottom-8 -left-8 -z-10 h-40 w-40 rounded-full bg-qs-primary/10 blur-3xl" aria-hidden="true"></div>
 
-                            {{-- Decorative accent rings --}}
-                            <div class="pointer-events-none absolute -right-3 top-[6%] -z-10 h-28 w-28 rounded-full border-2 border-qs-primary/25 sm:-right-5 sm:h-36 sm:w-36" aria-hidden="true"></div>
-                            <div class="pointer-events-none absolute -bottom-2 -left-4 -z-10 h-24 w-24 rounded-full border border-qs-soft bg-qs-primary/10 sm:-left-6 sm:h-32 sm:w-32" aria-hidden="true"></div>
+                        {{-- The card itself: white bezel + rounded photo + caption overlay --}}
+                        <div class="relative overflow-hidden rounded-[28px] bg-white p-2.5 shadow-2xl shadow-qs-text/15 ring-1 ring-qs-soft sm:p-3">
+                            <div class="relative overflow-hidden rounded-[20px] bg-gradient-to-br from-qs-bg to-qs-soft">
+                                <img
+                                    src="{{ asset('images/home/quizsnap-homepage-hero-desktop-student-laptop.jpg') }}"
+                                    alt=""
+                                    width="1024"
+                                    height="768"
+                                    decoding="async"
+                                    fetchpriority="high"
+                                    class="aspect-[16/11] h-auto w-full object-cover object-center transition duration-700 group-hover:scale-[1.02]"
+                                />
 
-                            <img
-                                src="{{ asset('images/home/quizsnap-homepage-hero-desktop-student-laptop.jpg') }}"
-                                alt=""
-                                width="1024"
-                                height="768"
-                                decoding="async"
-                                fetchpriority="high"
-                                class="relative z-10 h-full w-full object-contain object-center drop-shadow-[0_24px_48px_rgba(26,43,48,0.12)]"
-                            />
+                                {{-- Gradient legibility wash for the caption --}}
+                                <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent"></div>
+
+                                {{-- Bottom-left caption (Podium "Seamless Syncing" pattern) --}}
+                                <div class="absolute inset-x-5 bottom-5 sm:inset-x-7 sm:bottom-7">
+                                    <h2 class="text-balance text-2xl font-bold leading-tight tracking-tight text-white sm:text-[1.7rem]">
+                                        {{ __('Trusted Results') }}
+                                    </h2>
+                                    <p class="mt-1.5 max-w-md text-pretty text-sm leading-snug text-white/85 sm:text-base">
+                                        {{ __('Marks released by your examiner — same place every term, with an audit trail your QA team can defend.') }}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
