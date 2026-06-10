@@ -474,6 +474,12 @@
                                     $field  = (string) ($member['field'] ?? '');
                                     $avatar = (string) ($member['avatar'] ?? '');
                                     $badge  = $index === 0 ? __('Founder') : null;
+                                    // Cache-bust portraits whenever the source file changes (.htaccess
+                                    // serves /images with a 1-year cache, so a stable URL would pin the
+                                    // old photo in browsers indefinitely after a swap).
+                                    $avatarPath = public_path($avatar);
+                                    $avatarVer  = (is_file($avatarPath) ? filemtime($avatarPath) : null) ?: substr(md5($avatar), 0, 8);
+                                    $avatarUrl  = asset($avatar) . '?v=' . $avatarVer;
                                 @endphp
                                 @continue($name === '' || $avatar === '')
                                 <article class="qs-about-team-card">
@@ -485,7 +491,7 @@
                                             </span>
                                         @endif
                                         <img
-                                            src="{{ asset($avatar) }}"
+                                            src="{{ $avatarUrl }}"
                                             alt="{{ $name }}"
                                             width="900"
                                             height="1125"
