@@ -398,7 +398,7 @@
             {{-- HERO --}}
             <section class="qs-about-hero relative overflow-hidden text-white">
                 <div class="qs-about-hero-grid pointer-events-none absolute inset-0" aria-hidden="true"></div>
-                <div class="relative mx-auto max-w-6xl px-5 pt-44 pb-14 sm:px-8 sm:pt-56 sm:pb-20 lg:px-8 lg:pt-64 lg:pb-24">
+                <div class="relative mx-auto max-w-6xl px-5 pt-44 pb-14 sm:px-8 sm:pt-56 sm:pb-20 lg:px-8 lg:pt-[18rem] lg:pb-28">
                     <div class="mx-auto max-w-3xl text-center">
                         <h1 class="text-balance text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-6xl">
                             {{ __('The exam platform schools use when results have to count.') }}
