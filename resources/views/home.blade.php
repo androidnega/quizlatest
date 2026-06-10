@@ -17,7 +17,7 @@
     whatever vertical space the header leaves behind, regardless of
     viewport height or zoom.
 --}}
-<body class="flex min-h-screen flex-col bg-white font-sans text-qs-text antialiased">
+<body class="flex min-h-screen flex-col bg-[#fdf9f1] font-sans text-qs-text antialiased">
 
     @php
         $branding = app(\App\Services\BrandingImagesService::class);
@@ -27,7 +27,7 @@
     @endphp
 
     {{-- =============== Sticky marketing nav =============== --}}
-    <header class="z-50 shrink-0 border-b border-qs-soft/60 bg-white">
+    <header class="z-50 shrink-0 border-b border-qs-soft/60 bg-[#fdf9f1]">
         <div class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6 md:gap-6 md:px-10 md:py-5">
             <a href="{{ url('/') }}" class="inline-flex items-center gap-2.5 text-lg font-bold tracking-tight md:text-xl" aria-label="{{ config('app.name', 'QuizSnap') }} home">
                 <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-qs-primary text-white shadow-sm">
@@ -59,7 +59,9 @@
     </header>
 
     {{-- =============== Hero (consumes the rest of the viewport) =============== --}}
-    <main class="flex flex-1 bg-qs-bg">
+    {{-- Main inherits the cream parchment background from <body>; no explicit
+         bg class so the whole page reads as one continuous warm surface. --}}
+    <main class="flex flex-1">
 
         {{-- Mobile hero: centered single column, fills remaining height --}}
         <section class="flex w-full flex-col items-center justify-center px-5 py-10 text-center md:hidden">
