@@ -40,6 +40,7 @@
     ]))
 </head>
 <body class="font-sans antialiased {{ ! empty($isAssignmentMode) ? 'bg-[#f0f4f8]' : 'bg-qs-bg text-qs-text' }}">
+    @include('layouts.partials.desktop-only-guard')
     @yield('content')
 </body>
 </html>

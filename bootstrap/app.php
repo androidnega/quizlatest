@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureDesktopForExam;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsCoordinator;
 use App\Http\Middleware\EnsureUserIsExaminer;
@@ -21,7 +22,23 @@ return Application::configure(basePath: dirname(__DIR__))
             'coordinator' => EnsureUserIsCoordinator::class,
             'examiner' => EnsureUserIsExaminer::class,
             'student' => EnsureUserIsStudent::class,
+            'desktop' => EnsureDesktopForExam::class,
         ]);
+
+        // Laravel's default middleware priority list pins the framework's
+        // Authenticate middleware (via the AuthenticatesRequests contract) at
+        // a fixed slot regardless of how a route group orders its middleware.
+        // Without intervention, that means a mobile request to a quiz route
+        // gets a 302 to /login BEFORE our desktop gate runs, which is the
+        // wrong UX — the user has no idea their device is the problem.
+        //
+        // We prepend EnsureDesktopForExam BEFORE the contract (not the
+        // concrete class — the priority list keys on the contract) so the
+        // desktop check fires first and shows a helpful "desktop only" page.
+        $middleware->prependToPriorityList(
+            before: \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,
+            prepend: EnsureDesktopForExam::class,
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

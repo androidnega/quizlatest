@@ -38,6 +38,7 @@
     ])
 </head>
 <body class="font-sans antialiased bg-slate-950 text-slate-100">
+    @include('layouts.partials.desktop-only-guard')
     @yield('content')
 </body>
 </html>

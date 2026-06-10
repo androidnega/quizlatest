@@ -116,19 +116,36 @@ Route::any('/student/practice/{path?}', function (?string $path = null) {
     return redirect($path === '' ? $base : $base.'/'.$path, 301);
 })->where('path', '.*');
 
-Route::middleware('auth')->group(function () {
+// Quiz/exam taking surface — locked to desktop until the mobile UI
+// ships. The 'desktop' middleware deliberately runs BEFORE 'auth' so a
+// student who clicks an exam link on their phone sees a helpful
+// "desktop required" page instead of being bounced through the login
+// flow first only to be stopped after authenticating. The
+// client-side guard inside the exam layouts is the second line of
+// defence — it catches "Request Desktop Site" spoofs the server-side
+// User-Agent regex can't see through.
+//
+// /submitted is intentionally NOT desktop-gated — it's read-only and
+// useful for students who want to confirm a submission from their
+// phone after the fact.
+Route::middleware(['desktop', 'auth'])->group(function () {
     Route::get('/student/exam/{examSession}', [StudentExamController::class, 'take'])
         ->name('student.exam.take');
+});
+
+Route::middleware('auth')->group(function () {
     Route::get('/student/exam/{examSession}/submitted', [StudentExamController::class, 'submitted'])
         ->name('student.exam.submitted');
+});
 
-    Route::middleware(['verified', 'student'])->group(function () {
-        Route::get('/student/exams/{quiz}/instructions', [StudentExamEntryController::class, 'instructions'])
-            ->name('student.exam.instructions');
-        Route::get('/student/exams/{quiz}/prepare', [StudentExamEntryController::class, 'prepare'])
-            ->name('student.exam.prepare');
-    });
+Route::middleware(['desktop', 'auth', 'verified', 'student'])->group(function () {
+    Route::get('/student/exams/{quiz}/instructions', [StudentExamEntryController::class, 'instructions'])
+        ->name('student.exam.instructions');
+    Route::get('/student/exams/{quiz}/prepare', [StudentExamEntryController::class, 'prepare'])
+        ->name('student.exam.prepare');
+});
 
+Route::middleware(['desktop', 'auth'])->group(function () {
     Route::prefix('exam-sessions')
         ->name('exam-sessions.')
         ->group(function () {
@@ -273,8 +290,11 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
                 Route::post('/quizzes', [StudentPracticeQuizController::class, 'store'])->name('quizzes.store');
                 Route::get('/quizzes/{practiceQuiz}', [StudentPracticeQuizController::class, 'show'])->name('quizzes.show');
                 Route::delete('/quizzes/{practiceQuiz}', [StudentPracticeQuizController::class, 'destroy'])->name('quizzes.destroy');
-                Route::get('/quizzes/{practiceQuiz}/take', [StudentPracticeQuizController::class, 'take'])->name('quizzes.take');
-                Route::post('/quizzes/{practiceQuiz}/submit', [StudentPracticeQuizController::class, 'submit'])->name('quizzes.submit');
+                // Practice attempt is part of the quiz-taking surface — desktop only.
+                Route::middleware('desktop')->group(function () {
+                    Route::get('/quizzes/{practiceQuiz}/take', [StudentPracticeQuizController::class, 'take'])->name('quizzes.take');
+                    Route::post('/quizzes/{practiceQuiz}/submit', [StudentPracticeQuizController::class, 'submit'])->name('quizzes.submit');
+                });
                 Route::get('/quizzes/{practiceQuiz}/results/{attempt}', [StudentPracticeQuizController::class, 'result'])->name('quizzes.result');
             });
     });

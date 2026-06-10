@@ -1,6 +1,8 @@
 <x-layouts.student>
     <x-slot name="title">{{ __('Practice attempt') }}</x-slot>
 
+    @include('layouts.partials.desktop-only-guard')
+
     <div class="mx-auto max-w-3xl space-y-8 py-2">
             <p class="text-sm text-qs-muted">{{ __('Unofficial practice — not proctored or graded officially.') }}</p>
 
