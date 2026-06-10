@@ -8,10 +8,193 @@
     <title>{{ __('About us') }} — {{ config('app.name', 'QuizSnap') }}</title>
     @include('layouts.partials.favicon')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <style>
+        /* Page-scoped polish for /about so the marketing layout stays untouched. */
+        .qs-about-hero {
+            background:
+                radial-gradient(120% 80% at 80% 0%, rgba(86, 174, 187, 0.18) 0%, rgba(86, 174, 187, 0) 55%),
+                radial-gradient(80% 60% at 0% 100%, rgba(228, 111, 46, 0.10) 0%, rgba(228, 111, 46, 0) 60%),
+                #0f1719;
+        }
+        .qs-about-hero-grid {
+            background-image: linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+            background-size: 48px 48px;
+            mask-image: radial-gradient(60% 70% at 50% 30%, #000 30%, transparent 80%);
+        }
+        .qs-about-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 9999px;
+            border: 1px solid rgba(86, 174, 187, 0.35);
+            background: rgba(86, 174, 187, 0.10);
+            color: #b8e7ee;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }
+        .qs-about-section-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--qs-primary);
+        }
+        .qs-about-section-eyebrow::before {
+            content: '';
+            display: inline-block;
+            width: 1.4rem;
+            height: 1px;
+            background: currentColor;
+            opacity: 0.6;
+        }
+        .qs-about-feature-card {
+            position: relative;
+            border-radius: 1rem;
+            background: #fff;
+            border: 1px solid var(--qs-soft);
+            padding: 1.5rem;
+            transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+        }
+        .qs-about-feature-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(86, 174, 187, 0.45);
+            box-shadow: 0 16px 32px -22px rgba(15, 52, 58, 0.20);
+        }
+        .qs-about-feature-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 0.75rem;
+            background: rgba(86, 174, 187, 0.12);
+            color: var(--qs-primary);
+            font-size: 0.95rem;
+        }
+        .qs-about-control-list { display: grid; gap: 1rem; }
+        @media (min-width: 640px) {
+            .qs-about-control-list { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (min-width: 1024px) {
+            .qs-about-control-list { grid-template-columns: repeat(3, 1fr); }
+        }
+        .qs-about-control {
+            position: relative;
+            border-radius: 0.875rem;
+            background: rgba(255,255,255,0.92);
+            border: 1px solid var(--qs-soft);
+            padding: 1.25rem 1.25rem 1.25rem 1.25rem;
+            display: flex;
+            gap: 0.85rem;
+            align-items: flex-start;
+            transition: border-color .18s ease, background .18s ease;
+        }
+        .qs-about-control:hover {
+            border-color: rgba(86, 174, 187, 0.4);
+            background: #fff;
+        }
+        .qs-about-control__icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2rem; height: 2rem;
+            border-radius: 0.55rem;
+            background: rgba(86, 174, 187, 0.10);
+            color: var(--qs-primary);
+            flex-shrink: 0;
+            font-size: 0.85rem;
+        }
+        .qs-about-team-card {
+            position: relative;
+            background: #fff;
+            border-radius: 1.25rem;
+            overflow: hidden;
+            border: 1px solid var(--qs-soft);
+            transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+        }
+        .qs-about-team-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(86, 174, 187, 0.5);
+            box-shadow: 0 30px 60px -32px rgba(15, 52, 58, 0.28);
+        }
+        .qs-about-team-card__photo {
+            aspect-ratio: 1 / 1;
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(180deg, #eaf3f5 0%, #d5e7ea 100%);
+        }
+        .qs-about-team-card__photo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: transform .5s ease;
+        }
+        .qs-about-team-card:hover .qs-about-team-card__photo img {
+            transform: scale(1.03);
+        }
+        .qs-about-team-card__badge {
+            position: absolute;
+            top: 0.85rem;
+            left: 0.85rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.3rem 0.65rem;
+            border-radius: 9999px;
+            background: rgba(15, 23, 25, 0.55);
+            color: #fff;
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            backdrop-filter: blur(6px);
+        }
+        .qs-about-team-card__body {
+            padding: 1.15rem 1.25rem 1.4rem;
+        }
+        .qs-about-stats {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0;
+            border-top: 1px solid rgba(255,255,255,0.10);
+            border-bottom: 1px solid rgba(255,255,255,0.10);
+        }
+        .qs-about-stats__cell {
+            padding: 1.25rem 1rem;
+            text-align: center;
+            border-left: 1px solid rgba(255,255,255,0.08);
+        }
+        .qs-about-stats__cell:first-child { border-left: 0; }
+        .qs-about-stats__num {
+            font-size: 1.75rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #fff;
+            line-height: 1;
+        }
+        .qs-about-stats__label {
+            margin-top: 0.4rem;
+            font-size: 0.7rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.55);
+        }
+        @media (min-width: 640px) {
+            .qs-about-stats__num { font-size: 2.25rem; }
+        }
+    </style>
 </head>
 <body class="min-h-screen bg-qs-bg font-sans text-qs-text antialiased">
     <div class="flex min-h-screen flex-col">
-        <header class="sticky top-0 z-50 border-b border-qs-soft bg-white shadow-sm">
+        <header class="sticky top-0 z-50 border-b border-qs-soft bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80">
             <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-8">
                 <x-brand-logo class="text-xl sm:text-2xl" interactive :href="url('/')" />
                 <nav class="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
@@ -32,47 +215,79 @@
         </header>
 
         <main class="flex-1">
-            <section class="relative overflow-hidden border-b border-qs-soft bg-[#0f1719] text-white">
-                <div class="pointer-events-none absolute inset-0 opacity-[0.04]" style="background-image: radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0); background-size: 20px 20px;" aria-hidden="true"></div>
-                <div class="relative mx-auto max-w-6xl px-5 py-14 text-center sm:px-8 sm:py-16 lg:px-8 lg:py-20">
-                    <p class="text-[0.65rem] font-semibold uppercase tracking-[0.28em] text-white/55">{{ config('app.name', 'QuizSnap') }}</p>
-                    <h1 class="mx-auto mt-4 max-w-3xl text-balance text-3xl font-semibold leading-[1.15] tracking-tight text-white sm:text-4xl">
-                        {{ __('The exam platform schools use when results have to count') }}
-                    </h1>
-                    <p class="mx-auto mt-5 max-w-2xl text-pretty text-sm leading-relaxed text-white/65 sm:text-base">
-                        {{ __('From cohort setup to final marks, QuizSnap keeps everyone on the same rails: coordinators organise, examiners deliver, students attempt in a controlled environment — and integrity options you can turn up when the stakes are high.') }}
-                    </p>
+            {{-- HERO --}}
+            <section class="qs-about-hero relative overflow-hidden text-white">
+                <div class="qs-about-hero-grid pointer-events-none absolute inset-0" aria-hidden="true"></div>
+                <div class="relative mx-auto max-w-6xl px-5 pt-16 pb-12 sm:px-8 sm:pt-20 sm:pb-16 lg:px-8 lg:pt-24 lg:pb-20">
+                    <div class="mx-auto max-w-3xl text-center">
+                        <span class="qs-about-eyebrow">
+                            <span class="h-1.5 w-1.5 rounded-full bg-[var(--qs-primary)]" aria-hidden="true"></span>
+                            {{ __('About') }} {{ config('app.name', 'QuizSnap') }}
+                        </span>
+                        <h1 class="mt-6 text-balance text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-6xl">
+                            {{ __('The exam platform schools use when results have to count.') }}
+                        </h1>
+                        <p class="mx-auto mt-6 max-w-2xl text-pretty text-base leading-relaxed text-white/70 sm:text-lg">
+                            {{ __('From cohort setup to final marks, QuizSnap keeps everyone on the same rails — coordinators organise, examiners deliver, students attempt in a controlled environment, and integrity options that scale with how high the stakes are.') }}
+                        </p>
+                        <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+                            <a href="{{ route('login') }}" class="qs-btn-primary min-h-[44px] px-5 py-2.5 text-sm font-semibold">
+                                <i class="fa-solid fa-arrow-right-to-bracket text-xs" aria-hidden="true"></i>
+                                <span class="ml-1.5">{{ __('Student login') }}</span>
+                            </a>
+                            <a href="#team" class="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-semibold text-white/85 transition hover:border-white/30 hover:bg-white/10">
+                                <i class="fa-solid fa-users text-xs" aria-hidden="true"></i>
+                                {{ __('Meet the team') }}
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="qs-about-stats mt-14 sm:mt-16">
+                        <div class="qs-about-stats__cell">
+                            <div class="qs-about-stats__num">100%</div>
+                            <div class="qs-about-stats__label">{{ __('Built in-house') }}</div>
+                        </div>
+                        <div class="qs-about-stats__cell">
+                            <div class="qs-about-stats__num">3</div>
+                            <div class="qs-about-stats__label">{{ __('Roles, one stack') }}</div>
+                        </div>
+                        <div class="qs-about-stats__cell">
+                            <div class="qs-about-stats__num">∞</div>
+                            <div class="qs-about-stats__label">{{ __('Cohorts supported') }}</div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
-            <section class="border-b border-qs-soft bg-white py-12 sm:py-14">
+            {{-- WHY INSTITUTIONS PICK QUIZSNAP --}}
+            <section class="border-b border-qs-soft bg-white py-16 sm:py-20">
                 <div class="mx-auto max-w-6xl px-5 sm:px-8 lg:px-8">
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--qs-primary)]">{{ __('Why institutions pick QuizSnap') }}</p>
-                    <div class="mt-8 grid gap-8 sm:grid-cols-3 sm:gap-6 lg:gap-10">
-                        <div class="sm:pr-2">
-                            <div class="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--qs-primary)]/[0.09] text-[var(--qs-primary)]">
-                                <i class="fa-solid fa-bolt text-sm" aria-hidden="true"></i>
-                            </div>
-                            <h2 class="mt-3 text-sm font-semibold leading-snug text-[var(--qs-text)]">{{ __('Launch papers without the spreadsheet circus') }}</h2>
-                            <p class="mt-2 text-xs leading-relaxed text-[var(--qs-muted)] sm:text-sm">
-                                {{ __('Classes, courses, and assignments stay connected so examiners spend time on pedagogy — not chasing lists and version chaos.') }}
+                    <div class="max-w-2xl">
+                        <span class="qs-about-section-eyebrow">{{ __('Why institutions pick QuizSnap') }}</span>
+                        <h2 class="mt-4 text-2xl font-semibold leading-tight tracking-tight text-[var(--qs-text)] sm:text-3xl lg:text-[2.25rem]">
+                            {{ __('Three problems schools keep paying for. We built one platform that owns all three.') }}
+                        </h2>
+                    </div>
+
+                    <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
+                        <div class="qs-about-feature-card">
+                            <div class="qs-about-feature-icon"><i class="fa-solid fa-bolt" aria-hidden="true"></i></div>
+                            <h3 class="mt-4 text-base font-semibold tracking-tight text-[var(--qs-text)]">{{ __('Launch papers without the spreadsheet circus') }}</h3>
+                            <p class="mt-2 text-sm leading-relaxed text-[var(--qs-muted)]">
+                                {{ __('Classes, courses, and assignments stay connected so examiners spend their time on pedagogy — not chasing lists or fighting version chaos.') }}
                             </p>
                         </div>
-                        <div class="sm:border-l sm:border-qs-soft sm:pl-6 lg:pl-8">
-                            <div class="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--qs-primary)]/[0.09] text-[var(--qs-primary)]">
-                                <i class="fa-solid fa-lock text-sm" aria-hidden="true"></i>
-                            </div>
-                            <h2 class="mt-3 text-sm font-semibold leading-snug text-[var(--qs-text)]">{{ __('Sell integrity you can stand behind') }}</h2>
-                            <p class="mt-2 text-xs leading-relaxed text-[var(--qs-muted)] sm:text-sm">
-                                {{ __('Turn on strong proctoring when you need it: verification, monitoring, fullscreen, and clear escalation — so “we did everything reasonable” is true, not aspirational.') }}
+                        <div class="qs-about-feature-card">
+                            <div class="qs-about-feature-icon"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></div>
+                            <h3 class="mt-4 text-base font-semibold tracking-tight text-[var(--qs-text)]">{{ __('Sell integrity you can stand behind') }}</h3>
+                            <p class="mt-2 text-sm leading-relaxed text-[var(--qs-muted)]">
+                                {{ __('Turn on strong proctoring when you need it: verification, monitoring, fullscreen, escalation — so “we did everything reasonable” is an audit-ready statement, not a hope.') }}
                             </p>
                         </div>
-                        <div class="sm:border-l sm:border-qs-soft sm:pl-6 lg:pl-8">
-                            <div class="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[var(--qs-primary)]/[0.09] text-[var(--qs-primary)]">
-                                <i class="fa-solid fa-chart-line text-sm" aria-hidden="true"></i>
-                            </div>
-                            <h2 class="mt-3 text-sm font-semibold leading-snug text-[var(--qs-text)]">{{ __('Read the room from one workspace') }}</h2>
-                            <p class="mt-2 text-xs leading-relaxed text-[var(--qs-muted)] sm:text-sm">
+                        <div class="qs-about-feature-card">
+                            <div class="qs-about-feature-icon"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></div>
+                            <h3 class="mt-4 text-base font-semibold tracking-tight text-[var(--qs-text)]">{{ __('Read the room from one workspace') }}</h3>
+                            <p class="mt-2 text-sm leading-relaxed text-[var(--qs-muted)]">
                                 {{ __('Session signals, submissions, and follow-up live where examiners already work — fewer blind spots when you need to intervene or defend a grade.') }}
                             </p>
                         </div>
@@ -80,112 +295,147 @@
                 </div>
             </section>
 
-            <section class="border-b border-qs-soft bg-qs-bg py-14 sm:py-16">
+            {{-- WHAT STRICT EXAM CONDITIONS ACTUALLY MEAN --}}
+            <section class="border-b border-qs-soft bg-qs-bg py-16 sm:py-20">
                 <div class="mx-auto max-w-6xl px-5 sm:px-8 lg:px-8">
-                    <div class="max-w-2xl">
-                        <h2 class="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--qs-primary)]">{{ __('What “strict exam conditions” actually means here') }}</h2>
-                        <p class="mt-3 text-xl font-semibold tracking-tight text-[var(--qs-text)] sm:text-2xl sm:leading-snug">
-                            {{ __('When your school enables proctoring, students are not left alone in a browser tab — they are under surveillance your policy defines.') }}
-                        </p>
-                        <p class="mt-3 text-sm leading-relaxed text-[var(--qs-muted)] sm:text-base">
-                            {{ __('Every control below is optional and administrator-governed — but when it is on, it is real: fewer places to hide unauthorised help, and a cleaner story for appeals and quality assurance.') }}
-                        </p>
-                    </div>
+                    <div class="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] lg:gap-14">
+                        <div>
+                            <span class="qs-about-section-eyebrow">{{ __('Strict exam conditions, defined') }}</span>
+                            <h2 class="mt-4 text-2xl font-semibold leading-tight tracking-tight text-[var(--qs-text)] sm:text-3xl lg:text-[2.1rem]">
+                                {{ __('When proctoring is on, students aren\'t alone in a tab — they\'re under the surveillance your policy defines.') }}
+                            </h2>
+                            <p class="mt-4 text-base leading-relaxed text-[var(--qs-muted)]">
+                                {{ __('Every control is optional and administrator-governed. But when it\'s on, it\'s real: fewer places to hide unauthorised help, and a cleaner story for appeals and quality assurance.') }}
+                            </p>
+                            <div class="mt-7 inline-flex items-center gap-3 rounded-xl border border-qs-soft bg-white px-4 py-3">
+                                <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--qs-primary)]/[0.10] text-[var(--qs-primary)]">
+                                    <i class="fa-solid fa-sliders text-sm" aria-hidden="true"></i>
+                                </span>
+                                <div>
+                                    <p class="text-sm font-semibold text-[var(--qs-text)]">{{ __('You set the dial.') }}</p>
+                                    <p class="text-xs text-[var(--qs-muted)]">{{ __('Per-exam overrides on top of institution defaults.') }}</p>
+                                </div>
+                            </div>
+                        </div>
 
-                    <ul class="mt-10 grid gap-4 sm:grid-cols-2 lg:gap-5">
-                        <li class="rounded-xl border border-qs-soft/90 bg-white/90 px-4 py-4 transition hover:border-[var(--qs-primary)]/25 sm:px-5 sm:py-5">
-                            <div class="flex h-8 w-8 items-center justify-center rounded-md bg-qs-soft/70 text-[var(--qs-primary)]">
-                                <i class="fa-solid fa-video text-sm" aria-hidden="true"></i>
-                            </div>
-                            <h3 class="mt-3 text-sm font-semibold text-[var(--qs-text)]">{{ __('Live session monitoring') }}</h3>
-                            <p class="mt-1.5 text-xs leading-relaxed text-[var(--qs-muted)] sm:text-sm">
-                                {{ __('Camera monitoring can remain active for the attempt so the exam surface is watched the way a hall invigilator would — not a one-off snapshot you forget five minutes later.') }}
-                            </p>
-                        </li>
-                        <li class="rounded-xl border border-qs-soft/90 bg-white/90 px-4 py-4 transition hover:border-[var(--qs-primary)]/25 sm:px-5 sm:py-5">
-                            <div class="flex h-8 w-8 items-center justify-center rounded-md bg-qs-soft/70 text-[var(--qs-primary)]">
-                                <i class="fa-solid fa-user-check text-sm" aria-hidden="true"></i>
-                            </div>
-                            <h3 class="mt-3 text-sm font-semibold text-[var(--qs-text)]">{{ __('Start-of-exam verification') }}</h3>
-                            <p class="mt-1.5 text-xs leading-relaxed text-[var(--qs-muted)] sm:text-sm">
-                                {{ __('Require a verification capture at start so the account taking the paper matches the student who was supposed to sit — a simple guardrail with outsized deterrence.') }}
-                            </p>
-                        </li>
-                        <li class="rounded-xl border border-qs-soft/90 bg-white/90 px-4 py-4 transition hover:border-[var(--qs-primary)]/25 sm:px-5 sm:py-5">
-                            <div class="flex h-8 w-8 items-center justify-center rounded-md bg-qs-soft/70 text-[var(--qs-primary)]">
-                                <i class="fa-solid fa-expand text-sm" aria-hidden="true"></i>
-                            </div>
-                            <h3 class="mt-3 text-sm font-semibold text-[var(--qs-text)]">{{ __('Fullscreen that keeps focus on the paper') }}</h3>
-                            <p class="mt-1.5 text-xs leading-relaxed text-[var(--qs-muted)] sm:text-sm">
-                                {{ __('Lock the attempt to a fullscreen surface so “just checking something” in another window stops being frictionless — the exam stays in front.') }}
-                            </p>
-                        </li>
-                        <li class="rounded-xl border border-qs-soft/90 bg-white/90 px-4 py-4 transition hover:border-[var(--qs-primary)]/25 sm:px-5 sm:py-5">
-                            <div class="flex h-8 w-8 items-center justify-center rounded-md bg-qs-soft/70 text-[var(--qs-primary)]">
-                                <i class="fa-solid fa-mobile-screen-button text-sm" aria-hidden="true"></i>
-                            </div>
-                            <h3 class="mt-3 text-sm font-semibold text-[var(--qs-text)]">{{ __('Signals that expose second-device shortcuts') }}</h3>
-                            <p class="mt-1.5 text-xs leading-relaxed text-[var(--qs-muted)] sm:text-sm">
-                                {{ __('Optional misuse signals help staff spot behaviour that does not match closed-book rules — feeding a structured trail examiners can review with context, not vibes.') }}
-                            </p>
-                        </li>
-                        <li class="rounded-xl border border-qs-soft/90 bg-white/90 px-4 py-4 transition hover:border-[var(--qs-primary)]/25 sm:px-5 sm:py-5 sm:col-span-2 lg:col-span-1">
-                            <div class="flex h-8 w-8 items-center justify-center rounded-md bg-qs-soft/70 text-[var(--qs-primary)]">
-                                <i class="fa-solid fa-scale-balanced text-sm" aria-hidden="true"></i>
-                            </div>
-                            <h3 class="mt-3 text-sm font-semibold text-[var(--qs-text)]">{{ __('Escalation that matches your risk appetite') }}</h3>
-                            <p class="mt-1.5 text-xs leading-relaxed text-[var(--qs-muted)] sm:text-sm">
-                                {{ __('Violations accumulate with cooldowns; thresholds can auto-submit or flag for human review — so you choose how hard the guardrails bite.') }}
-                            </p>
-                        </li>
-                        <li class="rounded-xl border border-qs-soft/90 bg-white/90 px-4 py-4 transition hover:border-[var(--qs-primary)]/25 sm:px-5 sm:py-5 sm:col-span-2 lg:col-span-1">
-                            <div class="flex h-8 w-8 items-center justify-center rounded-md bg-qs-soft/70 text-[var(--qs-primary)]">
-                                <i class="fa-solid fa-eye text-sm" aria-hidden="true"></i>
-                            </div>
-                            <h3 class="mt-3 text-sm font-semibold text-[var(--qs-text)]">{{ __('Visibility for the people accountable') }}</h3>
-                            <p class="mt-1.5 text-xs leading-relaxed text-[var(--qs-muted)] sm:text-sm">
-                                {{ __('Examiners see session health and outcomes in one place — design, deliver, and defend grades without stitching five tools together.') }}
-                            </p>
-                        </li>
-                    </ul>
+                        <ul class="qs-about-control-list">
+                            <li class="qs-about-control">
+                                <span class="qs-about-control__icon"><i class="fa-solid fa-video" aria-hidden="true"></i></span>
+                                <div>
+                                    <h3 class="text-sm font-semibold text-[var(--qs-text)]">{{ __('Live session monitoring') }}</h3>
+                                    <p class="mt-1 text-xs leading-relaxed text-[var(--qs-muted)]">
+                                        {{ __('Camera stays active for the attempt — like a hall invigilator, not a one-off snapshot.') }}
+                                    </p>
+                                </div>
+                            </li>
+                            <li class="qs-about-control">
+                                <span class="qs-about-control__icon"><i class="fa-solid fa-user-check" aria-hidden="true"></i></span>
+                                <div>
+                                    <h3 class="text-sm font-semibold text-[var(--qs-text)]">{{ __('Start-of-exam verification') }}</h3>
+                                    <p class="mt-1 text-xs leading-relaxed text-[var(--qs-muted)]">
+                                        {{ __('Verification capture at start so the account taking the paper matches the student who was supposed to sit.') }}
+                                    </p>
+                                </div>
+                            </li>
+                            <li class="qs-about-control">
+                                <span class="qs-about-control__icon"><i class="fa-solid fa-expand" aria-hidden="true"></i></span>
+                                <div>
+                                    <h3 class="text-sm font-semibold text-[var(--qs-text)]">{{ __('Fullscreen focus lock') }}</h3>
+                                    <p class="mt-1 text-xs leading-relaxed text-[var(--qs-muted)]">
+                                        {{ __('Lock the attempt to a fullscreen surface so “just checking another window” stops being frictionless.') }}
+                                    </p>
+                                </div>
+                            </li>
+                            <li class="qs-about-control">
+                                <span class="qs-about-control__icon"><i class="fa-solid fa-mobile-screen-button" aria-hidden="true"></i></span>
+                                <div>
+                                    <h3 class="text-sm font-semibold text-[var(--qs-text)]">{{ __('Second-device signals') }}</h3>
+                                    <p class="mt-1 text-xs leading-relaxed text-[var(--qs-muted)]">
+                                        {{ __('Optional misuse signals feed a structured trail examiners can review with context — not vibes.') }}
+                                    </p>
+                                </div>
+                            </li>
+                            <li class="qs-about-control">
+                                <span class="qs-about-control__icon"><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i></span>
+                                <div>
+                                    <h3 class="text-sm font-semibold text-[var(--qs-text)]">{{ __('Escalation that fits your risk appetite') }}</h3>
+                                    <p class="mt-1 text-xs leading-relaxed text-[var(--qs-muted)]">
+                                        {{ __('Violations accumulate with cooldowns; thresholds can auto-submit or flag for human review.') }}
+                                    </p>
+                                </div>
+                            </li>
+                            <li class="qs-about-control">
+                                <span class="qs-about-control__icon"><i class="fa-solid fa-eye" aria-hidden="true"></i></span>
+                                <div>
+                                    <h3 class="text-sm font-semibold text-[var(--qs-text)]">{{ __('Visibility for the people accountable') }}</h3>
+                                    <p class="mt-1 text-xs leading-relaxed text-[var(--qs-muted)]">
+                                        {{ __('Examiners see session health and outcomes in one place — design, deliver, and defend grades.') }}
+                                    </p>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </section>
 
+            {{-- TEAM --}}
             @if (count($teamMembers) > 0)
-                <section class="py-14 sm:py-16">
+                <section id="team" class="bg-white py-16 sm:py-20">
                     <div class="mx-auto max-w-6xl px-5 sm:px-8 lg:px-8">
                         <div class="mx-auto max-w-2xl text-center">
-                            <h2 class="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--qs-primary)]">{{ __('Team') }}</h2>
-                            <p class="mt-3 text-xl font-semibold tracking-tight text-[var(--qs-text)] sm:text-2xl">
-                                {{ __('Built by people who ship, support, and own the stack') }}
-                            </p>
-                            <p class="mt-3 text-sm leading-relaxed text-[var(--qs-muted)] sm:text-base">
+                            <span class="qs-about-section-eyebrow justify-center">{{ __('The team') }}</span>
+                            <h2 class="mt-4 text-2xl font-semibold leading-tight tracking-tight text-[var(--qs-text)] sm:text-3xl lg:text-[2.25rem]">
+                                {{ __('Built by people who ship, support, and own the stack.') }}
+                            </h2>
+                            <p class="mt-4 text-base leading-relaxed text-[var(--qs-muted)]">
                                 {{ __('Architecture and product development led in-house — so the roadmap stays aligned with what schools actually run in production.') }}
                             </p>
                         </div>
 
-                        <div class="mx-auto mt-12 grid max-w-3xl gap-10 sm:grid-cols-2 sm:gap-8 lg:max-w-4xl lg:gap-12">
-                            @foreach ($teamMembers as $member)
+                        @php
+                            // Reasonable max widths so 2 cards stay handsome and 3 still fit on lg.
+                            $teamCount = count($teamMembers);
+                            $teamGrid = match (true) {
+                                $teamCount === 1 => 'mx-auto mt-12 grid max-w-sm gap-6',
+                                $teamCount === 2 => 'mx-auto mt-12 grid max-w-3xl gap-6 sm:grid-cols-2 sm:gap-8',
+                                default          => 'mx-auto mt-12 grid max-w-5xl gap-6 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8',
+                            };
+                        @endphp
+
+                        <div class="{{ $teamGrid }}">
+                            @foreach ($teamMembers as $index => $member)
                                 @php
-                                    $name = (string) ($member['name'] ?? '');
-                                    $field = (string) ($member['field'] ?? '');
+                                    $name   = (string) ($member['name'] ?? '');
+                                    $field  = (string) ($member['field'] ?? '');
                                     $avatar = (string) ($member['avatar'] ?? '');
+                                    $badge  = $index === 0 ? __('Founder') : null;
                                 @endphp
                                 @continue($name === '' || $avatar === '')
-                                <article class="text-center">
-                                    <div class="mx-auto aspect-square max-w-[240px] overflow-hidden rounded-xl border border-qs-soft bg-white sm:max-w-none">
+                                <article class="qs-about-team-card">
+                                    <div class="qs-about-team-card__photo">
+                                        @if ($badge)
+                                            <span class="qs-about-team-card__badge">
+                                                <i class="fa-solid fa-star text-[0.6rem] text-amber-300" aria-hidden="true"></i>
+                                                {{ $badge }}
+                                            </span>
+                                        @endif
                                         <img
                                             src="{{ asset($avatar) }}"
                                             alt="{{ $name }}"
-                                            width="640"
-                                            height="640"
-                                            class="h-full w-full object-cover"
+                                            width="900"
+                                            height="900"
                                             loading="lazy"
                                             decoding="async"
                                         />
                                     </div>
-                                    <h3 class="mt-4 text-sm font-semibold text-[var(--qs-text)] sm:text-base">{{ $name }}</h3>
-                                    <p class="mt-1 text-xs leading-snug text-[var(--qs-muted)] sm:text-sm">{{ $field }}</p>
+                                    <div class="qs-about-team-card__body">
+                                        <h3 class="text-lg font-semibold tracking-tight text-[var(--qs-text)]">{{ $name }}</h3>
+                                        <p class="mt-1 text-sm font-medium text-[var(--qs-primary)]">{{ $field }}</p>
+                                        <div class="mt-3 flex items-center gap-1.5 text-xs text-[var(--qs-muted)]">
+                                            <span class="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                            <span>{{ __('Available for institution support') }}</span>
+                                        </div>
+                                    </div>
                                 </article>
                             @endforeach
                         </div>
@@ -193,24 +443,34 @@
                 </section>
             @endif
 
-            <section class="mx-auto max-w-6xl px-5 pb-14 sm:px-8 sm:pb-16 lg:px-8">
-                <div class="rounded-xl border border-qs-soft bg-white px-5 py-8 text-center sm:px-8 sm:py-10">
-                    <h2 class="text-base font-semibold text-[var(--qs-text)] sm:text-lg">{{ __('Start with the access your school gave you') }}</h2>
-                    <p class="mx-auto mt-2 max-w-md text-xs text-[var(--qs-muted)] sm:text-sm">
-                        {{ __('Students: sign in with the index number and credentials your coordinator registered. That is the front door to formal exams and practice where your institution enables it.') }}
-                    </p>
-                    <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
-                        <a href="{{ route('login') }}" class="qs-btn-primary min-h-[44px] px-6 py-2.5 text-sm font-semibold">
-                            {{ __('Student login') }}
-                        </a>
+            {{-- CTA --}}
+            <section class="bg-qs-bg py-16 sm:py-20">
+                <div class="mx-auto max-w-4xl px-5 sm:px-8 lg:px-8">
+                    <div class="relative overflow-hidden rounded-2xl border border-qs-soft bg-gradient-to-br from-white via-white to-[#eaf3f5] px-6 py-10 text-center shadow-sm sm:px-10 sm:py-12">
+                        <div class="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full bg-[var(--qs-primary)]/[0.12]" aria-hidden="true"></div>
+                        <div class="pointer-events-none absolute -left-16 -bottom-16 h-52 w-52 rounded-full bg-[var(--qs-danger)]/[0.06]" aria-hidden="true"></div>
+                        <div class="relative">
+                            <h2 class="text-2xl font-semibold tracking-tight text-[var(--qs-text)] sm:text-3xl">{{ __('Start with the access your school gave you') }}</h2>
+                            <p class="mx-auto mt-3 max-w-md text-sm leading-relaxed text-[var(--qs-muted)] sm:text-base">
+                                {{ __('Students sign in with the index number and credentials your coordinator registered — that\'s the front door to formal exams and any practice your institution enables.') }}
+                            </p>
+                            <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
+                                <a href="{{ route('login') }}" class="qs-btn-primary min-h-[44px] px-6 py-2.5 text-sm font-semibold">
+                                    {{ __('Student login') }}
+                                </a>
+                                <a href="{{ route('home') }}" class="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-qs-soft bg-white px-5 py-2.5 text-sm font-semibold text-[var(--qs-text)] transition hover:border-[var(--qs-primary)]/40 hover:text-[var(--qs-primary)]">
+                                    {{ __('Back to home') }}
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
         </main>
 
-        <footer class="border-t border-qs-soft bg-qs-card/50 py-10 text-center">
-            <p class="text-sm font-medium text-qs-text">{{ config('app.name', 'QuizSnap') }}</p>
-            <p class="mt-1 text-xs text-qs-muted">{{ __('Digital quizzes and exams for schools') }} · © {{ date('Y') }}</p>
+        <footer class="border-t border-qs-soft bg-white py-10 text-center">
+            <p class="text-sm font-semibold text-[var(--qs-text)]">{{ config('app.name', 'QuizSnap') }}</p>
+            <p class="mt-1 text-xs text-[var(--qs-muted)]">{{ __('Digital quizzes and exams for schools') }} · © {{ date('Y') }}</p>
         </footer>
     </div>
 </body>
