@@ -10,6 +10,101 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         /* Page-scoped polish for /about so the marketing layout stays untouched. */
+        html { scroll-padding-top: 92px; scroll-behavior: smooth; }
+        /* ------- Marketing nav (page-scoped, replaces the old generic header) ------- */
+        .qs-mnav { position: sticky; top: 0; z-index: 50; padding: 0.85rem 0 0.4rem; }
+        .qs-mnav__shell {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.45rem 0.55rem 0.45rem 0.75rem;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.78);
+            border: 1px solid rgba(15, 52, 58, 0.08);
+            backdrop-filter: saturate(160%) blur(14px);
+            -webkit-backdrop-filter: saturate(160%) blur(14px);
+            box-shadow: 0 1px 0 rgba(15, 52, 58, 0.02), 0 18px 40px -28px rgba(15, 52, 58, 0.18);
+        }
+        .qs-mnav__brand {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.35rem 0.6rem;
+            border-radius: 10px;
+            transition: background .18s ease;
+        }
+        .qs-mnav__brand:hover { background: rgba(86, 174, 187, 0.08); }
+        .qs-mnav__links { display: none; }
+        @media (min-width: 860px) {
+            .qs-mnav__links {
+                display: inline-flex;
+                flex: 1 1 auto;
+                justify-content: center;
+                align-items: center;
+                gap: 0.15rem;
+                padding: 0 0.5rem;
+            }
+        }
+        .qs-mnav__link {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.55rem 0.85rem;
+            border-radius: 10px;
+            font-size: 0.84rem;
+            font-weight: 500;
+            color: var(--qs-muted);
+            white-space: nowrap;
+            transition: color .18s ease, background .18s ease;
+        }
+        .qs-mnav__link:hover { color: var(--qs-text); background: rgba(15, 52, 58, 0.04); }
+        .qs-mnav__link.is-active { color: var(--qs-text); background: rgba(86, 174, 187, 0.12); }
+        .qs-mnav__link.is-active::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            bottom: -3px;
+            width: 16px;
+            height: 2px;
+            border-radius: 2px;
+            background: var(--qs-primary);
+            transform: translateX(-50%);
+        }
+        .qs-mnav__cta { margin-left: auto; display: inline-flex; align-items: center; gap: 0.45rem; }
+        .qs-mnav__cta-secondary {
+            display: none;
+            align-items: center;
+            padding: 0.55rem 0.85rem;
+            border-radius: 10px;
+            border: 1px solid rgba(15, 52, 58, 0.12);
+            background: #fff;
+            color: var(--qs-text);
+            font-size: 0.82rem;
+            font-weight: 600;
+            transition: border-color .18s ease, color .18s ease;
+        }
+        .qs-mnav__cta-secondary:hover { border-color: var(--qs-primary); color: var(--qs-primary); }
+        @media (min-width: 640px) { .qs-mnav__cta-secondary { display: inline-flex; } }
+        .qs-mnav__cta-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1rem;
+            border-radius: 10px;
+            background: var(--qs-text);
+            color: #fff;
+            font-size: 0.82rem;
+            font-weight: 600;
+            letter-spacing: 0.005em;
+            box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset, 0 10px 20px -12px rgba(15, 52, 58, 0.5);
+            transition: background .18s ease, transform .18s ease, box-shadow .18s ease;
+        }
+        .qs-mnav__cta-primary:hover {
+            background: #1a2a2e;
+            transform: translateY(-1px);
+            box-shadow: 0 1px 0 rgba(255,255,255,0.10) inset, 0 16px 28px -14px rgba(15, 52, 58, 0.55);
+        }
         .qs-about-hero {
             background:
                 radial-gradient(120% 80% at 80% 0%, rgba(86, 174, 187, 0.18) 0%, rgba(86, 174, 187, 0) 55%),
@@ -268,23 +363,34 @@
 </head>
 <body class="min-h-screen bg-qs-bg font-sans text-qs-text antialiased">
     <div class="flex min-h-screen flex-col">
-        <header class="sticky top-0 z-50 border-b border-qs-soft bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80">
-            <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-8">
-                <x-brand-logo class="text-xl sm:text-2xl" interactive :href="url('/')" />
-                <nav class="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
-                    <a href="{{ route('home') }}" class="min-h-[44px] rounded-lg px-4 py-2.5 text-sm font-semibold text-[var(--qs-muted)] transition hover:bg-qs-soft/60 hover:text-[var(--qs-text)]">
-                        {{ __('Home') }}
+        <header class="qs-mnav">
+            <div class="mx-auto max-w-6xl px-4 sm:px-6">
+                <div class="qs-mnav__shell">
+                    <a href="{{ route('home') }}" class="qs-mnav__brand" aria-label="{{ config('app.name', 'QuizSnap') }} home">
+                        <x-brand-logo class="text-lg sm:text-xl" />
                     </a>
-                    @auth
-                        <a href="{{ route('dashboard') }}" class="qs-btn-secondary min-h-[44px] px-4 py-2.5 text-sm font-semibold">
-                            {{ __('Dashboard') }}
-                        </a>
-                    @else
-                        <a href="{{ route('login') }}" class="qs-btn-primary min-h-[44px] px-4 py-2.5 text-sm font-semibold">
-                            {{ __('Student login') }}
-                        </a>
-                    @endauth
-                </nav>
+                    <nav class="qs-mnav__links" aria-label="Primary">
+                        <a href="{{ route('home') }}" class="qs-mnav__link">{{ __('Home') }}</a>
+                        <a href="{{ route('about') }}" class="qs-mnav__link is-active" aria-current="page">{{ __('About') }}</a>
+                        <a href="#why" class="qs-mnav__link">{{ __('Why us') }}</a>
+                        <a href="#proctoring" class="qs-mnav__link">{{ __('Proctoring') }}</a>
+                        <a href="#team" class="qs-mnav__link">{{ __('Team') }}</a>
+                    </nav>
+                    <div class="qs-mnav__cta">
+                        @auth
+                            <a href="{{ route('dashboard') }}" class="qs-mnav__cta-primary">
+                                <i class="fa-solid fa-gauge-high text-[0.72rem]" aria-hidden="true"></i>
+                                {{ __('Dashboard') }}
+                            </a>
+                        @else
+                            <a href="{{ route('login') }}" class="qs-mnav__cta-secondary">{{ __('Sign in') }}</a>
+                            <a href="{{ route('login') }}" class="qs-mnav__cta-primary">
+                                {{ __('Student portal') }}
+                                <i class="fa-solid fa-arrow-right text-[0.72rem]" aria-hidden="true"></i>
+                            </a>
+                        @endauth
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -292,13 +398,9 @@
             {{-- HERO --}}
             <section class="qs-about-hero relative overflow-hidden text-white">
                 <div class="qs-about-hero-grid pointer-events-none absolute inset-0" aria-hidden="true"></div>
-                <div class="relative mx-auto max-w-6xl px-5 pt-16 pb-12 sm:px-8 sm:pt-20 sm:pb-16 lg:px-8 lg:pt-24 lg:pb-20">
+                <div class="relative mx-auto max-w-6xl px-5 pt-12 pb-12 sm:px-8 sm:pt-16 sm:pb-16 lg:px-8 lg:pt-20 lg:pb-20">
                     <div class="mx-auto max-w-3xl text-center">
-                        <span class="qs-about-eyebrow">
-                            <span class="h-1.5 w-1.5 rounded-full bg-[var(--qs-primary)]" aria-hidden="true"></span>
-                            {{ __('About') }} {{ config('app.name', 'QuizSnap') }}
-                        </span>
-                        <h1 class="mt-6 text-balance text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-6xl">
+                        <h1 class="text-balance text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-6xl">
                             {{ __('The exam platform schools use when results have to count.') }}
                         </h1>
                         <p class="mx-auto mt-6 max-w-2xl text-pretty text-base leading-relaxed text-white/70 sm:text-lg">
@@ -334,7 +436,7 @@
             </section>
 
             {{-- WHY INSTITUTIONS PICK QUIZSNAP --}}
-            <section class="border-b border-qs-soft bg-white py-16 sm:py-20">
+            <section id="why" class="border-b border-qs-soft bg-white py-16 sm:py-20">
                 <div class="mx-auto max-w-6xl px-5 sm:px-8 lg:px-8">
                     <div class="max-w-2xl">
                         <span class="qs-about-section-eyebrow">{{ __('Why institutions pick QuizSnap') }}</span>
@@ -370,7 +472,7 @@
             </section>
 
             {{-- WHAT STRICT EXAM CONDITIONS ACTUALLY MEAN --}}
-            <section class="border-b border-qs-soft bg-qs-bg py-16 sm:py-20">
+            <section id="proctoring" class="border-b border-qs-soft bg-qs-bg py-16 sm:py-20">
                 <div class="mx-auto max-w-6xl px-5 sm:px-8 lg:px-8">
                     <div class="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] lg:gap-14">
                         <div>
