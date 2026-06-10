@@ -573,6 +573,151 @@
                 {{ __('The wallet-style mobile theme toggle lives in the “Student dashboard” section above (saved with the main settings form).') }}
             </p>
         </section>
+
+        {{-- =============== Arena (gamified) exam runtime background =============== --}}
+        <section class="{{ $setPanel }}">
+            <h3 class="text-base font-semibold text-slate-900">{{ __('Quiz arena background (gamified mode)') }}</h3>
+            <p class="text-sm text-slate-600">
+                {{ __('Full-screen photo that sits behind the gamified ("arena") exam runtime. Only used when the student exam play mode is set to Arena above. Saved as a compressed JPEG (max ~320 KB, up to 1920×1080).') }}
+            </p>
+
+            <div class="overflow-hidden rounded-xl border border-slate-200 bg-slate-900">
+                <div
+                    class="aspect-[16/9] w-full max-w-md bg-cover bg-center"
+                    style="background-image: url('{{ $arenaBackgroundUrl }}');"
+                    role="img"
+                    aria-label="{{ __('Current arena exam background preview') }}"
+                ></div>
+            </div>
+            @if ($arenaHasCustomBackground)
+                <p class="text-xs font-medium text-emerald-800">{{ __('Using a custom background.') }}</p>
+            @else
+                <p class="text-xs text-slate-500">{{ __('Using the default background.') }}</p>
+            @endif
+
+            <form
+                method="post"
+                action="{{ route('admin.settings.arena-background.update') }}"
+                enctype="multipart/form-data"
+                class="space-y-4"
+            >
+                @csrf
+                <div>
+                    <label for="arena_background_image" class="mb-1 block text-sm text-slate-600">{{ __('Upload new background') }}</label>
+                    <input
+                        id="arena_background_image"
+                        name="background_image"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        class="{{ $setInput }} max-w-md"
+                    />
+                    @error('background_image')
+                        <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
+                    @enderror
+                    <p class="mt-1 text-xs text-slate-500">{{ __('JPEG, PNG, or WebP. Landscape orientation works best — recommended 1920×1080.') }}</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800">
+                        {{ __('Save background') }}
+                    </button>
+                </div>
+            </form>
+
+            @if ($arenaHasCustomBackground)
+                <form method="post" action="{{ route('admin.settings.arena-background.update') }}" class="pt-2">
+                    @csrf
+                    <input type="hidden" name="remove_background" value="1" />
+                    <button type="submit" class="text-sm font-semibold text-rose-700 hover:text-rose-900">
+                        {{ __('Reset to default background') }}
+                    </button>
+                </form>
+            @endif
+        </section>
+
+        {{-- =============== Marketing homepage hero photo =============== --}}
+        <section class="{{ $setPanel }}">
+            <h3 class="text-base font-semibold text-slate-900">{{ __('Homepage hero photo') }}</h3>
+            <p class="text-sm text-slate-600">
+                {{ __('Photo that sits beside the headline on the public marketing homepage. Use the toggle below to pick whether it shows on desktop, mobile, or both. Saved as a compressed JPEG (max ~220 KB, up to 1600×1200).') }}
+            </p>
+
+            <div class="overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                <div
+                    class="aspect-[4/3] w-full max-w-sm bg-cover bg-center"
+                    style="background-image: url('{{ $homepageHeroUrl }}');"
+                    role="img"
+                    aria-label="{{ __('Current homepage hero preview') }}"
+                ></div>
+            </div>
+            @if ($homepageHeroHasCustom)
+                <p class="text-xs font-medium text-emerald-800">{{ __('Using a custom hero photo.') }}</p>
+            @else
+                <p class="text-xs text-slate-500">{{ __('Using the default hero photo.') }}</p>
+            @endif
+
+            <form
+                method="post"
+                action="{{ route('admin.settings.homepage-hero.update') }}"
+                enctype="multipart/form-data"
+                class="space-y-4"
+            >
+                @csrf
+
+                <div>
+                    <label for="homepage_hero_image" class="mb-1 block text-sm text-slate-600">{{ __('Upload new hero photo') }}</label>
+                    <input
+                        id="homepage_hero_image"
+                        name="hero_image"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        class="{{ $setInput }} max-w-md"
+                    />
+                    @error('hero_image')
+                        <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
+                    @enderror
+                    <p class="mt-1 text-xs text-slate-500">{{ __('Optional — leave empty to only change the visibility below.') }}</p>
+                </div>
+
+                <fieldset class="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3 sm:p-4">
+                    <legend class="px-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        {{ __('Where to show the photo') }}
+                    </legend>
+                    <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                        @foreach ($homepageHeroVisibilityOptions as $option)
+                            <label class="flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 text-sm text-slate-800 transition-colors {{ $homepageHeroVisibility === $option['slug'] ? 'border-emerald-400 bg-white' : 'border-slate-200 bg-white/80 hover:bg-white' }}">
+                                <input
+                                    type="radio"
+                                    name="hero_visibility"
+                                    value="{{ $option['slug'] }}"
+                                    class="mt-1 h-4 w-4 text-emerald-600 focus:ring-emerald-500/35"
+                                    @checked($homepageHeroVisibility === $option['slug'])
+                                />
+                                <span class="min-w-0 flex-1 space-y-0.5">
+                                    <span class="block font-semibold text-slate-900">{{ __($option['label']) }}</span>
+                                    <span class="block text-xs text-slate-600">{{ __($option['description']) }}</span>
+                                </span>
+                            </label>
+                        @endforeach
+                    </div>
+                </fieldset>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800">
+                        {{ __('Save hero settings') }}
+                    </button>
+                </div>
+            </form>
+
+            @if ($homepageHeroHasCustom)
+                <form method="post" action="{{ route('admin.settings.homepage-hero.update') }}" class="pt-2">
+                    @csrf
+                    <input type="hidden" name="remove_hero" value="1" />
+                    <button type="submit" class="text-sm font-semibold text-rose-700 hover:text-rose-900">
+                        {{ __('Reset to default hero photo') }}
+                    </button>
+                </form>
+            @endif
+        </section>
     @endif
 
     @if (session('scroll_to_setting_lock'))

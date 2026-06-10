@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\CoordinatorController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\ProctoringGovernanceController;
 use App\Http\Controllers\Admin\ReportingController as AdminReportingController;
+use App\Http\Controllers\Admin\BrandingImagesController;
 use App\Http\Controllers\Admin\StudentDashboardBrandingController;
 use App\Http\Controllers\Admin\UniversityController;
 use App\Http\Controllers\Admin\UserAccountController;
@@ -334,6 +335,10 @@ Route::middleware(['auth', 'verified'])->prefix('dashboard')->group(function () 
             Route::post('/settings/unlock', [AdminSettingsController::class, 'unlock'])->name('settings.unlock');
             Route::post('/settings/student-dashboard-banner', [StudentDashboardBrandingController::class, 'update'])
                 ->name('settings.student-dashboard-banner.update');
+            Route::post('/settings/arena-background', [BrandingImagesController::class, 'updateArenaBackground'])
+                ->name('settings.arena-background.update');
+            Route::post('/settings/homepage-hero', [BrandingImagesController::class, 'updateHomepageHero'])
+                ->name('settings.homepage-hero.update');
 
             Route::get('/academic-reset-snapshots', [AcademicResetSnapshotsController::class, 'index'])->name('academic-reset-snapshots.index');
 

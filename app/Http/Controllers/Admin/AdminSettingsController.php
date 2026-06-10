@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\AiIntegrationSettings;
+use App\Services\BrandingImagesService;
 use App\Services\StudentDashboardBrandingService;
 use App\Services\SystemExamPolicyService;
 use App\Services\SystemSettingsService;
@@ -39,10 +40,17 @@ class AdminSettingsController extends Controller
             : array_diff_key($allLockable, array_flip($superOnlyLockKeys));
 
         $branding = app(StudentDashboardBrandingService::class);
+        $brandingImages = app(BrandingImagesService::class);
 
         return view('admin.settings.index', [
             'studentDashboardBannerUrl' => $branding->bannerUrl(),
             'studentDashboardHasCustomBanner' => $branding->hasCustomBanner(),
+            'arenaBackgroundUrl' => $brandingImages->arenaBackgroundUrl(),
+            'arenaHasCustomBackground' => $brandingImages->hasCustomArenaBackground(),
+            'homepageHeroUrl' => $brandingImages->homepageHeroUrl(),
+            'homepageHeroHasCustom' => $brandingImages->hasCustomHomepageHero(),
+            'homepageHeroVisibility' => $brandingImages->homepageHeroVisibility(),
+            'homepageHeroVisibilityOptions' => $brandingImages->homepageHeroVisibilityOptions(),
             'lockable' => $lockable,
             'lockStatesByKey' => $lockStatesByKey,
             'arkesel_api_key_masked' => $this->systemSettings->getMasked('arkesel_api_key'),

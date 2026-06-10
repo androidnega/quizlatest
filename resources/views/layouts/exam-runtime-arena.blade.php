@@ -36,6 +36,17 @@
         'resources/css/student-exam-arena.css',
         'resources/js/studentExamArena.js',
     ])
+
+    {{-- Super-admin override for the full-screen arena background. Stored
+         via BrandingImagesService and surfaced as a CSS variable so we don't
+         have to touch the bundled stylesheet. URL is single-quoted because
+         asset() will not produce a quote character on its own. --}}
+    @php
+        $arenaBackgroundCssUrl = app(\App\Services\BrandingImagesService::class)->arenaBackgroundUrl();
+    @endphp
+    <style>
+        :root { --qs-arena-bg-image: url('{{ $arenaBackgroundCssUrl }}'); }
+    </style>
 </head>
 <body class="font-sans antialiased bg-slate-950 text-slate-100">
     @include('layouts.partials.desktop-only-guard')

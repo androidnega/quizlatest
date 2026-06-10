@@ -19,6 +19,13 @@
 --}}
 <body class="flex min-h-screen flex-col bg-white font-sans text-qs-text antialiased">
 
+    @php
+        $branding = app(\App\Services\BrandingImagesService::class);
+        $heroImageUrl = $branding->homepageHeroUrl();
+        $heroShowDesktop = $branding->homepageHeroShowsOnDesktop();
+        $heroShowMobile = $branding->homepageHeroShowsOnMobile();
+    @endphp
+
     {{-- =============== Sticky marketing nav =============== --}}
     <header class="z-50 shrink-0 border-b border-qs-soft/60 bg-white">
         <div class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6 md:gap-6 md:px-10 md:py-5">
@@ -56,6 +63,23 @@
 
         {{-- Mobile hero: centered single column, fills remaining height --}}
         <section class="flex w-full flex-col items-center justify-center px-5 py-10 text-center md:hidden">
+            @if ($heroShowMobile)
+                <figure
+                    data-home-hero-mobile-photo="1"
+                    class="mb-7 w-full max-w-sm overflow-hidden rounded-2xl shadow-lg shadow-qs-text/10 ring-1 ring-qs-soft/80"
+                >
+                    <img
+                        src="{{ $heroImageUrl }}"
+                        alt=""
+                        width="1024"
+                        height="768"
+                        decoding="async"
+                        fetchpriority="high"
+                        sizes="100vw"
+                        class="block aspect-[4/3] h-auto w-full object-cover object-center"
+                    />
+                </figure>
+            @endif
             <span class="inline-flex items-center gap-2 rounded-full bg-qs-primary/10 px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.18em] text-qs-primary ring-1 ring-qs-primary/15">
                 <span class="inline-block h-1.5 w-1.5 rounded-full bg-qs-primary"></span>
                 {{ __('Built for schools') }}
@@ -77,11 +101,78 @@
             </div>
         </section>
 
-        {{-- Desktop hero: 2-column split, vertically centered, fills remaining height --}}
-        <section class="mx-auto hidden w-full max-w-7xl md:grid md:grid-cols-2 md:items-center md:gap-12 md:px-10 md:py-10 lg:gap-16 lg:py-12">
+        @if ($heroShowDesktop)
+            {{-- Desktop hero: 2-column split, vertically centered, fills remaining height --}}
+            <section class="mx-auto hidden w-full max-w-7xl md:grid md:grid-cols-2 md:items-center md:gap-12 md:px-10 md:py-10 lg:gap-16 lg:py-12">
 
-            {{-- Left column: text + CTAs --}}
-            <div class="min-w-0 max-w-xl md:justify-self-end">
+                {{-- Left column: text + CTAs --}}
+                <div class="min-w-0 max-w-xl md:justify-self-end">
+                    <span class="inline-flex items-center gap-2 rounded-full bg-qs-primary/10 px-3 py-1.5 text-[0.66rem] font-bold uppercase tracking-[0.18em] text-qs-primary ring-1 ring-qs-primary/15">
+                        <span class="inline-block h-1.5 w-1.5 rounded-full bg-qs-primary"></span>
+                        {{ __('Built for schools') }}
+                    </span>
+
+                    <h1 class="mt-6 text-balance text-5xl font-bold leading-[1.05] tracking-tight text-qs-text sm:text-6xl lg:text-[4.25rem] lg:leading-[1.04]">
+                        <span class="block">{{ __('Secure Digital') }}</span>
+                        <span class="block text-qs-primary">{{ __('Exams. Perfected.') }}</span>
+                    </h1>
+
+                    <p class="mt-6 max-w-md text-base leading-relaxed text-qs-muted sm:text-lg">
+                        {{ __('Verified students. Smart assessments. Trusted results.') }}
+                    </p>
+
+                    <div class="mt-9 flex flex-wrap items-center gap-3 sm:gap-4">
+                        <a href="{{ route('login') }}" class="inline-flex min-h-[52px] items-center justify-center rounded-md bg-qs-primary px-7 py-3 text-[0.72rem] font-bold uppercase tracking-[0.18em] text-white shadow-lg shadow-qs-primary/30 ring-1 ring-qs-primary/30 transition hover:bg-qs-primary-deep hover:shadow-xl hover:shadow-qs-primary/35">
+                            {{ __('Student login') }}
+                        </a>
+                        <a href="{{ route('about') }}" class="inline-flex min-h-[52px] items-center justify-center rounded-md border border-qs-soft bg-white px-7 py-3 text-[0.72rem] font-bold uppercase tracking-[0.18em] text-qs-text shadow-sm transition hover:border-qs-primary hover:text-qs-primary">
+                            {{ __('About us') }}
+                        </a>
+                    </div>
+                </div>
+
+                {{-- Right column: photo card with bottom-left caption --}}
+                <div
+                    data-online-quiz-hero="1"
+                    class="group relative w-full min-w-0 max-w-xl md:justify-self-start lg:max-w-2xl"
+                >
+                    <p class="sr-only">
+                        {{ __('QuizSnap promotional illustration: a student on a laptop in a teal chair beside a phone showing secure digital quizzes and exams for schools.') }}
+                    </p>
+
+                    <div class="pointer-events-none absolute -right-6 -top-6 -z-10 h-32 w-32 rounded-full bg-qs-primary/20 blur-2xl sm:h-40 sm:w-40" aria-hidden="true"></div>
+                    <div class="pointer-events-none absolute -bottom-8 -left-8 -z-10 h-40 w-40 rounded-full bg-qs-primary/10 blur-3xl" aria-hidden="true"></div>
+
+                    <div class="relative overflow-hidden rounded-[28px] bg-white p-2.5 shadow-2xl shadow-qs-text/15 ring-1 ring-qs-soft sm:p-3">
+                        <div class="relative overflow-hidden rounded-[20px] bg-gradient-to-br from-qs-bg to-qs-soft">
+                            <img
+                                src="{{ $heroImageUrl }}"
+                                alt=""
+                                width="1024"
+                                height="768"
+                                decoding="async"
+                                fetchpriority="high"
+                                class="aspect-[4/3] h-auto w-full object-cover object-center transition duration-700 group-hover:scale-[1.02]"
+                            />
+
+                            <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent"></div>
+
+                            <div class="absolute inset-x-5 bottom-5 sm:inset-x-7 sm:bottom-7">
+                                <h2 class="text-balance text-2xl font-bold leading-tight tracking-tight text-white sm:text-[1.7rem]">
+                                    {{ __('Trusted Results') }}
+                                </h2>
+                                <p class="mt-1.5 max-w-md text-pretty text-sm leading-snug text-white/85 sm:text-base">
+                                    {{ __('Marks released by your examiner — same place every term, with an audit trail your QA team can defend.') }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+        @else
+            {{-- Desktop hero (text-only fallback): admin hid the photo on desktop. --}}
+            <section class="mx-auto hidden w-full max-w-3xl flex-col items-center justify-center px-10 py-10 text-center md:flex md:py-12 lg:py-16">
                 <span class="inline-flex items-center gap-2 rounded-full bg-qs-primary/10 px-3 py-1.5 text-[0.66rem] font-bold uppercase tracking-[0.18em] text-qs-primary ring-1 ring-qs-primary/15">
                     <span class="inline-block h-1.5 w-1.5 rounded-full bg-qs-primary"></span>
                     {{ __('Built for schools') }}
@@ -92,11 +183,11 @@
                     <span class="block text-qs-primary">{{ __('Exams. Perfected.') }}</span>
                 </h1>
 
-                <p class="mt-6 max-w-md text-base leading-relaxed text-qs-muted sm:text-lg">
+                <p class="mx-auto mt-6 max-w-md text-base leading-relaxed text-qs-muted sm:text-lg">
                     {{ __('Verified students. Smart assessments. Trusted results.') }}
                 </p>
 
-                <div class="mt-9 flex flex-wrap items-center gap-3 sm:gap-4">
+                <div class="mt-9 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
                     <a href="{{ route('login') }}" class="inline-flex min-h-[52px] items-center justify-center rounded-md bg-qs-primary px-7 py-3 text-[0.72rem] font-bold uppercase tracking-[0.18em] text-white shadow-lg shadow-qs-primary/30 ring-1 ring-qs-primary/30 transition hover:bg-qs-primary-deep hover:shadow-xl hover:shadow-qs-primary/35">
                         {{ __('Student login') }}
                     </a>
@@ -104,47 +195,8 @@
                         {{ __('About us') }}
                     </a>
                 </div>
-            </div>
-
-            {{-- Right column: photo card with bottom-left caption --}}
-            <div
-                data-online-quiz-hero="1"
-                class="group relative w-full min-w-0 max-w-xl md:justify-self-start lg:max-w-2xl"
-            >
-                <p class="sr-only">
-                    {{ __('QuizSnap promotional illustration: a student on a laptop in a teal chair beside a phone showing secure digital quizzes and exams for schools.') }}
-                </p>
-
-                <div class="pointer-events-none absolute -right-6 -top-6 -z-10 h-32 w-32 rounded-full bg-qs-primary/20 blur-2xl sm:h-40 sm:w-40" aria-hidden="true"></div>
-                <div class="pointer-events-none absolute -bottom-8 -left-8 -z-10 h-40 w-40 rounded-full bg-qs-primary/10 blur-3xl" aria-hidden="true"></div>
-
-                <div class="relative overflow-hidden rounded-[28px] bg-white p-2.5 shadow-2xl shadow-qs-text/15 ring-1 ring-qs-soft sm:p-3">
-                    <div class="relative overflow-hidden rounded-[20px] bg-gradient-to-br from-qs-bg to-qs-soft">
-                        <img
-                            src="{{ asset('images/home/quizsnap-homepage-hero-desktop-student-laptop.jpg') }}"
-                            alt=""
-                            width="1024"
-                            height="768"
-                            decoding="async"
-                            fetchpriority="high"
-                            class="aspect-[4/3] h-auto w-full object-cover object-center transition duration-700 group-hover:scale-[1.02]"
-                        />
-
-                        <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent"></div>
-
-                        <div class="absolute inset-x-5 bottom-5 sm:inset-x-7 sm:bottom-7">
-                            <h2 class="text-balance text-2xl font-bold leading-tight tracking-tight text-white sm:text-[1.7rem]">
-                                {{ __('Trusted Results') }}
-                            </h2>
-                            <p class="mt-1.5 max-w-md text-pretty text-sm leading-snug text-white/85 sm:text-base">
-                                {{ __('Marks released by your examiner — same place every term, with an audit trail your QA team can defend.') }}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </section>
+            </section>
+        @endif
 
     </main>
 </body>
