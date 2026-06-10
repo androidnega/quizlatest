@@ -26,35 +26,75 @@
         $heroShowMobile = $branding->homepageHeroShowsOnMobile();
     @endphp
 
-    {{-- =============== Sticky marketing nav =============== --}}
-    <header class="z-50 shrink-0 border-b border-qs-soft/60 bg-[#fdf9f1]">
-        <div class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6 md:gap-6 md:px-10 md:py-5">
-            <a href="{{ url('/') }}" class="inline-flex items-center gap-2.5 text-lg font-bold tracking-tight md:text-xl" aria-label="{{ config('app.name', 'QuizSnap') }} home">
-                <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-qs-primary text-white shadow-sm">
-                    <i class="fa-solid fa-graduation-cap text-sm" aria-hidden="true"></i>
+    {{--
+      =============== Sleek navigation header ===============
+        • 3-column grid (brand · centered nav · actions) so the
+          center nav is truly centered regardless of side widths.
+        • Sentence-case, medium-weight links with an animated
+          underline on hover; the active page gets a static
+          hairline underline (Stripe / Linear pattern).
+        • Primary CTA is a dark pill with an arrow that translates
+          on hover.
+        • Hairline border (qs-text/[0.06]) instead of qs-soft so
+          the divider barely registers against the cream.
+        • No shadows anywhere — consistent with the flat editorial
+          treatment of the hero photo below.
+    --}}
+    <header class="z-50 shrink-0 border-b border-qs-text/[0.06] bg-[#fdf9f1]">
+        <div class="mx-auto grid h-16 max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-4 px-5 sm:h-[68px] sm:px-6 md:gap-8 md:px-10">
+
+            {{-- Brand: small teal chip + 2-tone wordmark, with a tiny rotation on hover --}}
+            <a href="{{ url('/') }}" class="group inline-flex items-center gap-2.5" aria-label="{{ config('app.name', 'QuizSnap') }} home">
+                <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-qs-primary text-white transition duration-300 ease-out group-hover:-rotate-[6deg] group-hover:scale-105">
+                    <i class="fa-solid fa-graduation-cap text-[0.78rem]" aria-hidden="true"></i>
                 </span>
-                <span><span class="text-qs-primary">Quiz</span><span class="text-qs-text">Snap</span></span>
+                <span class="text-base font-semibold tracking-tight leading-none md:text-[1.05rem]">
+                    <span class="text-qs-primary">Quiz</span><span class="text-qs-text">Snap</span>
+                </span>
             </a>
-            <nav class="flex items-center gap-1 sm:gap-2 md:gap-3">
-                <a href="{{ route('about') }}" class="hidden min-h-[44px] rounded-lg px-3 py-2 text-[0.7rem] font-bold uppercase tracking-[0.16em] text-qs-muted transition hover:text-qs-text sm:inline-flex sm:items-center md:px-4">
+
+            {{-- Centered nav (md+ only). Active link has a static underline; siblings get an animated underline on hover. --}}
+            <nav class="hidden items-center justify-center gap-1 md:flex" aria-label="Primary">
+                <a href="{{ url('/') }}" aria-current="page"
+                   class="relative inline-flex h-9 items-center rounded-full px-3.5 text-sm font-medium text-qs-text">
+                    {{ __('Home') }}
+                    <span class="absolute inset-x-3.5 -bottom-px h-px bg-qs-primary" aria-hidden="true"></span>
+                </a>
+                <a href="{{ route('about') }}"
+                   class="group relative inline-flex h-9 items-center rounded-full px-3.5 text-sm font-medium text-qs-muted transition-colors duration-200 hover:text-qs-text">
                     {{ __('About') }}
+                    <span class="absolute inset-x-3.5 -bottom-px h-px origin-center scale-x-0 bg-qs-primary transition-transform duration-300 ease-out group-hover:scale-x-100" aria-hidden="true"></span>
                 </a>
                 @auth
-                    <a href="{{ route('dashboard') }}" class="hidden min-h-[44px] rounded-lg px-3 py-2 text-[0.7rem] font-bold uppercase tracking-[0.16em] text-qs-muted transition hover:text-qs-text sm:inline-flex sm:items-center md:px-4">
+                    <a href="{{ route('dashboard') }}"
+                       class="group relative inline-flex h-9 items-center rounded-full px-3.5 text-sm font-medium text-qs-muted transition-colors duration-200 hover:text-qs-text">
                         {{ __('Dashboard') }}
-                    </a>
-                    <a href="{{ route('dashboard') }}" class="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-qs-text px-4 py-2.5 text-[0.7rem] font-bold uppercase tracking-[0.16em] text-white shadow-sm transition hover:bg-[#1a2a2e] md:px-5">
-                        {{ __('Get Started') }}
-                    </a>
-                @else
-                    <a href="{{ route('login') }}" class="hidden min-h-[44px] rounded-lg px-3 py-2 text-[0.7rem] font-bold uppercase tracking-[0.16em] text-qs-muted transition hover:text-qs-text sm:inline-flex sm:items-center md:px-4">
-                        {{ __('Sign in') }}
-                    </a>
-                    <a href="{{ route('login') }}" class="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-qs-text px-4 py-2.5 text-[0.7rem] font-bold uppercase tracking-[0.16em] text-white shadow-sm transition hover:bg-[#1a2a2e] md:px-5">
-                        {{ __('Student login') }}
+                        <span class="absolute inset-x-3.5 -bottom-px h-px origin-center scale-x-0 bg-qs-primary transition-transform duration-300 ease-out group-hover:scale-x-100" aria-hidden="true"></span>
                     </a>
                 @endauth
             </nav>
+
+            {{-- Right actions: secondary text link (sm+) + primary pill CTA --}}
+            <div class="flex items-center gap-2 sm:gap-4">
+                @auth
+                    <a href="{{ route('dashboard') }}"
+                       class="group inline-flex items-center gap-1.5 rounded-full bg-qs-text px-4 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#1a2a2e] md:px-5 md:py-2.5">
+                        {{ __('Dashboard') }}
+                        <i class="fa-solid fa-arrow-right text-[0.7rem] transition-transform duration-300 ease-out group-hover:translate-x-0.5" aria-hidden="true"></i>
+                    </a>
+                @else
+                    <a href="{{ route('login') }}"
+                       class="hidden text-sm font-medium text-qs-muted transition-colors duration-200 hover:text-qs-text sm:inline-flex sm:items-center">
+                        {{ __('Sign in') }}
+                    </a>
+                    <a href="{{ route('login') }}"
+                       class="group inline-flex items-center gap-1.5 rounded-full bg-qs-text px-4 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#1a2a2e] md:px-5 md:py-2.5">
+                        {{ __('Student login') }}
+                        <i class="fa-solid fa-arrow-right text-[0.7rem] transition-transform duration-300 ease-out group-hover:translate-x-0.5" aria-hidden="true"></i>
+                    </a>
+                @endauth
+            </div>
+
         </div>
     </header>
 
