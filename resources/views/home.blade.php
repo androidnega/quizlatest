@@ -64,20 +64,25 @@
         {{-- Mobile hero: centered single column, fills remaining height --}}
         <section class="flex w-full flex-col items-center justify-center px-5 py-10 text-center md:hidden">
             @if ($heroShowMobile)
+                {{-- Mobile photo frame: gradient hairline border + layered brand shadow,
+                     mirroring the desktop card's modern edge-to-edge treatment. --}}
                 <figure
                     data-home-hero-mobile-photo="1"
-                    class="mb-7 w-full max-w-sm overflow-hidden rounded-2xl shadow-lg shadow-qs-text/10 ring-1 ring-qs-soft/80"
+                    class="relative mb-7 w-full max-w-sm rounded-[22px] bg-gradient-to-br from-white/90 via-qs-soft/80 to-white/90 p-px shadow-[0_22px_45px_-18px_rgba(15,52,58,0.28),0_10px_20px_-10px_rgba(86,174,187,0.20)]"
                 >
-                    <img
-                        src="{{ $heroImageUrl }}"
-                        alt=""
-                        width="1024"
-                        height="768"
-                        decoding="async"
-                        fetchpriority="high"
-                        sizes="100vw"
-                        class="block aspect-[4/3] h-auto w-full object-cover object-center"
-                    />
+                    <div class="relative overflow-hidden rounded-[21px] bg-qs-text">
+                        <img
+                            src="{{ $heroImageUrl }}"
+                            alt=""
+                            width="1024"
+                            height="768"
+                            decoding="async"
+                            fetchpriority="high"
+                            sizes="100vw"
+                            class="block aspect-[4/3] h-auto w-full object-cover object-center"
+                        />
+                        <div class="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white/15 to-transparent" aria-hidden="true"></div>
+                    </div>
                 </figure>
             @endif
             <span class="inline-flex items-center gap-2 rounded-full bg-qs-primary/10 px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.18em] text-qs-primary ring-1 ring-qs-primary/15">
@@ -131,7 +136,16 @@
                     </div>
                 </div>
 
-                {{-- Right column: photo card with bottom-left caption --}}
+                {{--
+                  Right column: modern photo card.
+                    • Edge-to-edge photo (no white bezel) — the photo IS the card.
+                    • Gradient hairline border (1px gradient via p-px + inner div).
+                    • Layered shadow: long soft drop + brand-tinted lift.
+                    • Floating glassmorphic caption (backdrop-blur, white/95)
+                      instead of a baked-in dark bottom gradient.
+                    • Small floating "Live exams" data pill at the top-right
+                      to break the rectangle silhouette.
+                --}}
                 <div
                     data-online-quiz-hero="1"
                     class="group relative w-full min-w-0 max-w-xl md:justify-self-start lg:max-w-2xl"
@@ -140,11 +154,13 @@
                         {{ __('QuizSnap promotional illustration: a student on a laptop in a teal chair beside a phone showing secure digital quizzes and exams for schools.') }}
                     </p>
 
-                    <div class="pointer-events-none absolute -right-6 -top-6 -z-10 h-32 w-32 rounded-full bg-qs-primary/20 blur-2xl sm:h-40 sm:w-40" aria-hidden="true"></div>
-                    <div class="pointer-events-none absolute -bottom-8 -left-8 -z-10 h-40 w-40 rounded-full bg-qs-primary/10 blur-3xl" aria-hidden="true"></div>
+                    {{-- Refined background accents: smaller, more focused, brand-tinted --}}
+                    <div class="pointer-events-none absolute -right-10 -top-10 -z-10 h-44 w-44 rounded-full bg-qs-primary/25 blur-3xl" aria-hidden="true"></div>
+                    <div class="pointer-events-none absolute -bottom-12 -left-8 -z-10 h-52 w-52 rounded-full bg-qs-primary/12 blur-3xl" aria-hidden="true"></div>
 
-                    <div class="relative overflow-hidden rounded-[28px] bg-white p-2.5 shadow-2xl shadow-qs-text/15 ring-1 ring-qs-soft sm:p-3">
-                        <div class="relative overflow-hidden rounded-[20px] bg-gradient-to-br from-qs-bg to-qs-soft">
+                    {{-- Gradient hairline frame: 1px gradient via padded outer div --}}
+                    <div class="relative rounded-[28px] bg-gradient-to-br from-white/90 via-qs-soft/80 to-white/90 p-px shadow-[0_30px_60px_-20px_rgba(15,52,58,0.28),0_14px_28px_-14px_rgba(86,174,187,0.22)] transition duration-500 group-hover:shadow-[0_40px_80px_-20px_rgba(15,52,58,0.32),0_18px_36px_-14px_rgba(86,174,187,0.28)]">
+                        <div class="relative overflow-hidden rounded-[27px] bg-qs-text">
                             <img
                                 src="{{ $heroImageUrl }}"
                                 alt=""
@@ -152,18 +168,36 @@
                                 height="768"
                                 decoding="async"
                                 fetchpriority="high"
-                                class="aspect-[4/3] h-auto w-full object-cover object-center transition duration-700 group-hover:scale-[1.02]"
+                                class="aspect-[4/3] h-auto w-full object-cover object-center transition duration-700 ease-out group-hover:scale-[1.03]"
                             />
 
-                            <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent"></div>
+                            {{-- Subtle inner highlight on the top edge ("lit from above") --}}
+                            <div class="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/15 to-transparent" aria-hidden="true"></div>
 
-                            <div class="absolute inset-x-5 bottom-5 sm:inset-x-7 sm:bottom-7">
-                                <h2 class="text-balance text-2xl font-bold leading-tight tracking-tight text-white sm:text-[1.7rem]">
-                                    {{ __('Trusted Results') }}
-                                </h2>
-                                <p class="mt-1.5 max-w-md text-pretty text-sm leading-snug text-white/85 sm:text-base">
-                                    {{ __('Marks released by your examiner — same place every term, with an audit trail your QA team can defend.') }}
-                                </p>
+                            {{-- Top-right floating "Live exams" data pill (frosted glass) --}}
+                            <div class="absolute right-4 top-4 inline-flex items-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-[0.62rem] font-bold uppercase tracking-[0.18em] text-qs-text shadow-lg ring-1 ring-black/5 backdrop-blur sm:right-5 sm:top-5">
+                                <span class="relative inline-flex h-1.5 w-1.5 items-center justify-center">
+                                    <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-50" aria-hidden="true"></span>
+                                    <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                </span>
+                                {{ __('Live exams') }}
+                            </div>
+
+                            {{-- Bottom floating glassmorphic caption (Liquid Glass / Linear style) --}}
+                            <div class="absolute inset-x-4 bottom-4 rounded-2xl bg-white/95 p-4 shadow-xl ring-1 ring-black/5 backdrop-blur-md sm:inset-x-5 sm:bottom-5 sm:p-5">
+                                <div class="flex items-start gap-3">
+                                    <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-qs-primary/10 text-qs-primary ring-1 ring-qs-primary/15">
+                                        <i class="fa-solid fa-circle-check text-base" aria-hidden="true"></i>
+                                    </span>
+                                    <div class="min-w-0 flex-1">
+                                        <h2 class="text-balance text-base font-bold leading-tight tracking-tight text-qs-text sm:text-lg">
+                                            {{ __('Trusted Results') }}
+                                        </h2>
+                                        <p class="mt-1 text-pretty text-xs leading-relaxed text-qs-muted sm:text-sm">
+                                            {{ __('Marks released by your examiner — same place every term.') }}
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
