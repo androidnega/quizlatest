@@ -165,17 +165,17 @@
         }
         .qs-about-team-card__badge {
             position: absolute;
-            top: 0.85rem;
-            left: 0.85rem;
+            top: 0.7rem;
+            left: 0.7rem;
             display: inline-flex;
             align-items: center;
-            gap: 0.4rem;
-            padding: 0.32rem 0.7rem;
+            gap: 0.35rem;
+            padding: 0.25rem 0.6rem;
             border-radius: 9999px;
             background: rgba(15, 23, 25, 0.55);
             color: #fff;
             font-family: 'Antonio', ui-sans-serif, system-ui, sans-serif;
-            font-size: 0.7rem;
+            font-size: 0.62rem;
             font-weight: 600;
             letter-spacing: 0.18em;
             text-transform: uppercase;
@@ -184,26 +184,26 @@
             z-index: 3;
         }
         .qs-about-team-card__body {
-            padding: 1.35rem 1.4rem 1.5rem;
+            padding: 1rem 1.1rem 1.15rem;
         }
         .qs-about-team-card__name {
             font-family: 'Antonio', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
             font-weight: 600;
-            font-size: 1.5rem;
-            line-height: 1.15;
+            font-size: 1.15rem;
+            line-height: 1.18;
             letter-spacing: 0.005em;
             color: var(--qs-text);
         }
         @media (min-width: 640px) {
-            .qs-about-team-card__name { font-size: 1.65rem; }
+            .qs-about-team-card__name { font-size: 1.25rem; }
         }
         .qs-about-team-card__role {
-            margin-top: 0.55rem;
+            margin-top: 0.4rem;
             display: inline-flex;
             align-items: center;
-            gap: 0.55rem;
+            gap: 0.45rem;
             font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
-            font-size: 0.72rem;
+            font-size: 0.65rem;
             font-weight: 600;
             letter-spacing: 0.14em;
             text-transform: uppercase;
@@ -212,24 +212,24 @@
         .qs-about-team-card__role::before {
             content: '';
             display: inline-block;
-            width: 1.25rem;
+            width: 1rem;
             height: 1px;
             background: currentColor;
             opacity: 0.55;
         }
         .qs-about-team-card__status {
-            margin-top: 0.85rem;
+            margin-top: 0.65rem;
             display: inline-flex;
             align-items: center;
-            gap: 0.45rem;
-            font-size: 0.72rem;
+            gap: 0.4rem;
+            font-size: 0.68rem;
             color: var(--qs-muted);
         }
         .qs-about-team-card__status-dot {
             position: relative;
             display: inline-block;
-            width: 0.45rem;
-            height: 0.45rem;
+            width: 0.4rem;
+            height: 0.4rem;
             border-radius: 9999px;
             background: rgb(16, 185, 129);
             box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
@@ -381,15 +381,6 @@
                             <p class="mt-4 text-base leading-relaxed text-[var(--qs-muted)]">
                                 {{ __('Every control is optional and administrator-governed. But when it\'s on, it\'s real: fewer places to hide unauthorised help, and a cleaner story for appeals and quality assurance.') }}
                             </p>
-                            <div class="mt-7 inline-flex items-center gap-3 rounded-xl border border-qs-soft bg-white px-4 py-3">
-                                <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--qs-primary)]/[0.10] text-[var(--qs-primary)]">
-                                    <i class="fa-solid fa-sliders text-sm" aria-hidden="true"></i>
-                                </span>
-                                <div>
-                                    <p class="text-sm font-semibold text-[var(--qs-text)]">{{ __('You set the dial.') }}</p>
-                                    <p class="text-xs text-[var(--qs-muted)]">{{ __('Per-exam overrides on top of institution defaults.') }}</p>
-                                </div>
-                            </div>
                         </div>
 
                         <ul class="qs-about-control-list">
@@ -467,12 +458,12 @@
                         </div>
 
                         @php
-                            // Reasonable max widths so 2 cards stay handsome and 3 still fit on lg.
+                            // Compact max widths so portrait cards stay tasteful, not oversized.
                             $teamCount = count($teamMembers);
                             $teamGrid = match (true) {
-                                $teamCount === 1 => 'mx-auto mt-12 grid max-w-sm gap-6',
-                                $teamCount === 2 => 'mx-auto mt-12 grid max-w-3xl gap-6 sm:grid-cols-2 sm:gap-8',
-                                default          => 'mx-auto mt-12 grid max-w-5xl gap-6 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8',
+                                $teamCount === 1 => 'mx-auto mt-12 grid max-w-[260px] gap-6',
+                                $teamCount === 2 => 'mx-auto mt-12 grid max-w-2xl gap-6 sm:grid-cols-2 sm:gap-7',
+                                default          => 'mx-auto mt-12 grid max-w-4xl gap-6 sm:grid-cols-2 lg:grid-cols-3 lg:gap-7',
                             };
                         @endphp
 
