@@ -11,6 +11,29 @@
     writing any custom CSS.
 --}}
 
+{{--
+    Suppress only Tailwind's "Play CDN should not be used in production"
+    console warning. Every other console.warn() call — from any script,
+    third-party or our own — must continue to flow through normally.
+
+    This MUST run before <script src="https://cdn.tailwindcss.com…">
+    so the override is in place by the time Tailwind boots and emits.
+--}}
+<script>
+(function () {
+    var originalWarn = console.warn.bind(console);
+    var SUPPRESS = 'cdn.tailwindcss.com should not be used in production';
+    console.warn = function () {
+        for (var i = 0; i < arguments.length; i++) {
+            if (typeof arguments[i] === 'string' && arguments[i].indexOf(SUPPRESS) !== -1) {
+                return;
+            }
+        }
+        originalWarn.apply(console, arguments);
+    };
+})();
+</script>
+
 <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
 <script>
     tailwind.config = {
