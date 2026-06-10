@@ -373,67 +373,130 @@
             </section>
         @endif
 
-        <section class="{{ $setPanel }}">
-            <h3 class="text-base font-semibold text-slate-900">Practice &amp; course materials (unofficial)</h3>
-            <p class="text-xs text-slate-600">{{ __('Student practice is separate from official exams and proctoring. AI features below use the unified AI integration configured above — there is no separate API key here.') }}</p>
-
-            <label class="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
-                <input type="checkbox" name="enable_student_practice_quizzes" value="1" class="{{ $setCheck }}"
-                    @checked(old('enable_student_practice_quizzes', $enable_student_practice_quizzes)) @disabled($lock_enable_student_practice_quizzes) />
-                <span>Enable student practice area (master switch)</span>
-                @include('admin.settings.partials.lock-pill', ['lockKey' => 'enable_student_practice_quizzes'])
-            </label>
-            <label class="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
-                <input type="checkbox" name="enable_course_material_uploads" value="1" class="{{ $setCheck }}"
-                    @checked(old('enable_course_material_uploads', $enable_course_material_uploads)) @disabled($lock_enable_course_material_uploads) />
-                <span>Examiners can upload course materials</span>
-                @include('admin.settings.partials.lock-pill', ['lockKey' => 'enable_course_material_uploads'])
-            </label>
-            <label class="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
-                <input type="checkbox" name="enable_ai_summary" value="1" class="{{ $setCheck }}"
-                    @checked(old('enable_ai_summary', $enable_ai_summary)) @disabled($lock_enable_ai_summary) />
-                <span>Students can request AI study summaries</span>
-                @include('admin.settings.partials.lock-pill', ['lockKey' => 'enable_ai_summary'])
-            </label>
-            <label class="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
-                <input type="checkbox" name="enable_ai_practice_quiz_generation" value="1" class="{{ $setCheck }}"
-                    @checked(old('enable_ai_practice_quiz_generation', $enable_ai_practice_quiz_generation)) @disabled($lock_enable_ai_practice_quiz_generation) />
-                <span>Students can generate AI practice quizzes</span>
-                @include('admin.settings.partials.lock-pill', ['lockKey' => 'enable_ai_practice_quiz_generation'])
-            </label>
-            <label class="flex cursor-pointer items-center gap-3 text-sm text-slate-800">
-                <input type="checkbox" name="allow_examiner_practice_overview" value="1" class="{{ $setCheck }}"
-                    @checked(old('allow_examiner_practice_overview', $allow_examiner_practice_overview)) @disabled($lock_allow_examiner_practice_overview) />
-                <span>Examiners can view practice analytics (aggregates only)</span>
-                @include('admin.settings.partials.lock-pill', ['lockKey' => 'allow_examiner_practice_overview'])
-            </label>
-
-            <div class="grid gap-4 sm:grid-cols-3">
-                <div>
-                    <label class="{{ $fieldLabel }}">
-                        <span>Daily AI quiz generations / student</span>
-                        @include('admin.settings.partials.lock-pill', ['lockKey' => 'practice_quiz_daily_limit'])
-                    </label>
-                    <input type="number" name="practice_quiz_daily_limit" min="0" max="500" value="{{ old('practice_quiz_daily_limit', $practice_quiz_daily_limit) }}" class="{{ $setInput }} max-w-xs" @disabled($lock_practice_quiz_daily_limit) />
+        <section id="student-self-practice" class="{{ $setPanel }}">
+            <header class="space-y-1">
+                <div class="flex flex-wrap items-center gap-2">
+                    <h3 class="text-base font-semibold text-slate-900">{{ __('Student self-practice (unofficial)') }}</h3>
+                    <span class="inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                        <i class="fa-solid fa-graduation-cap text-[10px]" aria-hidden="true"></i>
+                        {{ __('Students practice on their own') }}
+                    </span>
                 </div>
-                <div>
-                    <label class="{{ $fieldLabel }}">
-                        <span>Monthly AI quiz generations / student</span>
-                        @include('admin.settings.partials.lock-pill', ['lockKey' => 'practice_quiz_monthly_limit'])
-                    </label>
-                    <input type="number" name="practice_quiz_monthly_limit" min="0" max="5000" value="{{ old('practice_quiz_monthly_limit', $practice_quiz_monthly_limit) }}" class="{{ $setInput }} max-w-xs" @disabled($lock_practice_quiz_monthly_limit) />
-                </div>
-                <div>
-                    <label class="{{ $fieldLabel }}">
-                        <span>Practice AI tokens / student / month</span>
-                        @include('admin.settings.partials.lock-pill', ['lockKey' => 'practice_ai_token_limit_per_student'])
-                    </label>
-                    <input type="number" name="practice_ai_token_limit_per_student" min="0" value="{{ old('practice_ai_token_limit_per_student', $practice_ai_token_limit_per_student) }}" class="{{ $setInput }} max-w-xs" @disabled($lock_practice_ai_token_limit_per_student) />
+                <p class="text-xs leading-relaxed text-slate-600">
+                    {{ __('Lets students study and quiz themselves outside of official exams. Completely separate from proctoring — AI features here use the unified AI integration configured above.') }}
+                </p>
+            </header>
+
+            {{-- Master switch — visually elevated so admins know turning this OFF closes the whole hub. --}}
+            @php $masterOn = (bool) old('enable_student_practice_quizzes', $enable_student_practice_quizzes); @endphp
+            <div class="rounded-lg border-2 px-4 py-3.5 transition-colors {{ $masterOn ? 'border-emerald-300/80 bg-emerald-50/60' : 'border-slate-200 bg-slate-50/70' }}">
+                <label class="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
+                    <input type="checkbox" name="enable_student_practice_quizzes" value="1" class="{{ $setCheck }} mt-0.5"
+                        @checked($masterOn) @disabled($lock_enable_student_practice_quizzes) />
+                    <span class="min-w-0 flex-1">
+                        <span class="flex items-center gap-2">
+                            <span class="font-semibold text-slate-900">{{ __('Enable the student practice hub') }}</span>
+                            <span class="rounded bg-slate-900/85 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">{{ __('Master switch') }}</span>
+                            @include('admin.settings.partials.lock-pill', ['lockKey' => 'enable_student_practice_quizzes'])
+                        </span>
+                        <span class="mt-1 block text-xs leading-relaxed text-slate-600">
+                            {{ __('When ON, students see a “Practice” item in their navigation and can study/quiz themselves on their own time. When OFF, the whole self-practice area is hidden — including AI summaries and AI-generated practice quizzes below.') }}
+                        </span>
+                    </span>
+                </label>
+            </div>
+
+            {{-- AI study sub-features (gated by the master switch) --}}
+            <div class="space-y-3 border-l-2 border-slate-200 pl-4">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    {{ __('AI-assisted self-study (require master switch above)') }}
+                </p>
+                <label class="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
+                    <input type="checkbox" name="enable_ai_summary" value="1" class="{{ $setCheck }} mt-0.5"
+                        @checked(old('enable_ai_summary', $enable_ai_summary)) @disabled($lock_enable_ai_summary) />
+                    <span class="min-w-0 flex-1">
+                        <span class="flex items-center gap-1.5 font-medium text-slate-800">
+                            <span>{{ __('Students can request AI study summaries') }}</span>
+                            @include('admin.settings.partials.lock-pill', ['lockKey' => 'enable_ai_summary'])
+                        </span>
+                        <span class="mt-0.5 block text-xs text-slate-500">{{ __('Generates a study-note summary of a course topic.') }}</span>
+                    </span>
+                </label>
+                <label class="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
+                    <input type="checkbox" name="enable_ai_practice_quiz_generation" value="1" class="{{ $setCheck }} mt-0.5"
+                        @checked(old('enable_ai_practice_quiz_generation', $enable_ai_practice_quiz_generation)) @disabled($lock_enable_ai_practice_quiz_generation) />
+                    <span class="min-w-0 flex-1">
+                        <span class="flex items-center gap-1.5 font-medium text-slate-800">
+                            <span>{{ __('Students can generate AI practice quizzes') }}</span>
+                            @include('admin.settings.partials.lock-pill', ['lockKey' => 'enable_ai_practice_quiz_generation'])
+                        </span>
+                        <span class="mt-0.5 block text-xs text-slate-500">{{ __('Students create their own practice quizzes from a topic, then take and re-take them.') }}</span>
+                    </span>
+                </label>
+            </div>
+
+            {{-- Per-student AI throttles --}}
+            <div class="rounded-lg border border-slate-200 bg-white px-4 py-3.5">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ __('Per-student AI usage limits') }}</p>
+                <p class="mt-0.5 text-xs text-slate-500">{{ __('Caps how much each student can use AI study features. Use 0 to disable a limit.') }}</p>
+                <div class="mt-3 grid gap-4 sm:grid-cols-3">
+                    <div>
+                        <label class="{{ $fieldLabel }}">
+                            <span>{{ __('Daily AI quiz generations') }}</span>
+                            @include('admin.settings.partials.lock-pill', ['lockKey' => 'practice_quiz_daily_limit'])
+                        </label>
+                        <input type="number" name="practice_quiz_daily_limit" min="0" max="500" value="{{ old('practice_quiz_daily_limit', $practice_quiz_daily_limit) }}" class="{{ $setInput }} max-w-xs" @disabled($lock_practice_quiz_daily_limit) />
+                    </div>
+                    <div>
+                        <label class="{{ $fieldLabel }}">
+                            <span>{{ __('Monthly AI quiz generations') }}</span>
+                            @include('admin.settings.partials.lock-pill', ['lockKey' => 'practice_quiz_monthly_limit'])
+                        </label>
+                        <input type="number" name="practice_quiz_monthly_limit" min="0" max="5000" value="{{ old('practice_quiz_monthly_limit', $practice_quiz_monthly_limit) }}" class="{{ $setInput }} max-w-xs" @disabled($lock_practice_quiz_monthly_limit) />
+                    </div>
+                    <div>
+                        <label class="{{ $fieldLabel }}">
+                            <span>{{ __('AI tokens / month') }}</span>
+                            @include('admin.settings.partials.lock-pill', ['lockKey' => 'practice_ai_token_limit_per_student'])
+                        </label>
+                        <input type="number" name="practice_ai_token_limit_per_student" min="0" value="{{ old('practice_ai_token_limit_per_student', $practice_ai_token_limit_per_student) }}" class="{{ $setInput }} max-w-xs" @disabled($lock_practice_ai_token_limit_per_student) />
+                    </div>
                 </div>
             </div>
+
+            {{-- Course materials & examiner overview (work alongside, not gated by master) --}}
+            <div class="space-y-3 rounded-lg border border-slate-200 bg-slate-50/40 px-4 py-3.5">
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    {{ __('Course materials & examiner visibility') }}
+                </p>
+                <label class="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
+                    <input type="checkbox" name="enable_course_material_uploads" value="1" class="{{ $setCheck }} mt-0.5"
+                        @checked(old('enable_course_material_uploads', $enable_course_material_uploads)) @disabled($lock_enable_course_material_uploads) />
+                    <span class="min-w-0 flex-1">
+                        <span class="flex items-center gap-1.5 font-medium text-slate-800">
+                            <span>{{ __('Examiners can upload course materials') }}</span>
+                            @include('admin.settings.partials.lock-pill', ['lockKey' => 'enable_course_material_uploads'])
+                        </span>
+                        <span class="mt-0.5 block text-xs text-slate-500">{{ __('Lecture notes / PDFs students can browse from the practice hub.') }}</span>
+                    </span>
+                </label>
+                <label class="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
+                    <input type="checkbox" name="allow_examiner_practice_overview" value="1" class="{{ $setCheck }} mt-0.5"
+                        @checked(old('allow_examiner_practice_overview', $allow_examiner_practice_overview)) @disabled($lock_allow_examiner_practice_overview) />
+                    <span class="min-w-0 flex-1">
+                        <span class="flex items-center gap-1.5 font-medium text-slate-800">
+                            <span>{{ __('Examiners can view practice analytics') }}</span>
+                            @include('admin.settings.partials.lock-pill', ['lockKey' => 'allow_examiner_practice_overview'])
+                        </span>
+                        <span class="mt-0.5 block text-xs text-slate-500">{{ __('Cohort-level aggregates only — never individual student answers.') }}</span>
+                    </span>
+                </label>
+            </div>
+
+            {{-- Footnote about the unified AI provider/key --}}
             <div class="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5 text-xs text-slate-700">
                 <p class="font-semibold text-slate-800">
-                    <i class="fa-solid fa-link" aria-hidden="true"></i>
+                    <i class="fa-solid fa-link mr-1" aria-hidden="true"></i>
                     {{ __('AI provider:') }}
                     <span class="font-normal">{{ __('Active provider is') }} <code class="rounded bg-white px-1 py-0.5 ring-1 ring-inset ring-slate-200">{{ $ai_provider_active }}</code> {{ __('using') }} <code class="rounded bg-white px-1 py-0.5 ring-1 ring-inset ring-slate-200">{{ $ai_model_active }}</code>.</span>
                 </p>
