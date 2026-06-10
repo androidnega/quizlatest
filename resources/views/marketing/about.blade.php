@@ -117,28 +117,51 @@
             border-radius: 1.25rem;
             overflow: hidden;
             border: 1px solid var(--qs-soft);
-            transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+            box-shadow: 0 1px 0 rgba(15, 52, 58, 0.02), 0 12px 28px -24px rgba(15, 52, 58, 0.18);
+            transition: transform .3s ease, box-shadow .3s ease, border-color .3s ease;
         }
         .qs-about-team-card:hover {
             transform: translateY(-4px);
             border-color: rgba(86, 174, 187, 0.5);
-            box-shadow: 0 30px 60px -32px rgba(15, 52, 58, 0.28);
+            box-shadow: 0 30px 60px -32px rgba(15, 52, 58, 0.32);
         }
         .qs-about-team-card__photo {
-            aspect-ratio: 1 / 1;
+            aspect-ratio: 4 / 5;
             position: relative;
             overflow: hidden;
             background: linear-gradient(180deg, #eaf3f5 0%, #d5e7ea 100%);
+        }
+        .qs-about-team-card__photo::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: linear-gradient(180deg, rgba(15, 23, 25, 0) 55%, rgba(15, 23, 25, 0.45) 100%);
+            opacity: 0.85;
+            transition: opacity .3s ease;
+        }
+        .qs-about-team-card:hover .qs-about-team-card__photo::after {
+            opacity: 1;
+        }
+        .qs-about-team-card__photo::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+            z-index: 2;
         }
         .qs-about-team-card__photo img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            object-position: center 18%;
             display: block;
-            transition: transform .5s ease;
+            filter: saturate(1.02) contrast(1.02);
+            transition: transform .6s cubic-bezier(.2,.8,.2,1);
         }
         .qs-about-team-card:hover .qs-about-team-card__photo img {
-            transform: scale(1.03);
+            transform: scale(1.04);
         }
         .qs-about-team-card__badge {
             position: absolute;
@@ -147,18 +170,69 @@
             display: inline-flex;
             align-items: center;
             gap: 0.4rem;
-            padding: 0.3rem 0.65rem;
+            padding: 0.32rem 0.7rem;
             border-radius: 9999px;
             background: rgba(15, 23, 25, 0.55);
             color: #fff;
-            font-size: 0.65rem;
+            font-family: 'Antonio', ui-sans-serif, system-ui, sans-serif;
+            font-size: 0.7rem;
             font-weight: 600;
-            letter-spacing: 0.12em;
+            letter-spacing: 0.18em;
             text-transform: uppercase;
-            backdrop-filter: blur(6px);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 3;
         }
         .qs-about-team-card__body {
-            padding: 1.15rem 1.25rem 1.4rem;
+            padding: 1.35rem 1.4rem 1.5rem;
+        }
+        .qs-about-team-card__name {
+            font-family: 'Antonio', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+            font-weight: 600;
+            font-size: 1.5rem;
+            line-height: 1.15;
+            letter-spacing: 0.005em;
+            color: var(--qs-text);
+        }
+        @media (min-width: 640px) {
+            .qs-about-team-card__name { font-size: 1.65rem; }
+        }
+        .qs-about-team-card__role {
+            margin-top: 0.55rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.55rem;
+            font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--qs-primary);
+        }
+        .qs-about-team-card__role::before {
+            content: '';
+            display: inline-block;
+            width: 1.25rem;
+            height: 1px;
+            background: currentColor;
+            opacity: 0.55;
+        }
+        .qs-about-team-card__status {
+            margin-top: 0.85rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.72rem;
+            color: var(--qs-muted);
+        }
+        .qs-about-team-card__status-dot {
+            position: relative;
+            display: inline-block;
+            width: 0.45rem;
+            height: 0.45rem;
+            border-radius: 9999px;
+            background: rgb(16, 185, 129);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
         }
         .qs-about-stats {
             display: grid;
@@ -423,16 +497,16 @@
                                             src="{{ asset($avatar) }}"
                                             alt="{{ $name }}"
                                             width="900"
-                                            height="900"
+                                            height="1125"
                                             loading="lazy"
                                             decoding="async"
                                         />
                                     </div>
                                     <div class="qs-about-team-card__body">
-                                        <h3 class="text-lg font-semibold tracking-tight text-[var(--qs-text)]">{{ $name }}</h3>
-                                        <p class="mt-1 text-sm font-medium text-[var(--qs-primary)]">{{ $field }}</p>
-                                        <div class="mt-3 flex items-center gap-1.5 text-xs text-[var(--qs-muted)]">
-                                            <span class="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                        <h3 class="qs-about-team-card__name">{{ $name }}</h3>
+                                        <p class="qs-about-team-card__role">{{ $field }}</p>
+                                        <div class="qs-about-team-card__status">
+                                            <span class="qs-about-team-card__status-dot" aria-hidden="true"></span>
                                             <span>{{ __('Available for institution support') }}</span>
                                         </div>
                                     </div>
